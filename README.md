@@ -32,6 +32,9 @@ gxpm 是面向完全替代 PMC 和 gstack 的第二代代理项目管理产品�
 bun test
 bun run gen:skill-docs
 bun run check
+bin/gxpm issue create local-demo
+bin/gxpm issue status local-demo
+bin/gxpm issue transition local-demo plan
 ```
 
 ## 当前边界

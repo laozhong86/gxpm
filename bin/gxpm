@@ -2,4 +2,4 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec bun run "$ROOT/scripts/gxpm-check.ts" "$@"
+exec bun run "$ROOT/scripts/gxpm.ts" "$@"

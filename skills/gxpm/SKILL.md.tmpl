@@ -21,10 +21,16 @@ and persist artifacts before claiming progress.
 Before doing phase work, read:
 
 ```bash
-cat .gxpm/issues/<issue-id>/state.json 2>/dev/null || echo "NO_STATE"
+gxpm issue status <issue-id>
 ```
 
-If no state exists, start with `triage` unless the user explicitly gives a validated phase artifact.
+If no state exists, create it before phase work:
+
+```bash
+gxpm issue create <issue-id>
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map.
 
 ## Phase Map
 

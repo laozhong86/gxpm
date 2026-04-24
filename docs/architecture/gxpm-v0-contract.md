@@ -26,26 +26,22 @@ gxpm 是替代 PMC 和 gstack 的二代代理项目管理控制面。它把 Line
 
 Issue 是状态机实例。Issue 的本地真值必须在文件系统中存在，Linear 只是前门和同步面。
 
-建议目录：
+V0 已实现的本地目录：
 
 ```text
 .gxpm/issues/<issue-id>/
   state.json
-  issue.json
-  acceptance-contract.json
-  dispatch.md
-  local-verify.json
-  local-verify.md
-  ac-check.json
-  verify-findings.json
-  verify-report.md
-  qa-findings.json
-  qa-report.md
-  land-findings.json
-  resume-packet.json
-  execution-log.md
-  execution-memory.md
+  graph.json
+  events.jsonl
+  artifacts/
+    index.json
+  reports/
+  evidence/
+    screenshots/
+  memory/
 ```
+
+V0 只建立 state graph 和 artifact/evidence 容器，不写入具体 capability artifact。
 
 ### Phase
 
@@ -65,6 +61,8 @@ V0 phase 集合：
 - `land`
 
 V0 可以导入 PMC/gstack 的语义，但最终 phase 是 gxpm 原生状态，不以 `.omc` 或 `.gstack` 作为长期真值。
+
+V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中的下一个 phase。
 
 ## Source of Truth
 
@@ -151,3 +149,13 @@ V0 阶段如果出现以下情况，应停止并生成 report，而不是继续�
 - 每个能力都有 gxpm 原生 contract。
 - 失败时能降级为本地报告，而不是把状态写坏。
 - 一个 issue 可以在 gxpm 内完成从 intake 到 QA/land 的最小闭环，不必同时加载 PMC 和 gstack。
+
+## V0 本地命令
+
+```bash
+gxpm issue create <issue-id>
+gxpm issue status <issue-id>
+gxpm issue transition <issue-id> <phase>
+```
+
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。
