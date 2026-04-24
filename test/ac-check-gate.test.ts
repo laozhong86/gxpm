@@ -1,41 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { initializeAcceptanceCheck } from "../core/ac-check";
-import { initializeDispatch } from "../core/dispatch";
-import { initializeLocalVerify } from "../core/implement";
-import { initializePlan } from "../core/plan";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { initializeTriage } from "../core/triage";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterLocalVerify(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-  initializePlan({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "dispatch" });
-  initializeDispatch({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "implement" });
-  initializeLocalVerify({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "local-verify" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("ac-check gate", () => {
   test("initializes acceptance check only in local-verify phase", () => {
@@ -46,7 +16,7 @@ describe("ac-check gate", () => {
       "Acceptance check can only be initialized from local-verify phase",
     );
 
-    enterLocalVerify(root, "GXPM-71");
+    enterPhase(root, "GXPM-71", "local-verify");
     const artifact = initializeAcceptanceCheck({ root, issueId: "GXPM-71" });
 
     expect(artifact.type).toBe("acceptance-check");
@@ -61,7 +31,7 @@ describe("ac-check gate", () => {
 
   test("blocks local-verify to ac-check until acceptance check exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ac-check-gate-"));
-    enterLocalVerify(root, "GXPM-72");
+    enterPhase(root, "GXPM-72", "local-verify");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-72", nextPhase: "ac-check" })).toThrow(
       "Missing required artifact",
@@ -91,15 +61,7 @@ describe("ac-check gate", () => {
 
   test("CLI supports ac-check init and artifact-backed ac-check transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ac-check-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-73"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-73"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-73", "plan"]).exitCode).toBe(0);
-    expect(runCli(root, ["plan", "init", "GXPM-73"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-73", "dispatch"]).exitCode).toBe(0);
-    expect(runCli(root, ["dispatch", "init", "GXPM-73"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-73", "implement"]).exitCode).toBe(0);
-    expect(runCli(root, ["implement", "verify", "GXPM-73"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-73", "local-verify"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-73", "local-verify");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-73", "ac-check"]);
     expect(blocked.exitCode).toBe(1);

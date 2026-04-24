@@ -1,47 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { initializeAcceptanceCheck } from "../core/ac-check";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
-import { initializeDispatch } from "../core/dispatch";
-import { initializeLocalVerify } from "../core/implement";
-import { initializePlan } from "../core/plan";
-import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { initializeTriage } from "../core/triage";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterSelfReview(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-  initializePlan({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "dispatch" });
-  initializeDispatch({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "implement" });
-  initializeLocalVerify({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "local-verify" });
-  initializeAcceptanceCheck({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "ac-check" });
-  initializeSelfReview({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "self-review" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("ship gate", () => {
   test("initializes ship readiness only in self-review phase", () => {
@@ -52,7 +16,7 @@ describe("ship gate", () => {
       "Ship readiness can only be initialized from self-review phase",
     );
 
-    enterSelfReview(root, "GXPM-91");
+    enterPhase(root, "GXPM-91", "self-review");
     const artifact = initializeShipReadiness({ root, issueId: "GXPM-91" });
 
     expect(artifact.type).toBe("ship-readiness");
@@ -69,7 +33,7 @@ describe("ship gate", () => {
 
   test("blocks self-review to ship until ship readiness exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ship-gate-"));
-    enterSelfReview(root, "GXPM-92");
+    enterPhase(root, "GXPM-92", "self-review");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-92", nextPhase: "ship" })).toThrow(
       "Missing required artifact",
@@ -99,19 +63,7 @@ describe("ship gate", () => {
 
   test("CLI supports ship readiness init and artifact-backed ship transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ship-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "plan"]).exitCode).toBe(0);
-    expect(runCli(root, ["plan", "init", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "dispatch"]).exitCode).toBe(0);
-    expect(runCli(root, ["dispatch", "init", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "implement"]).exitCode).toBe(0);
-    expect(runCli(root, ["implement", "verify", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "local-verify"]).exitCode).toBe(0);
-    expect(runCli(root, ["local-verify", "ac-check", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "ac-check"]).exitCode).toBe(0);
-    expect(runCli(root, ["ac-check", "self-review", "GXPM-93"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-93", "self-review"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-93", "self-review");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-93", "ship"]);
     expect(blocked.exitCode).toBe(1);

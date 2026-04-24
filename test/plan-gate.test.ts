@@ -1,32 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { createIssueState, transitionIssuePhase } from "../core/state";
 import { initializePlan } from "../core/plan";
 import { initializeTriage } from "../core/triage";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterPlan(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("plan gate", () => {
   test("initializes implementation plan only in plan phase", () => {
@@ -53,7 +33,7 @@ describe("plan gate", () => {
 
   test("blocks plan to dispatch until implementation plan exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-plan-gate-"));
-    enterPlan(root, "GXPM-41");
+    enterPhase(root, "GXPM-41", "plan");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-41", nextPhase: "dispatch" })).toThrow(
       "Missing required artifact",
@@ -83,9 +63,7 @@ describe("plan gate", () => {
 
   test("CLI supports plan init and artifact-backed dispatch transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-plan-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-42"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-42"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-42", "plan"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-42", "plan");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-42", "dispatch"]);
     expect(blocked.exitCode).toBe(1);

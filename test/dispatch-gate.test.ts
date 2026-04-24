@@ -1,35 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
-import { initializePlan } from "../core/plan";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { initializeTriage } from "../core/triage";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterDispatch(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-  initializePlan({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "dispatch" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("dispatch gate", () => {
   test("initializes dispatch handoff only in dispatch phase", () => {
@@ -40,7 +16,7 @@ describe("dispatch gate", () => {
       "Dispatch can only be initialized from dispatch phase",
     );
 
-    enterDispatch(root, "GXPM-51");
+    enterPhase(root, "GXPM-51", "dispatch");
     const artifact = initializeDispatch({ root, issueId: "GXPM-51" });
 
     expect(artifact.type).toBe("dispatch-handoff");
@@ -57,7 +33,7 @@ describe("dispatch gate", () => {
 
   test("blocks dispatch to implement until dispatch handoff exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-gate-"));
-    enterDispatch(root, "GXPM-52");
+    enterPhase(root, "GXPM-52", "dispatch");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-52", nextPhase: "implement" })).toThrow(
       "Missing required artifact",
@@ -87,11 +63,7 @@ describe("dispatch gate", () => {
 
   test("CLI supports dispatch init and artifact-backed implement transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-53"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-53"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-53", "plan"]).exitCode).toBe(0);
-    expect(runCli(root, ["plan", "init", "GXPM-53"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-53", "dispatch"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-53", "dispatch");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-53", "implement"]);
     expect(blocked.exitCode).toBe(1);

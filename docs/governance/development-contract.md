@@ -31,6 +31,8 @@
 - `triage` 这类没有前置 phase gate 的入口 artifact 可以保留专用实现。
 - 新增 artifact-backed transition 时，必须同步更新 `core/phase-gates.ts` 和 `scripts/phase-artifact-commands.ts`。
 - `test/phase-gates.test.ts` 必须证明 gate 提示命令和 CLI artifact 命令保持一致。
+- gate 测试需要把通用 phase setup 放在 `test/helpers/workflow.ts`，不要在每个 gate 文件重复写完整前置 phase 链。
+- gate 测试文件只保留当前 gate 的 artifact payload、blocked event、CLI command 和 transition 断言。
 
 ## 失败归因协议
 

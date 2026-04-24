@@ -1,53 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { initializeAcceptanceCheck } from "../core/ac-check";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
-import { initializeDispatch } from "../core/dispatch";
-import { initializeLocalVerify } from "../core/implement";
-import { initializePlan } from "../core/plan";
-import { initializePrCheck } from "../core/pr-check";
-import { initializeSelfReview } from "../core/self-review";
-import { initializeShipReadiness } from "../core/ship";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { initializeTriage } from "../core/triage";
 import { initializeVerifyFindings } from "../core/verify";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterPrCheck(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-  initializePlan({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "dispatch" });
-  initializeDispatch({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "implement" });
-  initializeLocalVerify({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "local-verify" });
-  initializeAcceptanceCheck({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "ac-check" });
-  initializeSelfReview({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "self-review" });
-  initializeShipReadiness({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "ship" });
-  initializePrCheck({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "pr-check" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("verify gate", () => {
   test("initializes verify findings only in pr-check phase", () => {
@@ -58,7 +16,7 @@ describe("verify gate", () => {
       "Verify findings can only be initialized from pr-check phase",
     );
 
-    enterPrCheck(root, "GXPM-111");
+    enterPhase(root, "GXPM-111", "pr-check");
     const artifact = initializeVerifyFindings({ root, issueId: "GXPM-111" });
 
     expect(artifact.type).toBe("verify-findings");
@@ -74,7 +32,7 @@ describe("verify gate", () => {
 
   test("blocks pr-check to verify until verify findings exist", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-verify-gate-"));
-    enterPrCheck(root, "GXPM-112");
+    enterPhase(root, "GXPM-112", "pr-check");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-112", nextPhase: "verify" })).toThrow(
       "Missing required artifact",
@@ -104,23 +62,7 @@ describe("verify gate", () => {
 
   test("CLI supports verify findings init and artifact-backed verify transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-verify-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "plan"]).exitCode).toBe(0);
-    expect(runCli(root, ["plan", "init", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "dispatch"]).exitCode).toBe(0);
-    expect(runCli(root, ["dispatch", "init", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "implement"]).exitCode).toBe(0);
-    expect(runCli(root, ["implement", "verify", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "local-verify"]).exitCode).toBe(0);
-    expect(runCli(root, ["local-verify", "ac-check", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "ac-check"]).exitCode).toBe(0);
-    expect(runCli(root, ["ac-check", "self-review", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "self-review"]).exitCode).toBe(0);
-    expect(runCli(root, ["self-review", "ship", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "ship"]).exitCode).toBe(0);
-    expect(runCli(root, ["ship", "pr-check", "GXPM-113"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-113", "pr-check"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-113", "pr-check");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-113", "verify"]);
     expect(blocked.exitCode).toBe(1);

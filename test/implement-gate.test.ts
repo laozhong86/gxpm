@@ -1,38 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
-import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
-import { initializePlan } from "../core/plan";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { initializeTriage } from "../core/triage";
-
-const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
-
-function runCli(root: string, args: string[]) {
-  return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function output(result: ReturnType<typeof runCli>) {
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
-}
-
-function enterImplement(root: string, issueId: string) {
-  createIssueState({ root, issueId });
-  initializeTriage({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "plan" });
-  initializePlan({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "dispatch" });
-  initializeDispatch({ root, issueId });
-  transitionIssuePhase({ root, issueId, nextPhase: "implement" });
-}
+import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("implement gate", () => {
   test("initializes local verify only in implement phase", () => {
@@ -43,7 +16,7 @@ describe("implement gate", () => {
       "Local verify can only be initialized from implement phase",
     );
 
-    enterImplement(root, "GXPM-61");
+    enterPhase(root, "GXPM-61", "implement");
     const artifact = initializeLocalVerify({ root, issueId: "GXPM-61" });
 
     expect(artifact.type).toBe("local-verify");
@@ -59,7 +32,7 @@ describe("implement gate", () => {
 
   test("blocks implement to local-verify until local verify artifact exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-implement-gate-"));
-    enterImplement(root, "GXPM-62");
+    enterPhase(root, "GXPM-62", "implement");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-62", nextPhase: "local-verify" })).toThrow(
       "Missing required artifact",
@@ -89,13 +62,7 @@ describe("implement gate", () => {
 
   test("CLI supports implement verify and artifact-backed local verify transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-implement-cli-"));
-    expect(runCli(root, ["issue", "create", "GXPM-63"]).exitCode).toBe(0);
-    expect(runCli(root, ["triage", "init", "GXPM-63"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-63", "plan"]).exitCode).toBe(0);
-    expect(runCli(root, ["plan", "init", "GXPM-63"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-63", "dispatch"]).exitCode).toBe(0);
-    expect(runCli(root, ["dispatch", "init", "GXPM-63"]).exitCode).toBe(0);
-    expect(runCli(root, ["issue", "transition", "GXPM-63", "implement"]).exitCode).toBe(0);
+    enterPhaseCli(root, "GXPM-63", "implement");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-63", "local-verify"]);
     expect(blocked.exitCode).toBe(1);
