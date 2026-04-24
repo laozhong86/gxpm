@@ -34,41 +34,11 @@ bun run gen:skill-docs
 bun run check
 bin/gxpm issue create local-demo
 bin/gxpm issue status local-demo
-bin/gxpm triage init local-demo
 bin/gxpm artifact list local-demo
 bin/gxpm artifact read local-demo acceptance-contract
-bin/gxpm issue transition local-demo plan
-bin/gxpm plan init local-demo
-bin/gxpm artifact read local-demo implementation-plan
-bin/gxpm issue transition local-demo dispatch
-bin/gxpm dispatch init local-demo
-bin/gxpm artifact read local-demo dispatch-handoff
-bin/gxpm issue transition local-demo implement
-bin/gxpm implement verify local-demo
-bin/gxpm artifact read local-demo local-verify
-bin/gxpm issue transition local-demo local-verify
-bin/gxpm local-verify ac-check local-demo
-bin/gxpm artifact read local-demo acceptance-check
-bin/gxpm issue transition local-demo ac-check
-bin/gxpm ac-check self-review local-demo
-bin/gxpm artifact read local-demo self-review
-bin/gxpm issue transition local-demo self-review
-bin/gxpm self-review ship local-demo
-bin/gxpm artifact read local-demo ship-readiness
-bin/gxpm issue transition local-demo ship
-bin/gxpm ship pr-check local-demo
-bin/gxpm artifact read local-demo pr-check
-bin/gxpm issue transition local-demo pr-check
-bin/gxpm pr-check verify local-demo
-bin/gxpm artifact read local-demo verify-findings
-bin/gxpm issue transition local-demo verify
-bin/gxpm verify qa local-demo
-bin/gxpm artifact read local-demo qa-findings
-bin/gxpm issue transition local-demo qa
-bin/gxpm qa land local-demo
-bin/gxpm artifact read local-demo land-findings
-bin/gxpm issue transition local-demo land
 ```
+
+完整 phase gate 命令由 `skills/gxpm/SKILL.md` 生成，真值来自 `core/phase-gates.ts`。
 
 ## 当前边界
 
