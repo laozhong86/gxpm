@@ -294,10 +294,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "implement" && nextPhase === "local-verify") {
     return "local-verify";
   }
+  if (fromPhase === "local-verify" && nextPhase === "ac-check") {
+    return "acceptance-check";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "acceptance-check") {
+    return `gxpm local-verify ac-check ${issueId}`;
+  }
   if (artifactType === "local-verify") {
     return `gxpm implement verify ${issueId}`;
   }

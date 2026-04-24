@@ -8,6 +8,7 @@ import {
   readIssueState,
   transitionIssuePhase,
 } from "../core/state";
+import { initializeAcceptanceCheck } from "../core/ac-check";
 import { listArtifacts, readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
@@ -126,6 +127,15 @@ function main(argv: string[]) {
     }
     initializeLocalVerify({ issueId });
     console.log(`initialized local verify artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "local-verify" && subcommand === "ac-check") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm local-verify ac-check <issue-id>");
+    }
+    initializeAcceptanceCheck({ issueId });
+    console.log(`initialized acceptance check artifact for ${issueId}`);
     return;
   }
 

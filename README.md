@@ -47,6 +47,9 @@ bin/gxpm issue transition local-demo implement
 bin/gxpm implement verify local-demo
 bin/gxpm artifact read local-demo local-verify
 bin/gxpm issue transition local-demo local-verify
+bin/gxpm local-verify ac-check local-demo
+bin/gxpm artifact read local-demo acceptance-check
+bin/gxpm issue transition local-demo ac-check
 ```
 
 ## 当前边界

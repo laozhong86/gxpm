@@ -35,6 +35,7 @@ V0 已实现的本地目录：
   events.jsonl
   artifacts/
     index.json
+    acceptance-check.json
     acceptance-contract.json
     dispatch-handoff.json
     implementation-plan.json
@@ -51,6 +52,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 
 - `issue-intake`
 - `triage-report`
+- `acceptance-check`
 - `acceptance-contract`
 - `implementation-plan`
 - `dispatch-handoff`
@@ -86,6 +88,8 @@ V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中�
 `dispatch -> implement` 额外要求存在 `dispatch-handoff` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm dispatch init <issue-id>`。
 
 `implement -> local-verify` 额外要求存在 `local-verify` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm implement verify <issue-id>`。
+
+`local-verify -> ac-check` 额外要求存在 `acceptance-check` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm local-verify ac-check <issue-id>`。
 
 ## Source of Truth
 
@@ -185,6 +189,7 @@ gxpm triage init <issue-id>
 gxpm plan init <issue-id>
 gxpm dispatch init <issue-id>
 gxpm implement verify <issue-id>
+gxpm local-verify ac-check <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。
