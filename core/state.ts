@@ -291,10 +291,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "dispatch" && nextPhase === "implement") {
     return "dispatch-handoff";
   }
+  if (fromPhase === "implement" && nextPhase === "local-verify") {
+    return "local-verify";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "local-verify") {
+    return `gxpm implement verify ${issueId}`;
+  }
   if (artifactType === "dispatch-handoff") {
     return `gxpm dispatch init ${issueId}`;
   }

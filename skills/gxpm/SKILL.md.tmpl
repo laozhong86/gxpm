@@ -43,6 +43,7 @@ gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> acceptance-contract
 gxpm artifact read <issue-id> implementation-plan
 gxpm artifact read <issue-id> dispatch-handoff
+gxpm artifact read <issue-id> local-verify
 ```
 
 Before leaving `plan`, initialize the implementation plan:
@@ -57,7 +58,13 @@ Before leaving `dispatch`, initialize the dispatch handoff:
 gxpm dispatch init <issue-id>
 ```
 
-V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists.
+Before leaving `implement`, initialize local verification evidence:
+
+```bash
+gxpm implement verify <issue-id>
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists. `implement -> local-verify` is blocked until `local-verify` exists.
 
 ## Phase Map
 

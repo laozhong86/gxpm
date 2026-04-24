@@ -10,6 +10,7 @@ import {
 } from "../core/state";
 import { listArtifacts, readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
+import { initializeLocalVerify } from "../core/implement";
 import { initializePlan } from "../core/plan";
 import { initializeTriage } from "../core/triage";
 
@@ -116,6 +117,15 @@ function main(argv: string[]) {
     }
     initializeDispatch({ issueId });
     console.log(`initialized dispatch handoff for ${issueId}`);
+    return;
+  }
+
+  if (command === "implement" && subcommand === "verify") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm implement verify <issue-id>");
+    }
+    initializeLocalVerify({ issueId });
+    console.log(`initialized local verify artifact for ${issueId}`);
     return;
   }
 
