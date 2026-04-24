@@ -1,0 +1,24 @@
+{
+  "name": "gxpm",
+  "version": "0.1.0",
+  "description": "Second-generation project management runtime designed to replace PMC and gstack.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "gxpm": "./bin/gxpm",
+    "gxpm-config": "./bin/gxpm-config",
+    "gxpm-init": "./bin/gxpm-init",
+    "gxpm-update-check": "./bin/gxpm-update-check"
+  },
+  "scripts": {
+    "check": "bun run scripts/gxpm-check.ts",
+    "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

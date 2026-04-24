@@ -6,6 +6,10 @@ node_modules/
 dist/
 build/
 coverage/
+.generated/
+.agents/
+.claude/
+.codex/
 .gstack/
 .omc/
 *.log

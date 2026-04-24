@@ -9,8 +9,8 @@ gxpm 要重新规划统一架构，把项目管理、技能运行时、浏览器
 
 ## 当前阶段
 
-本仓库处于替代型架构规划阶段。默认先维护产品真值、能力拆解、架构合同和迁移路线，
-不要把 gxpm 写成 PMC/gstack 的薄封装。
+本仓库已进入替代型脚手架阶段。默认先维护产品真值、能力拆解、架构合同、
+模板生成、host adapter 和本地检查入口，不要把 gxpm 写成 PMC/gstack 的薄封装。
 
 ## 工作原则
 
@@ -26,18 +26,21 @@ gxpm 要重新规划统一架构，把项目管理、技能运行时、浏览器
 
 1. 本仓库 `docs/architecture/gxpm-replacement-architecture.md`
 2. 本仓库 `docs/architecture/gxpm-v0-contract.md`
-3. 本仓库 `docs/research/pmc-gstack-skill-study.md`
-4. 当前本机技能源码：
+3. 本仓库 `docs/architecture/scaffold-northstar.md`
+4. 本仓库 `docs/research/pmc-gstack-skill-study.md`
+5. 当前本机技能源码：
    - `/Users/x/.agents/skills/pmc`
    - `/Users/x/.claude/skills/gstack`
    - `/Users/x/.codex/skills/gstack`
-5. 用户本轮明确指令
+6. 用户本轮明确指令
 
 如果这些来源冲突，先指出冲突并给出最小可执行建议。
 
 ## 预期交付形态
 
 - `skills/gxpm/SKILL.md`：未来 gxpm skill 的入口合同。
+- `skills/gxpm/SKILL.md.tmpl`：生成 `SKILL.md` 的模板真值。
+- `hosts/`、`scripts/`、`bin/`：gstack-style 产品脚手架、host adapter 与检查入口。
 - `docs/architecture/`：替代型产品架构、状态机、能力边界、运行时设计。
 - `docs/research/`：对 PMC、gstack 和相邻项目的调查记录。
 - `docs/roadmap/`：分阶段路线，不把 V1/V2 混成一个大球。
@@ -50,3 +53,4 @@ gxpm 要重新规划统一架构，把项目管理、技能运行时、浏览器
 2. gxpm capability runtime：issue、plan、worker、review、browser、ship、learn。
 3. PMC/gstack 能力映射到 gxpm 模块的 replacement map。
 4. Linear 同步、本地状态写回和 browser evidence 的统一幂等策略。
+5. install/update/team-init 命令从占位入口演进为真实流程。

@@ -13,12 +13,26 @@ gxpm 是面向完全替代 PMC 和 gstack 的第二代代理项目管理产品�
 ## 初始化产物
 
 - `AGENTS.md`：本仓库代理规则。
+- `package.json`：Bun/TypeScript 脚手架入口。
+- `hosts/`：Codex 与 Claude Code 的 host adapter 注册。
+- `scripts/`：skill 模板发现、生成和脚手架检查。
+- `bin/`：未来安装/升级/检查命令的稳定入口。
 - `docs/research/pmc-gstack-skill-study.md`：PMC 与 gstack 的调查结论。
 - `docs/architecture/gxpm-replacement-architecture.md`：替代型二代架构。
 - `docs/architecture/gxpm-v0-contract.md`：gxpm V0 合同与边界。
+- `docs/architecture/scaffold-northstar.md`：借鉴 gstack 的脚手架北极星。
 - `docs/roadmap/initial-roadmap.md`：初始路线图。
-- `skills/gxpm/SKILL.md`：gxpm skill 入口草案。
+- `skills/gxpm/SKILL.md.tmpl`：gxpm skill 模板真值。
+- `skills/gxpm/SKILL.md`：由模板生成的 gxpm skill 入口。
+
+## 本地命令
+
+```bash
+bun test
+bun run gen:skill-docs
+bun run check
+```
 
 ## 当前边界
 
-当前只初始化产品真值和架构基线，不实现 runtime。下一步应先把 PMC/gstack 能力拆成 gxpm 原生模块，再确定 V0 最小替代闭环。
+当前已进入脚手架阶段：先建立 gstack-style 的模板、host adapter、生成和检查骨架，再继续实现 gxpm 原生 state graph 与 capability runtime。下一步应把 PMC/gstack 能力拆成 gxpm 原生模块，并围绕 V0 最小替代闭环补齐 `.gxpm` 状态与证据写回。

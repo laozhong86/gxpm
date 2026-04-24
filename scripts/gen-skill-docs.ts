@@ -1,0 +1,111 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { discoverTemplates } from "./discover-skills";
+import { getHostConfig } from "../hosts";
+
+export interface GenerateSkillDocsOptions {
+  root?: string;
+  host?: string;
+  dryRun?: boolean;
+}
+
+const GENERATED_MARK = "<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->";
+
+export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): string[] {
+  const root = options.root ?? process.cwd();
+  const host = getHostConfig(options.host ?? "codex");
+  const outputs: string[] = [];
+  const stale: string[] = [];
+
+  for (const template of discoverTemplates(root)) {
+    const templatePath = join(root, template.tmpl);
+    const outputPath = join(root, template.output);
+    const rendered = renderTemplate(readFileSync(templatePath, "utf8"), buildPreamble(root, host));
+    const generated = insertGeneratedMark(rendered);
+
+    if (options.dryRun) {
+      const current = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";
+      if (current !== generated) {
+        stale.push(template.output);
+      }
+      continue;
+    }
+
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, generated);
+    outputs.push(template.output);
+  }
+
+  if (stale.length > 0) {
+    throw new Error(`Stale generated skill docs:\n${stale.map((path) => `- ${path}`).join("\n")}`);
+  }
+
+  return outputs;
+}
+
+function renderTemplate(template: string, preamble: string) {
+  return template.replaceAll("{{PREAMBLE}}", preamble.trimEnd());
+}
+
+function insertGeneratedMark(content: string) {
+  const frontmatter = content.match(/^---\n[\s\S]*?\n---\n?/);
+  if (!frontmatter) {
+    return `${GENERATED_MARK}\n\n${content}`;
+  }
+
+  const head = frontmatter[0].trimEnd();
+  const body = content.slice(frontmatter[0].length).replace(/^\n+/, "");
+  return `${head}\n${GENERATED_MARK}\n\n${body}`;
+}
+
+function buildPreamble(_root: string, host: ReturnType<typeof getHostConfig>) {
+  const envLines = host.usesEnvVars
+    ? [
+        'GXPM_ROOT="${GXPM_ROOT:-$PWD}"',
+        `GXPM_STATE_DIR="\${GXPM_STATE_DIR:-$GXPM_ROOT/.gxpm}"`,
+        "export GXPM_ROOT GXPM_STATE_DIR",
+      ]
+    : ['GXPM_ROOT="${GXPM_ROOT:-$PWD}"', "export GXPM_ROOT"];
+
+  return [
+    "## Host Preamble",
+    "",
+    `Target host: ${host.displayName}.`,
+    "",
+    "```bash",
+    ...envLines,
+    "```",
+  ].join("\n");
+}
+
+function parseArgs(argv: string[]) {
+  const options: GenerateSkillDocsOptions = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--host") {
+      options.host = argv[++index];
+    } else if (arg === "--dry-run") {
+      options.dryRun = true;
+    } else if (arg === "--root") {
+      options.root = argv[++index];
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+  return options;
+}
+
+if (import.meta.main) {
+  try {
+    const outputs = generateSkillDocs(parseArgs(Bun.argv.slice(2)));
+    if (outputs.length > 0) {
+      console.log(outputs.map((path) => `generated ${path}`).join("\n"));
+    } else {
+      console.log("skill docs are current");
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}

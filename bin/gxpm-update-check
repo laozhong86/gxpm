@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+printf 'gxpm local version: '
+bun -e "console.log(require('$ROOT/package.json').version)"
