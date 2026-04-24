@@ -15,6 +15,7 @@ export const ARTIFACT_TYPES = [
   "dispatch-handoff",
   "local-verify",
   "acceptance-check",
+  "self-review",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];

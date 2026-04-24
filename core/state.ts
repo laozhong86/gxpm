@@ -297,10 +297,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "local-verify" && nextPhase === "ac-check") {
     return "acceptance-check";
   }
+  if (fromPhase === "ac-check" && nextPhase === "self-review") {
+    return "self-review";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "self-review") {
+    return `gxpm ac-check self-review ${issueId}`;
+  }
   if (artifactType === "acceptance-check") {
     return `gxpm local-verify ac-check ${issueId}`;
   }

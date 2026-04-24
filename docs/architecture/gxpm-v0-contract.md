@@ -41,6 +41,7 @@ V0 已实现的本地目录：
     implementation-plan.json
     issue-intake.json
     local-verify.json
+    self-review.json
     triage-report.json
   reports/
   evidence/
@@ -57,6 +58,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `implementation-plan`
 - `dispatch-handoff`
 - `local-verify`
+- `self-review`
 
 V0 只写 JSON artifact，不渲染 markdown report。
 
@@ -90,6 +92,8 @@ V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中�
 `implement -> local-verify` 额外要求存在 `local-verify` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm implement verify <issue-id>`。
 
 `local-verify -> ac-check` 额外要求存在 `acceptance-check` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm local-verify ac-check <issue-id>`。
+
+`ac-check -> self-review` 额外要求存在 `self-review` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm ac-check self-review <issue-id>`。
 
 ## Source of Truth
 
@@ -190,6 +194,7 @@ gxpm plan init <issue-id>
 gxpm dispatch init <issue-id>
 gxpm implement verify <issue-id>
 gxpm local-verify ac-check <issue-id>
+gxpm ac-check self-review <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。`gxpm ac-check self-review` 会生成 draft `self-review`，用于解锁 `ac-check -> self-review`。

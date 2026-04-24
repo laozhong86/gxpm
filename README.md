@@ -50,6 +50,9 @@ bin/gxpm issue transition local-demo local-verify
 bin/gxpm local-verify ac-check local-demo
 bin/gxpm artifact read local-demo acceptance-check
 bin/gxpm issue transition local-demo ac-check
+bin/gxpm ac-check self-review local-demo
+bin/gxpm artifact read local-demo self-review
+bin/gxpm issue transition local-demo self-review
 ```
 
 ## 当前边界

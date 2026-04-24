@@ -13,6 +13,7 @@ import { listArtifacts, readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
 import { initializePlan } from "../core/plan";
+import { initializeSelfReview } from "../core/self-review";
 import { initializeTriage } from "../core/triage";
 
 function runCheck() {
@@ -136,6 +137,15 @@ function main(argv: string[]) {
     }
     initializeAcceptanceCheck({ issueId });
     console.log(`initialized acceptance check artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "ac-check" && subcommand === "self-review") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm ac-check self-review <issue-id>");
+    }
+    initializeSelfReview({ issueId });
+    console.log(`initialized self review artifact for ${issueId}`);
     return;
   }
 
