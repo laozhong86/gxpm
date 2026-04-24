@@ -20,6 +20,7 @@ export const ARTIFACT_TYPES = [
   "pr-check",
   "verify-findings",
   "qa-findings",
+  "land-findings",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];

@@ -50,6 +50,7 @@ gxpm artifact read <issue-id> ship-readiness
 gxpm artifact read <issue-id> pr-check
 gxpm artifact read <issue-id> verify-findings
 gxpm artifact read <issue-id> qa-findings
+gxpm artifact read <issue-id> land-findings
 ```
 
 Before leaving `plan`, initialize the implementation plan:
@@ -106,7 +107,13 @@ Before leaving `verify`, initialize QA findings evidence:
 gxpm verify qa <issue-id>
 ```
 
-V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists. `implement -> local-verify` is blocked until `local-verify` exists. `local-verify -> ac-check` is blocked until `acceptance-check` exists. `ac-check -> self-review` is blocked until `self-review` exists. `self-review -> ship` is blocked until `ship-readiness` exists. `ship -> pr-check` is blocked until `pr-check` exists. `pr-check -> verify` is blocked until `verify-findings` exists. `verify -> qa` is blocked until `qa-findings` exists.
+Before leaving `qa`, initialize land findings evidence:
+
+```bash
+gxpm qa land <issue-id>
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists. `implement -> local-verify` is blocked until `local-verify` exists. `local-verify -> ac-check` is blocked until `acceptance-check` exists. `ac-check -> self-review` is blocked until `self-review` exists. `self-review -> ship` is blocked until `ship-readiness` exists. `ship -> pr-check` is blocked until `pr-check` exists. `pr-check -> verify` is blocked until `verify-findings` exists. `verify -> qa` is blocked until `qa-findings` exists. `qa -> land` is blocked until `land-findings` exists.
 
 ## Phase Map
 

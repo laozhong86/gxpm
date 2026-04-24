@@ -12,6 +12,7 @@ import { initializeAcceptanceCheck } from "../core/ac-check";
 import { listArtifacts, readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
+import { initializeLandFindings } from "../core/land";
 import { initializePlan } from "../core/plan";
 import { initializePrCheck } from "../core/pr-check";
 import { initializeQaFindings } from "../core/qa";
@@ -186,6 +187,15 @@ function main(argv: string[]) {
     }
     initializeQaFindings({ issueId });
     console.log(`initialized QA findings artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "qa" && subcommand === "land") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm qa land <issue-id>");
+    }
+    initializeLandFindings({ issueId });
+    console.log(`initialized land findings artifact for ${issueId}`);
     return;
   }
 

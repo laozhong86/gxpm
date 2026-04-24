@@ -65,6 +65,9 @@ bin/gxpm issue transition local-demo verify
 bin/gxpm verify qa local-demo
 bin/gxpm artifact read local-demo qa-findings
 bin/gxpm issue transition local-demo qa
+bin/gxpm qa land local-demo
+bin/gxpm artifact read local-demo land-findings
+bin/gxpm issue transition local-demo land
 ```
 
 ## 当前边界
