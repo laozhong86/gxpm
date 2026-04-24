@@ -70,11 +70,17 @@ gstack 的限制：
 - `/ship` 是自动化 release flow；gxpm 应保留用户确认和 PMC gate，不应照搬所有自动推送/PR 语义。
 - gstack 强调完整性，但 gxpm 需要区分“可 boil 的 lake”和跨项目、跨团队、跨季度的 ocean。
 
-## gxpm 的融合方向
+## gxpm 的替代方向
 
-gxpm 应该采用“PMC 为骨架，gstack 为肌肉和工具层”的结构。
+gxpm 应该采用“重新抽象后的统一产品架构”，而不是“PMC 为骨架，gstack 为肌肉”的组合式 wrapper。
 
-保留 PMC：
+PMC 和 gstack 都应该被拆成 capability source：
+
+- PMC 贡献项目管理状态机、Linear 协作面、artifact gate、checkpoint 和可恢复执行。
+- gstack 贡献技能运行时、浏览器 runtime、QA/review/ship/investigate、context recovery、learn/timeline 和团队化安装。
+- gxpm 负责把这些能力重新定义成统一 state graph、capability runtime、evidence store、policy engine 和 product CLI/skill surface。
+
+吸收 PMC：
 
 - Linear issue 入口与同步。
 - 阶段状态机、checkpoint、artifact-first truth。
@@ -92,22 +98,25 @@ gxpm 应该采用“PMC 为骨架，gstack 为肌肉和工具层”的结构。
 
 避免：
 
+- 不把 gxpm 写成 PMC/gstack 的兼容壳。
+- 不保留 `.omc` 与 `.gstack` 两套长期真值。
 - 不把 gstack 整树 vendoring 进 gxpm。
-- 不把 PMC phase guide 改写成另一个手册。
+- 不把 PMC phase guide 简单改写成另一个手册。
 - 不让 Linear 执行代码或替代本地状态。
-- 不在 V0 同时做所有 runtime、browser、review、ship、deploy 能力。
+- 不在 V0 同时实现所有 runtime、browser、review、ship、deploy 能力。
 
 ## 建议的 V0 定义
 
-V0 只做三件事：
+V0 只做四件事：
 
-1. 定义 gxpm 的 phase/state/artifact 合同，兼容 PMC 的 `.omc/pm/<issue>` 思路。
-2. 定义 ability adapter：Linear、browser、review、qa、ship、learn 都是可插拔能力，不直接写死某个宿主。
-3. 写出 gxpm skill 入口，让代理能先读 state，再按最小引用面加载对应指南。
+1. 定义 gxpm 原生 state graph、artifact store、evidence store。
+2. 定义 capability runtime：issue、planning、execution、review、browser、release、memory、skill。
+3. 建立 PMC/gstack replacement map，明确每项旧能力迁移到哪个 gxpm 模块。
+4. 写出 gxpm skill 入口，让代理能先读 state，再按最小引用面加载对应 gxpm capability guide。
 
 V0 成功信号：
 
-- 一个代理能从 issue/state 进入正确阶段。
-- 每个阶段都知道读哪些最小文档、写哪些产物、什么时候停止。
+- 一个代理能在不加载 PMC/gstack 的情况下，从 gxpm issue/state 进入正确阶段。
+- 每个阶段都知道调用哪个 gxpm capability、写哪些产物、什么时候停止。
 - browser QA 能力被定义为 adapter/gate，而不是散落在 prompt 里的“去测一下”。
 - Linear 同步失败时可以安全降级，本地状态仍然完整。

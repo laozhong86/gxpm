@@ -2,14 +2,14 @@
 
 ## 北极星
 
-gxpm 是代理项目管理控制面。它把 Linear issue、阶段状态、执行代理、验证证据、浏览器 QA、评审和发布收口整合到同一个可恢复流程里。
+gxpm 是替代 PMC 和 gstack 的二代代理项目管理控制面。它把 Linear issue、阶段状态、执行代理、验证证据、浏览器 QA、评审、发布收口、上下文恢复和自学习整合到同一个原生系统里。
 
 ## 非目标
 
-- 不在 V0 重写 PMC。
-- 不在 V0 复制 gstack 全技能树。
-- 不在 V0 实现完整 browser daemon。
-- 不让 gxpm 直接承担所有 worker 的实现细节。
+- 不做 PMC/gstack 的薄封装。
+- 不保留“PMC 管项目、gstack 管工程流”的长期双轨。
+- 不把历史 skill 目录直接 vendoring 成 gxpm。
+- 不在 V0 一次性实现全部替代能力；V0 要形成最小可运行替代闭环。
 
 ## 核心对象
 
@@ -20,7 +20,7 @@ gxpm 是代理项目管理控制面。它把 Linear issue、阶段状态、执�
 - issue provider：默认 Linear。
 - state root：默认 `.gxpm/issues/<issue-id>/`。
 - artifact root：默认同 state root。
-- skill bindings：不同阶段调用哪些 worker/reviewer/browser 能力。
+- capability bindings：不同阶段调用哪些 gxpm 原生能力。
 
 ### Issue
 
@@ -64,7 +64,7 @@ V0 phase 集合：
 - `qa`
 - `land`
 
-V0 兼容 PMC 的语义，但允许 gxpm 后续把 gstack-style skills 挂到各 phase。
+V0 可以导入 PMC/gstack 的语义，但最终 phase 是 gxpm 原生状态，不以 `.omc` 或 `.gstack` 作为长期真值。
 
 ## Source of Truth
 
@@ -80,16 +80,17 @@ V0 兼容 PMC 的语义，但允许 gxpm 后续把 gstack-style skills 挂到各
 
 ## Ability Adapter
 
-gxpm 不直接内置所有能力，而是定义 adapter：
+gxpm 用 capability runtime 统一所有能力。V0 可以先用 adapter 接入现有能力，但 adapter 是迁移脚手架，不是最终产品边界：
 
-- `issueProvider`：Linear read/write/sync。
-- `workerProvider`：实现任务的代理或本地工具。
-- `reviewProvider`：代码评审、specialist review、adversarial review。
-- `browserProvider`：浏览器 QA、截图、console/network evidence。
-- `shipProvider`：PR、版本、changelog、release handoff。
-- `memoryProvider`：timeline、learn、context restore。
+- `issueRuntime`：Linear read/write/sync 与 issue graph。
+- `executionRuntime`：worker dispatch、worktree、task claim、local verification。
+- `reviewRuntime`：代码评审、specialist review、adversarial review。
+- `browserRuntime`：浏览器 QA、截图、console/network evidence。
+- `releaseRuntime`：PR、版本、changelog、merge/deploy handoff。
+- `memoryRuntime`：timeline、learn、context restore。
+- `skillRuntime`：skill discovery、routing、preamble、模板生成。
 
-每个 adapter 必须声明：
+每个 runtime/capability 必须声明：
 
 - input contract
 - output artifact
@@ -99,9 +100,9 @@ gxpm 不直接内置所有能力，而是定义 adapter：
 
 ## 与 PMC 的关系
 
-PMC 是 V0 的参考实现和兼容对象。
+PMC 是 gxpm 的上游能力来源和迁移对象，不是长期依赖。
 
-gxpm 应复用 PMC 的优秀部分：
+gxpm 应吸收 PMC 的优秀部分：
 
 - phase gating
 - checkpoint
@@ -109,7 +110,7 @@ gxpm 应复用 PMC 的优秀部分：
 - acceptance/local-verify/verify/qa artifact contracts
 - execution continuity
 
-gxpm 不应复制 PMC 的不足：
+gxpm 应替换 PMC 的不足：
 
 - QA 只停留在合同层。
 - skill routing 与能力发现不够系统。
@@ -117,9 +118,9 @@ gxpm 不应复制 PMC 的不足：
 
 ## 与 gstack 的关系
 
-gstack 是 V0 的框架参考。
+gstack 是 gxpm 的上游能力来源和迁移对象，不是长期依赖。
 
-gxpm 应吸收：
+gxpm 应吸收 gstack 的优秀部分：
 
 - preamble/config/session/timeline/learn 模式。
 - template-generated skill docs。
@@ -127,7 +128,7 @@ gxpm 应吸收：
 - `/review`、`/qa`、`/investigate`、`/ship` 的证据和循环机制。
 - team install 与 host abstraction 的思路。
 
-gxpm 不应照搬：
+gxpm 应替换 gstack 的不足：
 
 - Claude-only 假设。
 - 自动 ship/PR 的所有语义。
@@ -147,5 +148,6 @@ V0 阶段如果出现以下情况，应停止并生成 report，而不是继续�
 
 - 新会话可以只靠 `.gxpm/issues/<issue-id>/state.json` 和 artifacts 恢复。
 - 每个 phase 都有明确的 required output。
-- 每个外部能力都有 adapter contract。
+- 每个能力都有 gxpm 原生 contract。
 - 失败时能降级为本地报告，而不是把状态写坏。
+- 一个 issue 可以在 gxpm 内完成从 intake 到 QA/land 的最小闭环，不必同时加载 PMC 和 gstack。

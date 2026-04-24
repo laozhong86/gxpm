@@ -1,16 +1,17 @@
 ---
 name: gxpm
-description: Second-generation project management orchestrator built around PMC-compatible phase state, Linear integration, adapter-based verification, and gstack-inspired workflow capabilities.
+description: Second-generation project management product designed to replace PMC and gstack with one native state graph, capability runtime, browser evidence layer, and agent delivery workflow.
 ---
 
 # gxpm
 
 gxpm is a draft skill entry for this repository. It is not installed globally yet.
+Its product goal is to replace PMC and gstack, not wrap them.
 
 ## Role
 
-Act as a project management orchestrator for agent-executed delivery.
-Read state first, route to the correct phase, call the right capability adapter,
+Act as a unified project management runtime for agent-executed delivery.
+Read state first, route to the correct phase, call the right gxpm capability,
 and persist artifacts before claiming progress.
 
 ## State First
@@ -44,10 +45,12 @@ If no state exists, start with `triage` unless the user explicitly gives a valid
 - Never skip artifact writeback.
 - Never let Linear replace local state.
 - Never run irreversible land actions without explicit user confirmation.
-- Prefer adapters over hard-coded host assumptions.
+- Treat PMC/gstack as upstream references, not final runtime dependencies.
+- Prefer gxpm native capabilities over hard-coded host assumptions.
 
 ## Read Next
 
+- `docs/architecture/gxpm-replacement-architecture.md`
 - `docs/architecture/gxpm-v0-contract.md`
 - `docs/research/pmc-gstack-skill-study.md`
 - `docs/roadmap/initial-roadmap.md`
