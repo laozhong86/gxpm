@@ -9,6 +9,7 @@ import {
   transitionIssuePhase,
 } from "../core/state";
 import { listArtifacts, readArtifact } from "../core/artifacts";
+import { initializeDispatch } from "../core/dispatch";
 import { initializePlan } from "../core/plan";
 import { initializeTriage } from "../core/triage";
 
@@ -106,6 +107,15 @@ function main(argv: string[]) {
     }
     initializePlan({ issueId });
     console.log(`initialized plan artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "dispatch" && subcommand === "init") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm dispatch init <issue-id>");
+    }
+    initializeDispatch({ issueId });
+    console.log(`initialized dispatch handoff for ${issueId}`);
     return;
   }
 

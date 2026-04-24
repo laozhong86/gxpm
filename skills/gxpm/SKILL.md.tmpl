@@ -42,6 +42,7 @@ Inspect artifacts when gate evidence matters:
 gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> acceptance-contract
 gxpm artifact read <issue-id> implementation-plan
+gxpm artifact read <issue-id> dispatch-handoff
 ```
 
 Before leaving `plan`, initialize the implementation plan:
@@ -50,7 +51,13 @@ Before leaving `plan`, initialize the implementation plan:
 gxpm plan init <issue-id>
 ```
 
-V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists.
+Before leaving `dispatch`, initialize the dispatch handoff:
+
+```bash
+gxpm dispatch init <issue-id>
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists.
 
 ## Phase Map
 

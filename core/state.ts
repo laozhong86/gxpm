@@ -288,10 +288,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "plan" && nextPhase === "dispatch") {
     return "implementation-plan";
   }
+  if (fromPhase === "dispatch" && nextPhase === "implement") {
+    return "dispatch-handoff";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "dispatch-handoff") {
+    return `gxpm dispatch init ${issueId}`;
+  }
   if (artifactType === "implementation-plan") {
     return `gxpm plan init ${issueId}`;
   }

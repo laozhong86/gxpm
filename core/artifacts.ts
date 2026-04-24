@@ -12,6 +12,7 @@ export const ARTIFACT_TYPES = [
   "triage-report",
   "acceptance-contract",
   "implementation-plan",
+  "dispatch-handoff",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
