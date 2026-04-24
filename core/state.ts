@@ -309,10 +309,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "pr-check" && nextPhase === "verify") {
     return "verify-findings";
   }
+  if (fromPhase === "verify" && nextPhase === "qa") {
+    return "qa-findings";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "qa-findings") {
+    return `gxpm verify qa ${issueId}`;
+  }
   if (artifactType === "verify-findings") {
     return `gxpm pr-check verify ${issueId}`;
   }

@@ -14,6 +14,7 @@ import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
 import { initializePlan } from "../core/plan";
 import { initializePrCheck } from "../core/pr-check";
+import { initializeQaFindings } from "../core/qa";
 import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
 import { initializeTriage } from "../core/triage";
@@ -176,6 +177,15 @@ function main(argv: string[]) {
     }
     initializeVerifyFindings({ issueId });
     console.log(`initialized verify findings artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "verify" && subcommand === "qa") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm verify qa <issue-id>");
+    }
+    initializeQaFindings({ issueId });
+    console.log(`initialized QA findings artifact for ${issueId}`);
     return;
   }
 
