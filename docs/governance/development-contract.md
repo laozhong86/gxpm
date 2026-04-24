@@ -23,6 +23,13 @@
 - 生成物冲突只能通过模板和生成器解决，再重新生成。
 - `bun run check` 必须能发现生成物漂移。
 
+## Phase Artifact 规则
+
+- 新增 phase artifact initializer 时，优先使用 `core/phase-artifact.ts` 的 `createPhaseArtifactInitializer`。
+- initializer 文件只声明 required phase、artifact type、label 和 draft payload。
+- 不要在每个 initializer 中重复 `readIssueState`、phase 校验和 `writeArtifact` 样板。
+- `triage` 这类没有前置 phase gate 的入口 artifact 可以保留专用实现。
+
 ## 失败归因协议
 
 不要直接说“这是旧问题”或“与本次无关”。需要满足以下任一证据：
