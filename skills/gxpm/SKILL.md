@@ -56,6 +56,7 @@ gxpm artifact read <issue-id> local-verify
 gxpm artifact read <issue-id> acceptance-check
 gxpm artifact read <issue-id> self-review
 gxpm artifact read <issue-id> ship-readiness
+gxpm artifact read <issue-id> pr-check
 ```
 
 Before leaving `plan`, initialize the implementation plan:
@@ -94,7 +95,13 @@ Before leaving `self-review`, initialize ship readiness evidence:
 gxpm self-review ship <issue-id>
 ```
 
-V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists. `implement -> local-verify` is blocked until `local-verify` exists. `local-verify -> ac-check` is blocked until `acceptance-check` exists. `ac-check -> self-review` is blocked until `self-review` exists. `self-review -> ship` is blocked until `ship-readiness` exists.
+Before leaving `ship`, initialize PR check evidence:
+
+```bash
+gxpm ship pr-check <issue-id>
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists. `plan -> dispatch` is blocked until `implementation-plan` exists. `dispatch -> implement` is blocked until `dispatch-handoff` exists. `implement -> local-verify` is blocked until `local-verify` exists. `local-verify -> ac-check` is blocked until `acceptance-check` exists. `ac-check -> self-review` is blocked until `self-review` exists. `self-review -> ship` is blocked until `ship-readiness` exists. `ship -> pr-check` is blocked until `pr-check` exists.
 
 ## Phase Map
 

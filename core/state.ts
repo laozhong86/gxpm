@@ -303,10 +303,16 @@ function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmP
   if (fromPhase === "self-review" && nextPhase === "ship") {
     return "ship-readiness";
   }
+  if (fromPhase === "ship" && nextPhase === "pr-check") {
+    return "pr-check";
+  }
   return null;
 }
 
 function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "pr-check") {
+    return `gxpm ship pr-check ${issueId}`;
+  }
   if (artifactType === "ship-readiness") {
     return `gxpm self-review ship ${issueId}`;
   }

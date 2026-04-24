@@ -13,6 +13,7 @@ import { listArtifacts, readArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
 import { initializePlan } from "../core/plan";
+import { initializePrCheck } from "../core/pr-check";
 import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
 import { initializeTriage } from "../core/triage";
@@ -156,6 +157,15 @@ function main(argv: string[]) {
     }
     initializeShipReadiness({ issueId });
     console.log(`initialized ship readiness artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "ship" && subcommand === "pr-check") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm ship pr-check <issue-id>");
+    }
+    initializePrCheck({ issueId });
+    console.log(`initialized pr check artifact for ${issueId}`);
     return;
   }
 
