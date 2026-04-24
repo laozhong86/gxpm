@@ -236,12 +236,13 @@ function assertPhaseGate(input: {
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
-  if (input.fromPhase !== "triage" || input.nextPhase !== "plan") {
+  const requiredArtifact = getRequiredArtifactForTransition(input.fromPhase, input.nextPhase);
+  if (!requiredArtifact) {
     return;
   }
 
-  const acceptanceContractPath = join(input.issueDir, "artifacts", "acceptance-contract.json");
-  if (existsSync(acceptanceContractPath)) {
+  const requiredArtifactPath = join(input.issueDir, "artifacts", `${requiredArtifact}.json`);
+  if (existsSync(requiredArtifactPath)) {
     const now = new Date().toISOString();
     appendIssueEvent({
       issueDir: input.issueDir,
@@ -253,7 +254,7 @@ function assertPhaseGate(input: {
         payload: {
           fromPhase: input.fromPhase,
           toPhase: input.nextPhase,
-          requiredArtifact: "acceptance-contract",
+          requiredArtifact,
         },
       },
     });
@@ -271,11 +272,28 @@ function assertPhaseGate(input: {
       payload: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
-        missingArtifact: "acceptance-contract",
+        missingArtifact: requiredArtifact,
       },
     },
   });
   throw new Error(
-    `Missing required artifact: acceptance-contract; run gxpm triage init ${input.issueId}`,
+    `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );
+}
+
+function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmPhase) {
+  if (fromPhase === "triage" && nextPhase === "plan") {
+    return "acceptance-contract";
+  }
+  if (fromPhase === "plan" && nextPhase === "dispatch") {
+    return "implementation-plan";
+  }
+  return null;
+}
+
+function getGateCommand(issueId: string, artifactType: string) {
+  if (artifactType === "implementation-plan") {
+    return `gxpm plan init ${issueId}`;
+  }
+  return `gxpm triage init ${issueId}`;
 }

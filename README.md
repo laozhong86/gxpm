@@ -38,6 +38,9 @@ bin/gxpm triage init local-demo
 bin/gxpm artifact list local-demo
 bin/gxpm artifact read local-demo acceptance-contract
 bin/gxpm issue transition local-demo plan
+bin/gxpm plan init local-demo
+bin/gxpm artifact read local-demo implementation-plan
+bin/gxpm issue transition local-demo dispatch
 ```
 
 ## 当前边界

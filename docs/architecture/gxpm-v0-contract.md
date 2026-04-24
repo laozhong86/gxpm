@@ -36,6 +36,7 @@ V0 已实现的本地目录：
   artifacts/
     index.json
     acceptance-contract.json
+    implementation-plan.json
     issue-intake.json
     triage-report.json
   reports/
@@ -49,6 +50,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `issue-intake`
 - `triage-report`
 - `acceptance-contract`
+- `implementation-plan`
 
 V0 只写 JSON artifact，不渲染 markdown report。
 
@@ -74,6 +76,8 @@ V0 可以导入 PMC/gstack 的语义，但最终 phase 是 gxpm 原生状态，�
 V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中的下一个 phase。
 
 `triage -> plan` 额外要求存在 `acceptance-contract` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm triage init <issue-id>`。
+
+`plan -> dispatch` 额外要求存在 `implementation-plan` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm plan init <issue-id>`。
 
 ## Source of Truth
 
@@ -170,6 +174,7 @@ gxpm issue transition <issue-id> <phase>
 gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> <type>
 gxpm triage init <issue-id>
+gxpm plan init <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。

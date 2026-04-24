@@ -9,6 +9,7 @@ import {
   transitionIssuePhase,
 } from "../core/state";
 import { listArtifacts, readArtifact } from "../core/artifacts";
+import { initializePlan } from "../core/plan";
 import { initializeTriage } from "../core/triage";
 
 function runCheck() {
@@ -96,6 +97,15 @@ function main(argv: string[]) {
     }
     initializeTriage({ issueId });
     console.log(`initialized triage artifacts for ${issueId}`);
+    return;
+  }
+
+  if (command === "plan" && subcommand === "init") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm plan init <issue-id>");
+    }
+    initializePlan({ issueId });
+    console.log(`initialized plan artifact for ${issueId}`);
     return;
   }
 
