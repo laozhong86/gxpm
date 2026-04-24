@@ -58,17 +58,17 @@ V0 已支持 JSON artifact store。当前 artifact type：
 
 - `issue-intake`
 - `triage-report`
-- `acceptance-check`
 - `acceptance-contract`
 - `implementation-plan`
 - `dispatch-handoff`
-- `land-findings`
 - `local-verify`
-- `pr-check`
-- `qa-findings`
+- `acceptance-check`
 - `self-review`
 - `ship-readiness`
+- `pr-check`
 - `verify-findings`
+- `qa-findings`
+- `land-findings`
 
 V0 只写 JSON artifact，不渲染 markdown report。
 

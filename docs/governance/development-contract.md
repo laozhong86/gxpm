@@ -25,6 +25,7 @@
 - scaffold check 流程的真值是 `scripts/scaffold-check.ts`；`gxpm check` 和 `gxpm-check.ts` 只能调用它。
 - skill 模板中的 gate command、artifact read list 和 transition summary 必须由 `scripts/gen-skill-docs.ts` 从 phase gate registry 生成。
 - README 只展示稳定入口命令，不复制完整 phase gate 链；完整 gate guidance 以生成的 `skills/gxpm/SKILL.md` 为准。
+- `docs/architecture/gxpm-v0-contract.md` 可保留人类可读列表，但必须由测试证明和 phase、artifact、gate registry 一致。
 
 ## Phase Artifact 规则
 
