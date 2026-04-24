@@ -29,6 +29,8 @@
 - initializer 文件只声明 required phase、artifact type、label 和 draft payload。
 - 不要在每个 initializer 中重复 `readIssueState`、phase 校验和 `writeArtifact` 样板。
 - `triage` 这类没有前置 phase gate 的入口 artifact 可以保留专用实现。
+- 新增 artifact-backed transition 时，必须同步更新 `core/phase-gates.ts` 和 `scripts/phase-artifact-commands.ts`。
+- `test/phase-gates.test.ts` 必须证明 gate 提示命令和 CLI artifact 命令保持一致。
 
 ## 失败归因协议
 

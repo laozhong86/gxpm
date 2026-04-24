@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
 
 export const GXPM_PHASES = [
   "triage",
@@ -279,75 +280,4 @@ function assertPhaseGate(input: {
   throw new Error(
     `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );
-}
-
-function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmPhase) {
-  if (fromPhase === "triage" && nextPhase === "plan") {
-    return "acceptance-contract";
-  }
-  if (fromPhase === "plan" && nextPhase === "dispatch") {
-    return "implementation-plan";
-  }
-  if (fromPhase === "dispatch" && nextPhase === "implement") {
-    return "dispatch-handoff";
-  }
-  if (fromPhase === "implement" && nextPhase === "local-verify") {
-    return "local-verify";
-  }
-  if (fromPhase === "local-verify" && nextPhase === "ac-check") {
-    return "acceptance-check";
-  }
-  if (fromPhase === "ac-check" && nextPhase === "self-review") {
-    return "self-review";
-  }
-  if (fromPhase === "self-review" && nextPhase === "ship") {
-    return "ship-readiness";
-  }
-  if (fromPhase === "ship" && nextPhase === "pr-check") {
-    return "pr-check";
-  }
-  if (fromPhase === "pr-check" && nextPhase === "verify") {
-    return "verify-findings";
-  }
-  if (fromPhase === "verify" && nextPhase === "qa") {
-    return "qa-findings";
-  }
-  if (fromPhase === "qa" && nextPhase === "land") {
-    return "land-findings";
-  }
-  return null;
-}
-
-function getGateCommand(issueId: string, artifactType: string) {
-  if (artifactType === "land-findings") {
-    return `gxpm qa land ${issueId}`;
-  }
-  if (artifactType === "qa-findings") {
-    return `gxpm verify qa ${issueId}`;
-  }
-  if (artifactType === "verify-findings") {
-    return `gxpm pr-check verify ${issueId}`;
-  }
-  if (artifactType === "pr-check") {
-    return `gxpm ship pr-check ${issueId}`;
-  }
-  if (artifactType === "ship-readiness") {
-    return `gxpm self-review ship ${issueId}`;
-  }
-  if (artifactType === "self-review") {
-    return `gxpm ac-check self-review ${issueId}`;
-  }
-  if (artifactType === "acceptance-check") {
-    return `gxpm local-verify ac-check ${issueId}`;
-  }
-  if (artifactType === "local-verify") {
-    return `gxpm implement verify ${issueId}`;
-  }
-  if (artifactType === "dispatch-handoff") {
-    return `gxpm dispatch init ${issueId}`;
-  }
-  if (artifactType === "implementation-plan") {
-    return `gxpm plan init ${issueId}`;
-  }
-  return `gxpm triage init ${issueId}`;
 }

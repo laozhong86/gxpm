@@ -8,18 +8,8 @@ import {
   readIssueState,
   transitionIssuePhase,
 } from "../core/state";
-import { initializeAcceptanceCheck } from "../core/ac-check";
 import { listArtifacts, readArtifact } from "../core/artifacts";
-import { initializeDispatch } from "../core/dispatch";
-import { initializeLocalVerify } from "../core/implement";
-import { initializeLandFindings } from "../core/land";
-import { initializePlan } from "../core/plan";
-import { initializePrCheck } from "../core/pr-check";
-import { initializeQaFindings } from "../core/qa";
-import { initializeSelfReview } from "../core/self-review";
-import { initializeShipReadiness } from "../core/ship";
-import { initializeTriage } from "../core/triage";
-import { initializeVerifyFindings } from "../core/verify";
+import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 
 function runCheck() {
   const hostErrors = validateAllConfigs(ALL_HOST_CONFIGS);
@@ -100,102 +90,13 @@ function main(argv: string[]) {
     return;
   }
 
-  if (command === "triage" && subcommand === "init") {
+  const phaseArtifactCommand = findPhaseArtifactCommand(command, subcommand);
+  if (phaseArtifactCommand) {
     if (!issueId) {
-      throw new Error("Usage: gxpm triage init <issue-id>");
+      throw new Error(`Usage: ${phaseArtifactCommand.command}`);
     }
-    initializeTriage({ issueId });
-    console.log(`initialized triage artifacts for ${issueId}`);
-    return;
-  }
-
-  if (command === "plan" && subcommand === "init") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm plan init <issue-id>");
-    }
-    initializePlan({ issueId });
-    console.log(`initialized plan artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "dispatch" && subcommand === "init") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm dispatch init <issue-id>");
-    }
-    initializeDispatch({ issueId });
-    console.log(`initialized dispatch handoff for ${issueId}`);
-    return;
-  }
-
-  if (command === "implement" && subcommand === "verify") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm implement verify <issue-id>");
-    }
-    initializeLocalVerify({ issueId });
-    console.log(`initialized local verify artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "local-verify" && subcommand === "ac-check") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm local-verify ac-check <issue-id>");
-    }
-    initializeAcceptanceCheck({ issueId });
-    console.log(`initialized acceptance check artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "ac-check" && subcommand === "self-review") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm ac-check self-review <issue-id>");
-    }
-    initializeSelfReview({ issueId });
-    console.log(`initialized self review artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "self-review" && subcommand === "ship") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm self-review ship <issue-id>");
-    }
-    initializeShipReadiness({ issueId });
-    console.log(`initialized ship readiness artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "ship" && subcommand === "pr-check") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm ship pr-check <issue-id>");
-    }
-    initializePrCheck({ issueId });
-    console.log(`initialized pr check artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "pr-check" && subcommand === "verify") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm pr-check verify <issue-id>");
-    }
-    initializeVerifyFindings({ issueId });
-    console.log(`initialized verify findings artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "verify" && subcommand === "qa") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm verify qa <issue-id>");
-    }
-    initializeQaFindings({ issueId });
-    console.log(`initialized QA findings artifact for ${issueId}`);
-    return;
-  }
-
-  if (command === "qa" && subcommand === "land") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm qa land <issue-id>");
-    }
-    initializeLandFindings({ issueId });
-    console.log(`initialized land findings artifact for ${issueId}`);
+    phaseArtifactCommand.initialize({ issueId });
+    console.log(phaseArtifactCommand.successMessage(issueId));
     return;
   }
 
