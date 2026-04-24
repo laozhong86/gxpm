@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { ARTIFACT_TYPES } from "../core/artifacts";
 import {
+  GATE_ARTIFACT_TYPES,
   getGateCommand,
   getRequiredArtifactForTransition,
+  isGateArtifact,
   PHASE_GATE_RULES,
 } from "../core/phase-gates";
 import { PHASE_ARTIFACT_COMMANDS } from "../scripts/phase-artifact-commands";
@@ -76,6 +79,17 @@ describe("phase gate registry", () => {
         requiredArtifact: "land-findings",
       },
     ]);
+  });
+
+  test("distinguishes gate-required artifacts from non-gate artifacts", () => {
+    expect(GATE_ARTIFACT_TYPES).toEqual(PHASE_GATE_RULES.map((rule) => rule.requiredArtifact));
+    expect(ARTIFACT_TYPES.filter((type) => !isGateArtifact(type))).toEqual([
+      "issue-intake",
+      "triage-report",
+    ]);
+    expect(isGateArtifact("acceptance-contract")).toBe(true);
+    expect(isGateArtifact("issue-intake")).toBe(false);
+    expect(isGateArtifact("random-note")).toBe(false);
   });
 
   test("resolves transition artifacts and renders issue-specific gate commands", () => {

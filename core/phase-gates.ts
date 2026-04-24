@@ -77,6 +77,12 @@ export const PHASE_GATE_RULES: PhaseGateRule[] = [
   },
 ];
 
+export const GATE_ARTIFACT_TYPES = PHASE_GATE_RULES.map((rule) => rule.requiredArtifact);
+
+export function isGateArtifact(artifactType: string): artifactType is ArtifactType {
+  return GATE_ARTIFACT_TYPES.includes(artifactType as ArtifactType);
+}
+
 export function getRequiredArtifactForTransition(fromPhase: GxpmPhase, nextPhase: GxpmPhase) {
   return (
     PHASE_GATE_RULES.find((rule) => rule.fromPhase === fromPhase && rule.nextPhase === nextPhase)
