@@ -17,6 +17,7 @@ import { initializePrCheck } from "../core/pr-check";
 import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
 import { initializeTriage } from "../core/triage";
+import { initializeVerifyFindings } from "../core/verify";
 
 function runCheck() {
   const hostErrors = validateAllConfigs(ALL_HOST_CONFIGS);
@@ -166,6 +167,15 @@ function main(argv: string[]) {
     }
     initializePrCheck({ issueId });
     console.log(`initialized pr check artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "pr-check" && subcommand === "verify") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm pr-check verify <issue-id>");
+    }
+    initializeVerifyFindings({ issueId });
+    console.log(`initialized verify findings artifact for ${issueId}`);
     return;
   }
 

@@ -59,6 +59,9 @@ bin/gxpm issue transition local-demo ship
 bin/gxpm ship pr-check local-demo
 bin/gxpm artifact read local-demo pr-check
 bin/gxpm issue transition local-demo pr-check
+bin/gxpm pr-check verify local-demo
+bin/gxpm artifact read local-demo verify-findings
+bin/gxpm issue transition local-demo verify
 ```
 
 ## 当前边界

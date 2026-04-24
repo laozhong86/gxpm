@@ -45,6 +45,7 @@ V0 已实现的本地目录：
     self-review.json
     ship-readiness.json
     triage-report.json
+    verify-findings.json
   reports/
   evidence/
     screenshots/
@@ -63,6 +64,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `pr-check`
 - `self-review`
 - `ship-readiness`
+- `verify-findings`
 
 V0 只写 JSON artifact，不渲染 markdown report。
 
@@ -102,6 +104,8 @@ V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中�
 `self-review -> ship` 额外要求存在 `ship-readiness` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm self-review ship <issue-id>`。
 
 `ship -> pr-check` 额外要求存在 `pr-check` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm ship pr-check <issue-id>`。
+
+`pr-check -> verify` 额外要求存在 `verify-findings` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm pr-check verify <issue-id>`。
 
 ## Source of Truth
 
@@ -205,6 +209,7 @@ gxpm local-verify ac-check <issue-id>
 gxpm ac-check self-review <issue-id>
 gxpm self-review ship <issue-id>
 gxpm ship pr-check <issue-id>
+gxpm pr-check verify <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。`gxpm ac-check self-review` 会生成 draft `self-review`，用于解锁 `ac-check -> self-review`。`gxpm self-review ship` 会生成 draft `ship-readiness`，用于解锁 `self-review -> ship`。`gxpm ship pr-check` 会生成 draft `pr-check`，用于解锁 `ship -> pr-check`。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。`gxpm ac-check self-review` 会生成 draft `self-review`，用于解锁 `ac-check -> self-review`。`gxpm self-review ship` 会生成 draft `ship-readiness`，用于解锁 `self-review -> ship`。`gxpm ship pr-check` 会生成 draft `pr-check`，用于解锁 `ship -> pr-check`。`gxpm pr-check verify` 会生成 draft `verify-findings`，用于解锁 `pr-check -> verify`。

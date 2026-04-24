@@ -18,6 +18,7 @@ export const ARTIFACT_TYPES = [
   "self-review",
   "ship-readiness",
   "pr-check",
+  "verify-findings",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
