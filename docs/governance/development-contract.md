@@ -22,6 +22,7 @@
 - 修改模板后必须运行 `bun run gen:skill-docs` 并提交模板与生成物。
 - 生成物冲突只能通过模板和生成器解决，再重新生成。
 - `bun run check` 必须能发现生成物漂移。
+- scaffold check 流程的真值是 `scripts/scaffold-check.ts`；`gxpm check` 和 `gxpm-check.ts` 只能调用它。
 
 ## Phase Artifact 规则
 

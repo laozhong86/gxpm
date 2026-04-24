@@ -1,7 +1,3 @@
-import { ALL_HOST_CONFIGS } from "../hosts";
-import { generateSkillDocs } from "./gen-skill-docs";
-import { validateGovernanceDocs } from "./governance-check";
-import { validateAllConfigs } from "./host-config";
 import {
   createIssueState,
   getIssuePaths,
@@ -10,28 +6,13 @@ import {
 } from "../core/state";
 import { listArtifacts, readArtifact } from "../core/artifacts";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
-
-function runCheck() {
-  const hostErrors = validateAllConfigs(ALL_HOST_CONFIGS);
-  const governanceErrors = validateGovernanceDocs();
-  const errors = [
-    ...hostErrors.map((error) => `host config: ${error}`),
-    ...governanceErrors.map((error) => `governance: ${error}`),
-  ];
-
-  if (errors.length > 0) {
-    throw new Error(errors.join("\n"));
-  }
-
-  generateSkillDocs({ dryRun: true });
-  console.log(`gxpm scaffold check passed (${ALL_HOST_CONFIGS.length} hosts)`);
-}
+import { runScaffoldCheck } from "./scaffold-check";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
 
   if (!command || command === "check") {
-    runCheck();
+    console.log(runScaffoldCheck());
     return;
   }
 

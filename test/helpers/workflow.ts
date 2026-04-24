@@ -17,9 +17,13 @@ const cliPath = resolve(import.meta.dir, "..", "..", "scripts", "gxpm.ts");
 type CliResult = ReturnType<typeof runCli>;
 
 export function runCli(root: string, args: string[]) {
+  return runScript([cliPath, ...args], root);
+}
+
+export function runScript(args: string[], cwd = process.cwd()) {
   return Bun.spawnSync({
-    cmd: ["bun", "run", cliPath, ...args],
-    cwd: root,
+    cmd: ["bun", "run", ...args],
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
