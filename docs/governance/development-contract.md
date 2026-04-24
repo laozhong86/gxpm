@@ -35,6 +35,7 @@
 - 新增 artifact-backed transition 时，必须先更新 `core/phase-gates.ts`；`scripts/phase-artifact-commands.ts` 只绑定 initializer 和 success message。
 - `test/phase-gates.test.ts` 必须证明 CLI artifact command 顺序和 gate rule 顺序保持一致。
 - gate 测试需要把通用 phase setup 放在 `test/helpers/workflow.ts`，不要在每个 gate 文件重复写完整前置 phase 链。
+- `test/helpers/workflow.ts` 的 phase setup 顺序必须从 phase gate registry 派生，不再手写第二份 workflow chain。
 - gate 测试文件只保留当前 gate 的 artifact payload、blocked event、CLI command 和 transition 断言。
 
 ## 失败归因协议

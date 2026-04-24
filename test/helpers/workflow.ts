@@ -1,16 +1,7 @@
 import { resolve } from "node:path";
-import { initializeAcceptanceCheck } from "../../core/ac-check";
-import { initializeDispatch } from "../../core/dispatch";
-import { initializeLocalVerify } from "../../core/implement";
-import { initializeLandFindings } from "../../core/land";
-import { initializePlan } from "../../core/plan";
-import { initializePrCheck } from "../../core/pr-check";
-import { initializeQaFindings } from "../../core/qa";
-import { initializeSelfReview } from "../../core/self-review";
-import { initializeShipReadiness } from "../../core/ship";
+import { PHASE_GATE_RULES } from "../../core/phase-gates";
 import { createIssueState, transitionIssuePhase, type GxpmPhase } from "../../core/state";
-import { initializeTriage } from "../../core/triage";
-import { initializeVerifyFindings } from "../../core/verify";
+import { PHASE_ARTIFACT_COMMANDS } from "../../scripts/phase-artifact-commands";
 
 const cliPath = resolve(import.meta.dir, "..", "..", "scripts", "gxpm.ts");
 
@@ -77,33 +68,20 @@ function runRequiredCli(root: string, args: string[]) {
 const WORKFLOW_STEPS: Array<{
   initialize: (input: { root: string; issueId: string }) => unknown;
   nextPhase: GxpmPhase;
-}> = [
-  { initialize: initializeTriage, nextPhase: "plan" },
-  { initialize: initializePlan, nextPhase: "dispatch" },
-  { initialize: initializeDispatch, nextPhase: "implement" },
-  { initialize: initializeLocalVerify, nextPhase: "local-verify" },
-  { initialize: initializeAcceptanceCheck, nextPhase: "ac-check" },
-  { initialize: initializeSelfReview, nextPhase: "self-review" },
-  { initialize: initializeShipReadiness, nextPhase: "ship" },
-  { initialize: initializePrCheck, nextPhase: "pr-check" },
-  { initialize: initializeVerifyFindings, nextPhase: "verify" },
-  { initialize: initializeQaFindings, nextPhase: "qa" },
-  { initialize: initializeLandFindings, nextPhase: "land" },
-];
+}> = PHASE_GATE_RULES.map((rule, index) => ({
+  initialize: PHASE_ARTIFACT_COMMANDS[index].initialize,
+  nextPhase: rule.nextPhase,
+}));
 
 const CLI_WORKFLOW_STEPS: Array<{
   initializeArgs: string[];
   nextPhase: GxpmPhase;
-}> = [
-  { initializeArgs: ["triage", "init"], nextPhase: "plan" },
-  { initializeArgs: ["plan", "init"], nextPhase: "dispatch" },
-  { initializeArgs: ["dispatch", "init"], nextPhase: "implement" },
-  { initializeArgs: ["implement", "verify"], nextPhase: "local-verify" },
-  { initializeArgs: ["local-verify", "ac-check"], nextPhase: "ac-check" },
-  { initializeArgs: ["ac-check", "self-review"], nextPhase: "self-review" },
-  { initializeArgs: ["self-review", "ship"], nextPhase: "ship" },
-  { initializeArgs: ["ship", "pr-check"], nextPhase: "pr-check" },
-  { initializeArgs: ["pr-check", "verify"], nextPhase: "verify" },
-  { initializeArgs: ["verify", "qa"], nextPhase: "qa" },
-  { initializeArgs: ["qa", "land"], nextPhase: "land" },
-];
+}> = PHASE_GATE_RULES.map((rule) => ({
+  initializeArgs: rule.command.replace(/^gxpm\s+/, "").replace(/\s+<issue-id>$/, "").split(" "),
+  nextPhase: rule.nextPhase,
+}));
+
+export const WORKFLOW_HELPER_PHASES = WORKFLOW_STEPS.map((step) => step.nextPhase);
+export const WORKFLOW_HELPER_CLI_COMMANDS = CLI_WORKFLOW_STEPS.map((step) =>
+  `gxpm ${step.initializeArgs.join(" ")} <issue-id>`,
+);
