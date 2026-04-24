@@ -10,7 +10,25 @@ describe("generateSkillDocs", () => {
     mkdirSync(join(root, "skills", "gxpm"), { recursive: true });
     writeFileSync(
       join(root, "skills", "gxpm", "SKILL.md.tmpl"),
-      "---\nname: gxpm\ndescription: test\n---\n\n{{PREAMBLE}}\n\n# Body\n",
+      [
+        "---",
+        "name: gxpm",
+        "description: test",
+        "---",
+        "",
+        "{{PREAMBLE}}",
+        "",
+        "# Body",
+        "",
+        "```bash",
+        "{{ARTIFACT_READ_COMMANDS}}",
+        "```",
+        "",
+        "{{PHASE_GATE_COMMANDS}}",
+        "",
+        "{{PHASE_TRANSITION_SUMMARY}}",
+        "",
+      ].join("\n"),
     );
 
     const outputs = generateSkillDocs({ root, host: "claude", dryRun: false });
@@ -20,5 +38,9 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("AUTO-GENERATED from SKILL.md.tmpl");
     expect(generated).toContain("GXPM_ROOT=");
     expect(generated).toContain("# Body");
+    expect(generated).toContain("gxpm artifact read <issue-id> acceptance-contract");
+    expect(generated).toContain("gxpm qa land <issue-id>");
+    expect(generated).toContain("`qa -> land` is blocked until `land-findings` exists");
+    expect(generated).not.toContain("{{");
   });
 });

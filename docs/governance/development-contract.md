@@ -23,6 +23,7 @@
 - 生成物冲突只能通过模板和生成器解决，再重新生成。
 - `bun run check` 必须能发现生成物漂移。
 - scaffold check 流程的真值是 `scripts/scaffold-check.ts`；`gxpm check` 和 `gxpm-check.ts` 只能调用它。
+- skill 模板中的 gate command、artifact read list 和 transition summary 必须由 `scripts/gen-skill-docs.ts` 从 phase gate registry 生成。
 
 ## Phase Artifact 规则
 

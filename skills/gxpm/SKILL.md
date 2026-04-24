@@ -39,12 +39,6 @@ If no state exists, create it before phase work:
 gxpm issue create <issue-id>
 ```
 
-Before leaving `triage`, initialize the acceptance contract:
-
-```bash
-gxpm triage init <issue-id>
-```
-
 Inspect artifacts when gate evidence matters:
 
 ```bash
@@ -62,61 +56,67 @@ gxpm artifact read <issue-id> qa-findings
 gxpm artifact read <issue-id> land-findings
 ```
 
-Before leaving `plan`, initialize the implementation plan:
+Before leaving `triage`, initialize `acceptance-contract`:
+
+```bash
+gxpm triage init <issue-id>
+```
+
+Before leaving `plan`, initialize `implementation-plan`:
 
 ```bash
 gxpm plan init <issue-id>
 ```
 
-Before leaving `dispatch`, initialize the dispatch handoff:
+Before leaving `dispatch`, initialize `dispatch-handoff`:
 
 ```bash
 gxpm dispatch init <issue-id>
 ```
 
-Before leaving `implement`, initialize local verification evidence:
+Before leaving `implement`, initialize `local-verify`:
 
 ```bash
 gxpm implement verify <issue-id>
 ```
 
-Before leaving `local-verify`, initialize acceptance fulfillment evidence:
+Before leaving `local-verify`, initialize `acceptance-check`:
 
 ```bash
 gxpm local-verify ac-check <issue-id>
 ```
 
-Before leaving `ac-check`, initialize self-review evidence:
+Before leaving `ac-check`, initialize `self-review`:
 
 ```bash
 gxpm ac-check self-review <issue-id>
 ```
 
-Before leaving `self-review`, initialize ship readiness evidence:
+Before leaving `self-review`, initialize `ship-readiness`:
 
 ```bash
 gxpm self-review ship <issue-id>
 ```
 
-Before leaving `ship`, initialize PR check evidence:
+Before leaving `ship`, initialize `pr-check`:
 
 ```bash
 gxpm ship pr-check <issue-id>
 ```
 
-Before leaving `pr-check`, initialize verify findings evidence:
+Before leaving `pr-check`, initialize `verify-findings`:
 
 ```bash
 gxpm pr-check verify <issue-id>
 ```
 
-Before leaving `verify`, initialize QA findings evidence:
+Before leaving `verify`, initialize `qa-findings`:
 
 ```bash
 gxpm verify qa <issue-id>
 ```
 
-Before leaving `qa`, initialize land findings evidence:
+Before leaving `qa`, initialize `land-findings`:
 
 ```bash
 gxpm qa land <issue-id>

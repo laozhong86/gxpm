@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { discoverTemplates } from "./discover-skills";
 import { getHostConfig } from "../hosts";
+import { PHASE_GATE_RULES } from "../core/phase-gates";
 
 export interface GenerateSkillDocsOptions {
   root?: string;
@@ -21,7 +22,12 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
   for (const template of discoverTemplates(root)) {
     const templatePath = join(root, template.tmpl);
     const outputPath = join(root, template.output);
-    const rendered = renderTemplate(readFileSync(templatePath, "utf8"), buildPreamble(root, host));
+    const rendered = renderTemplate(readFileSync(templatePath, "utf8"), {
+      artifactReadCommands: buildArtifactReadCommands(),
+      phaseGateCommands: buildPhaseGateCommands(),
+      phaseTransitionSummary: buildPhaseTransitionSummary(),
+      preamble: buildPreamble(root, host),
+    });
     const generated = insertGeneratedMark(rendered);
 
     if (options.dryRun) {
@@ -44,8 +50,19 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
   return outputs;
 }
 
-function renderTemplate(template: string, preamble: string) {
-  return template.replaceAll("{{PREAMBLE}}", preamble.trimEnd());
+interface TemplateVars {
+  artifactReadCommands: string;
+  phaseGateCommands: string;
+  phaseTransitionSummary: string;
+  preamble: string;
+}
+
+function renderTemplate(template: string, vars: TemplateVars) {
+  return template
+    .replaceAll("{{PREAMBLE}}", vars.preamble.trimEnd())
+    .replaceAll("{{ARTIFACT_READ_COMMANDS}}", vars.artifactReadCommands)
+    .replaceAll("{{PHASE_GATE_COMMANDS}}", vars.phaseGateCommands)
+    .replaceAll("{{PHASE_TRANSITION_SUMMARY}}", vars.phaseTransitionSummary);
 }
 
 function insertGeneratedMark(content: string) {
@@ -77,6 +94,37 @@ function buildPreamble(_root: string, host: ReturnType<typeof getHostConfig>) {
     ...envLines,
     "```",
   ].join("\n");
+}
+
+function buildArtifactReadCommands() {
+  return PHASE_GATE_RULES.map((rule) => `gxpm artifact read <issue-id> ${rule.requiredArtifact}`).join(
+    "\n",
+  );
+}
+
+function buildPhaseGateCommands() {
+  return PHASE_GATE_RULES.map((rule) =>
+    [
+      `Before leaving \`${rule.fromPhase}\`, initialize \`${rule.requiredArtifact}\`:`,
+      "",
+      "```bash",
+      rule.command,
+      "```",
+    ].join("\n"),
+  ).join("\n\n");
+}
+
+function buildPhaseTransitionSummary() {
+  const gateSummary = PHASE_GATE_RULES.map(
+    (rule) =>
+      `\`${rule.fromPhase} -> ${rule.nextPhase}\` is blocked until \`${rule.requiredArtifact}\` exists.`,
+  ).join(" ");
+
+  return [
+    "V0 phase transitions are strict.",
+    "Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map.",
+    gateSummary,
+  ].join(" ");
 }
 
 function parseArgs(argv: string[]) {
