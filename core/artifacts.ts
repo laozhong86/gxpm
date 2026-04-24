@@ -16,6 +16,7 @@ export const ARTIFACT_TYPES = [
   "local-verify",
   "acceptance-check",
   "self-review",
+  "ship-readiness",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];

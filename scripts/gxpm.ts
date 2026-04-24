@@ -14,6 +14,7 @@ import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
 import { initializePlan } from "../core/plan";
 import { initializeSelfReview } from "../core/self-review";
+import { initializeShipReadiness } from "../core/ship";
 import { initializeTriage } from "../core/triage";
 
 function runCheck() {
@@ -146,6 +147,15 @@ function main(argv: string[]) {
     }
     initializeSelfReview({ issueId });
     console.log(`initialized self review artifact for ${issueId}`);
+    return;
+  }
+
+  if (command === "self-review" && subcommand === "ship") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm self-review ship <issue-id>");
+    }
+    initializeShipReadiness({ issueId });
+    console.log(`initialized ship readiness artifact for ${issueId}`);
     return;
   }
 

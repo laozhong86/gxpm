@@ -53,6 +53,9 @@ bin/gxpm issue transition local-demo ac-check
 bin/gxpm ac-check self-review local-demo
 bin/gxpm artifact read local-demo self-review
 bin/gxpm issue transition local-demo self-review
+bin/gxpm self-review ship local-demo
+bin/gxpm artifact read local-demo ship-readiness
+bin/gxpm issue transition local-demo ship
 ```
 
 ## 当前边界
