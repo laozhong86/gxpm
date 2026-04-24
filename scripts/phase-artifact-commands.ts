@@ -3,6 +3,7 @@ import { type ArtifactType } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { initializeLocalVerify } from "../core/implement";
 import { initializeLandFindings } from "../core/land";
+import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { initializePlan } from "../core/plan";
 import { initializePrCheck } from "../core/pr-check";
 import { initializeQaFindings } from "../core/qa";
@@ -18,74 +19,61 @@ interface PhaseArtifactCommand {
   successMessage: (issueId: string) => string;
 }
 
-export const PHASE_ARTIFACT_COMMANDS: PhaseArtifactCommand[] = [
-  {
-    artifactType: "acceptance-contract",
-    command: "gxpm triage init <issue-id>",
+const PHASE_ARTIFACT_HANDLERS: Record<
+  ArtifactType,
+  Pick<PhaseArtifactCommand, "initialize" | "successMessage">
+> = {
+  "acceptance-contract": {
     initialize: initializeTriage,
     successMessage: (issueId) => `initialized triage artifacts for ${issueId}`,
   },
-  {
-    artifactType: "implementation-plan",
-    command: "gxpm plan init <issue-id>",
+  "implementation-plan": {
     initialize: initializePlan,
     successMessage: (issueId) => `initialized plan artifact for ${issueId}`,
   },
-  {
-    artifactType: "dispatch-handoff",
-    command: "gxpm dispatch init <issue-id>",
+  "dispatch-handoff": {
     initialize: initializeDispatch,
     successMessage: (issueId) => `initialized dispatch handoff for ${issueId}`,
   },
-  {
-    artifactType: "local-verify",
-    command: "gxpm implement verify <issue-id>",
+  "local-verify": {
     initialize: initializeLocalVerify,
     successMessage: (issueId) => `initialized local verify artifact for ${issueId}`,
   },
-  {
-    artifactType: "acceptance-check",
-    command: "gxpm local-verify ac-check <issue-id>",
+  "acceptance-check": {
     initialize: initializeAcceptanceCheck,
     successMessage: (issueId) => `initialized acceptance check artifact for ${issueId}`,
   },
-  {
-    artifactType: "self-review",
-    command: "gxpm ac-check self-review <issue-id>",
+  "self-review": {
     initialize: initializeSelfReview,
     successMessage: (issueId) => `initialized self review artifact for ${issueId}`,
   },
-  {
-    artifactType: "ship-readiness",
-    command: "gxpm self-review ship <issue-id>",
+  "ship-readiness": {
     initialize: initializeShipReadiness,
     successMessage: (issueId) => `initialized ship readiness artifact for ${issueId}`,
   },
-  {
-    artifactType: "pr-check",
-    command: "gxpm ship pr-check <issue-id>",
+  "pr-check": {
     initialize: initializePrCheck,
     successMessage: (issueId) => `initialized pr check artifact for ${issueId}`,
   },
-  {
-    artifactType: "verify-findings",
-    command: "gxpm pr-check verify <issue-id>",
+  "verify-findings": {
     initialize: initializeVerifyFindings,
     successMessage: (issueId) => `initialized verify findings artifact for ${issueId}`,
   },
-  {
-    artifactType: "qa-findings",
-    command: "gxpm verify qa <issue-id>",
+  "qa-findings": {
     initialize: initializeQaFindings,
     successMessage: (issueId) => `initialized QA findings artifact for ${issueId}`,
   },
-  {
-    artifactType: "land-findings",
-    command: "gxpm qa land <issue-id>",
+  "land-findings": {
     initialize: initializeLandFindings,
     successMessage: (issueId) => `initialized land findings artifact for ${issueId}`,
   },
-];
+};
+
+export const PHASE_ARTIFACT_COMMANDS: PhaseArtifactCommand[] = PHASE_GATE_RULES.map((rule) => ({
+  artifactType: rule.requiredArtifact,
+  command: rule.command,
+  ...PHASE_ARTIFACT_HANDLERS[rule.requiredArtifact],
+}));
 
 export function findPhaseArtifactCommand(command: string, subcommand: string | undefined) {
   return PHASE_ARTIFACT_COMMANDS.find((item) => {

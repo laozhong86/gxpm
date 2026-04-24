@@ -85,6 +85,9 @@ describe("phase gate registry", () => {
   });
 
   test("keeps CLI artifact commands aligned with gate command hints", () => {
+    expect(PHASE_ARTIFACT_COMMANDS.map((item) => item.command)).toEqual(
+      PHASE_GATE_RULES.map((rule) => rule.command),
+    );
     expect(
       PHASE_ARTIFACT_COMMANDS.map((item) => ({
         command: item.command,
