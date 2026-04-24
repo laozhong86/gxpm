@@ -30,7 +30,20 @@ If no state exists, create it before phase work:
 gxpm issue create <issue-id>
 ```
 
-V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map.
+Before leaving `triage`, initialize the acceptance contract:
+
+```bash
+gxpm triage init <issue-id>
+```
+
+Inspect artifacts when gate evidence matters:
+
+```bash
+gxpm artifact list <issue-id>
+gxpm artifact read <issue-id> acceptance-contract
+```
+
+V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-phase>` only for the next phase in the phase map. `triage -> plan` is blocked until `acceptance-contract` exists.
 
 ## Phase Map
 

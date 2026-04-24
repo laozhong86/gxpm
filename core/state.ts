@@ -41,7 +41,12 @@ export interface IssueState {
 
 export interface StateEvent {
   schemaVersion: 1;
-  type: "issue.created" | "phase.transitioned";
+  type:
+    | "issue.created"
+    | "phase.transitioned"
+    | "artifact.written"
+    | "gate.blocked"
+    | "gate.passed";
   issueId: string;
   timestamp: string;
   payload: Record<string, unknown>;
@@ -153,6 +158,13 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
     );
   }
 
+  assertPhaseGate({
+    issueId: input.issueId,
+    fromPhase: state.currentPhase,
+    nextPhase,
+    issueDir: paths.issueDir,
+  });
+
   const now = new Date().toISOString();
   const updated: IssueState = {
     ...state,
@@ -216,4 +228,54 @@ function assertValidPhase(value: string): GxpmPhase {
 
 function writeJson(path: string, value: unknown) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function assertPhaseGate(input: {
+  issueId: string;
+  fromPhase: GxpmPhase;
+  nextPhase: GxpmPhase;
+  issueDir: string;
+}) {
+  if (input.fromPhase !== "triage" || input.nextPhase !== "plan") {
+    return;
+  }
+
+  const acceptanceContractPath = join(input.issueDir, "artifacts", "acceptance-contract.json");
+  if (existsSync(acceptanceContractPath)) {
+    const now = new Date().toISOString();
+    appendIssueEvent({
+      issueDir: input.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "gate.passed",
+        issueId: input.issueId,
+        timestamp: now,
+        payload: {
+          fromPhase: input.fromPhase,
+          toPhase: input.nextPhase,
+          requiredArtifact: "acceptance-contract",
+        },
+      },
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  appendIssueEvent({
+    issueDir: input.issueDir,
+    event: {
+      schemaVersion: 1,
+      type: "gate.blocked",
+      issueId: input.issueId,
+      timestamp: now,
+      payload: {
+        fromPhase: input.fromPhase,
+        toPhase: input.nextPhase,
+        missingArtifact: "acceptance-contract",
+      },
+    },
+  });
+  throw new Error(
+    `Missing required artifact: acceptance-contract; run gxpm triage init ${input.issueId}`,
+  );
 }

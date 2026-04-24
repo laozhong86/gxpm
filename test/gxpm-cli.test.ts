@@ -30,6 +30,10 @@ describe("gxpm CLI", () => {
     expect(initialStatus.exitCode).toBe(0);
     expect(output(initialStatus)).toContain("currentPhase: triage");
 
+    const triage = runCli(root, ["triage", "init", "GXPM-10"]);
+    expect(triage.exitCode).toBe(0);
+    expect(output(triage)).toContain("initialized triage artifacts for GXPM-10");
+
     const transition = runCli(root, ["issue", "transition", "GXPM-10", "plan"]);
     expect(transition.exitCode).toBe(0);
     expect(output(transition)).toContain("transitioned GXPM-10: triage -> plan");

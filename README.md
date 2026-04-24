@@ -34,6 +34,9 @@ bun run gen:skill-docs
 bun run check
 bin/gxpm issue create local-demo
 bin/gxpm issue status local-demo
+bin/gxpm triage init local-demo
+bin/gxpm artifact list local-demo
+bin/gxpm artifact read local-demo acceptance-contract
 bin/gxpm issue transition local-demo plan
 ```
 

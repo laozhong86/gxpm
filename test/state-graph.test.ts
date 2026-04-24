@@ -7,6 +7,7 @@ import {
   readIssueState,
   transitionIssuePhase,
 } from "../core/state";
+import { initializeTriage } from "../core/triage";
 
 describe("gxpm state graph", () => {
   test("creates a local issue state graph rooted in .gxpm", () => {
@@ -37,6 +38,7 @@ describe("gxpm state graph", () => {
   test("advances to the next phase and records history plus event log", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-transition-"));
     createIssueState({ root, issueId: "GXPM-2" });
+    initializeTriage({ root, issueId: "GXPM-2" });
 
     const state = transitionIssuePhase({ root, issueId: "GXPM-2", nextPhase: "plan" });
 
@@ -50,7 +52,12 @@ describe("gxpm state graph", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(events.map((event) => event.type)).toEqual(["issue.created", "phase.transitioned"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "issue.created",
+      "artifact.written",
+      "gate.passed",
+      "phase.transitioned",
+    ]);
     expect(events.at(-1)).toMatchObject({
       type: "phase.transitioned",
       payload: { fromPhase: "triage", toPhase: "plan" },

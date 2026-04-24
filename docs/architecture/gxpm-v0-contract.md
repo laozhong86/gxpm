@@ -35,13 +35,22 @@ V0 已实现的本地目录：
   events.jsonl
   artifacts/
     index.json
+    acceptance-contract.json
+    issue-intake.json
+    triage-report.json
   reports/
   evidence/
     screenshots/
   memory/
 ```
 
-V0 只建立 state graph 和 artifact/evidence 容器，不写入具体 capability artifact。
+V0 已支持 JSON artifact store。当前 artifact type：
+
+- `issue-intake`
+- `triage-report`
+- `acceptance-contract`
+
+V0 只写 JSON artifact，不渲染 markdown report。
 
 ### Phase
 
@@ -63,6 +72,8 @@ V0 phase 集合：
 V0 可以导入 PMC/gstack 的语义，但最终 phase 是 gxpm 原生状态，不以 `.omc` 或 `.gstack` 作为长期真值。
 
 V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中的下一个 phase。
+
+`triage -> plan` 额外要求存在 `acceptance-contract` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm triage init <issue-id>`。
 
 ## Source of Truth
 
@@ -156,6 +167,9 @@ V0 阶段如果出现以下情况，应停止并生成 report，而不是继续�
 gxpm issue create <issue-id>
 gxpm issue status <issue-id>
 gxpm issue transition <issue-id> <phase>
+gxpm artifact list <issue-id>
+gxpm artifact read <issue-id> <type>
+gxpm triage init <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。

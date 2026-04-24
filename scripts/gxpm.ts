@@ -8,6 +8,8 @@ import {
   readIssueState,
   transitionIssuePhase,
 } from "../core/state";
+import { listArtifacts, readArtifact } from "../core/artifacts";
+import { initializeTriage } from "../core/triage";
 
 function runCheck() {
   const hostErrors = validateAllConfigs(ALL_HOST_CONFIGS);
@@ -26,18 +28,14 @@ function runCheck() {
 }
 
 function main(argv: string[]) {
-  const [command, subcommand, issueId, phase] = argv;
+  const [command, subcommand, issueId, value] = argv;
 
   if (!command || command === "check") {
     runCheck();
     return;
   }
 
-  if (command !== "issue") {
-    throw new Error(`Unknown command: ${command}`);
-  }
-
-  if (subcommand === "create") {
+  if (command === "issue" && subcommand === "create") {
     if (!issueId) {
       throw new Error("Usage: gxpm issue create <issue-id>");
     }
@@ -47,7 +45,7 @@ function main(argv: string[]) {
     return;
   }
 
-  if (subcommand === "status") {
+  if (command === "issue" && subcommand === "status") {
     if (!issueId) {
       throw new Error("Usage: gxpm issue status <issue-id>");
     }
@@ -59,17 +57,49 @@ function main(argv: string[]) {
     return;
   }
 
-  if (subcommand === "transition") {
-    if (!issueId || !phase) {
+  if (command === "issue" && subcommand === "transition") {
+    if (!issueId || !value) {
       throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
     }
     const before = readIssueState({ issueId });
-    const after = transitionIssuePhase({ issueId, nextPhase: phase });
+    const after = transitionIssuePhase({ issueId, nextPhase: value });
     console.log(`transitioned ${after.issueId}: ${before.currentPhase} -> ${after.currentPhase}`);
     return;
   }
 
-  throw new Error(`Unknown issue command: ${subcommand ?? "<missing>"}`);
+  if (command === "artifact" && subcommand === "list") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm artifact list <issue-id>");
+    }
+    const artifacts = listArtifacts({ issueId });
+    if (artifacts.length === 0) {
+      console.log("no artifacts");
+      return;
+    }
+    for (const artifact of artifacts) {
+      console.log(`${artifact.type}\t${artifact.path}\t${artifact.writtenAt}`);
+    }
+    return;
+  }
+
+  if (command === "artifact" && subcommand === "read") {
+    if (!issueId || !value) {
+      throw new Error("Usage: gxpm artifact read <issue-id> <type>");
+    }
+    console.log(JSON.stringify(readArtifact({ issueId, type: value }), null, 2));
+    return;
+  }
+
+  if (command === "triage" && subcommand === "init") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm triage init <issue-id>");
+    }
+    initializeTriage({ issueId });
+    console.log(`initialized triage artifacts for ${issueId}`);
+    return;
+  }
+
+  throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
 }
 
 try {
