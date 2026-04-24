@@ -1,56 +1,62 @@
-# AGENTS.md - gxpm
+# gxpm Agent Contract
 
-## 项目定位
+## Role
 
-gxpm 是面向完全替代 `pmc` 和 `gstack` 的第二代代理项目管理产品。
-PMC 和 gstack 是上游研究对象与能力来源，不是 gxpm 的长期运行依赖。
-gxpm 要重新规划统一架构，把项目管理、技能运行时、浏览器验证、评审交付、
-上下文恢复和自学习收束成一个原生系统。
+gxpm 是面向完全替代 `pmc` 和 `gstack` 的第二代代理项目管理产品。PMC 和 gstack 是上游研究对象与能力来源，不是 gxpm 的长期运行依赖。
 
-## 当前阶段
+<!-- BEGIN USER-SPECIFIED -->
+gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计都要服务于独立产品闭环：统一 state graph、capability runtime、browser evidence、review/ship governance 和 agent execution loop。
+<!-- END USER-SPECIFIED -->
 
-本仓库已进入替代型脚手架阶段。默认先维护产品真值、能力拆解、架构合同、
-模板生成、host adapter 和本地检查入口，不要把 gxpm 写成 PMC/gstack 的薄封装。
+## Truth Sources
 
-## 工作原则
+1. 用户本轮明确指令。
+2. `docs/architecture/gxpm-replacement-architecture.md`
+3. `docs/architecture/gxpm-v0-contract.md`
+4. `docs/architecture/scaffold-northstar.md`
+5. `docs/governance/development-contract.md`
+6. `docs/governance/template-authoring.md`
+7. `docs/governance/host-adapter.md`
+8. `docs/research/pmc-gstack-skill-study.md`
 
-- 全程中文沟通，汇报要包含路径、命令和验证证据。
-- 先读现有文件和相关外部 skill 真值，再修改本仓库。
-- gxpm 的目标是完整替代 PMC 和 gstack；所有设计都要服务于独立产品闭环。
-- 先借鉴 PMC/gstack 的强能力，再重新命名、重组和产品化，不保留不必要的历史边界。
-- 任何 Linear 相关设计都必须把 Linear 当作协作前门，而不是执行器。
-- 任何 browser/QA 相关设计都必须有可复核证据路径，不能只写“已测试”。
-- destructive cleanup、发布、合并、远端写操作必须先确认边界。
+如果来源冲突，先指出冲突和建议的最小安全路径。
 
-## 真值优先级
+## Always
 
-1. 本仓库 `docs/architecture/gxpm-replacement-architecture.md`
-2. 本仓库 `docs/architecture/gxpm-v0-contract.md`
-3. 本仓库 `docs/architecture/scaffold-northstar.md`
-4. 本仓库 `docs/research/pmc-gstack-skill-study.md`
-5. 当前本机技能源码：
-   - `/Users/x/.agents/skills/pmc`
-   - `/Users/x/.claude/skills/gstack`
-   - `/Users/x/.codex/skills/gstack`
-6. 用户本轮明确指令
+- 全程中文沟通，汇报包含路径、命令和验证证据。
+- 先读本仓库真值和相关上游 skill/source，再改文件。
+- 编辑 skill 时改 `*.tmpl`，再运行 `bun run gen:skill-docs`；不要手改生成产物当真值。
+- 把 Linear 当协作前门，把 `.gxpm` 本地 state/artifacts 当未来执行真值。
+- browser/QA/review/ship 相关结论必须能落到可复核证据。
+- 新增 host、skill、生成规则时同步补测试或检查入口。
 
-如果这些来源冲突，先指出冲突并给出最小可执行建议。
+## Ask First
 
-## 预期交付形态
+- destructive cleanup、发布、合并、远端写操作。
+- 改变 gxpm 产品定位、phase 集合、state 真值优先级。
+- 引入 PMC/gstack 运行时依赖，而不是作为迁移/研究来源。
+- 需要付费 eval、外部 API、长时间浏览器/E2E 验证。
 
-- `skills/gxpm/SKILL.md`：未来 gxpm skill 的入口合同。
-- `skills/gxpm/SKILL.md.tmpl`：生成 `SKILL.md` 的模板真值。
-- `hosts/`、`scripts/`、`bin/`：gstack-style 产品脚手架、host adapter 与检查入口。
-- `docs/architecture/`：替代型产品架构、状态机、能力边界、运行时设计。
-- `docs/research/`：对 PMC、gstack 和相邻项目的调查记录。
-- `docs/roadmap/`：分阶段路线，不把 V1/V2 混成一个大球。
+## Never
 
-## 初始化后的下一步
+- 不把 gxpm 写成 PMC/gstack wrapper。
+- 不从聊天记忆推断 phase 或完成状态。
+- 不把 generated `SKILL.md` 冲突用“接受某一边”解决。
+- 不声称历史失败与本次无关，除非有 base/main 对照证据。
+- 不把大段项目结构或可由代码推断的信息塞回默认加载文件。
 
-优先补齐：
+## Commands
 
-1. gxpm 原生 state graph 与 artifact store。
-2. gxpm capability runtime：issue、plan、worker、review、browser、ship、learn。
-3. PMC/gstack 能力映射到 gxpm 模块的 replacement map。
-4. Linear 同步、本地状态写回和 browser evidence 的统一幂等策略。
-5. install/update/team-init 命令从占位入口演进为真实流程。
+```bash
+bun test
+bun run gen:skill-docs
+bun run check
+```
+
+## Progressive Docs
+
+- 开发、验证、提交：`docs/governance/development-contract.md`
+- skill 模板写法：`docs/governance/template-authoring.md`
+- host adapter 扩展：`docs/governance/host-adapter.md`
+- 产品架构：`docs/architecture/`
+- 上游研究：`docs/research/`

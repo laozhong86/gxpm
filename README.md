@@ -17,6 +17,7 @@ gxpm 是面向完全替代 PMC 和 gstack 的第二代代理项目管理产品�
 - `hosts/`：Codex 与 Claude Code 的 host adapter 注册。
 - `scripts/`：skill 模板发现、生成和脚手架检查。
 - `bin/`：未来安装/升级/检查命令的稳定入口。
+- `docs/governance/`：代理开发规范、模板写法和 host adapter 治理。
 - `docs/research/pmc-gstack-skill-study.md`：PMC 与 gstack 的调查结论。
 - `docs/architecture/gxpm-replacement-architecture.md`：替代型二代架构。
 - `docs/architecture/gxpm-v0-contract.md`：gxpm V0 合同与边界。
