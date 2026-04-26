@@ -200,6 +200,28 @@ V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-pha
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Task Intake / Brainstorming Gate
+
+For a new non-trivial task or any scope-changing request, do a short
+brainstorming pass before implementation. This is a gate, not a new gxpm phase.
+
+1. Run only read-only discovery first: current issue state, relevant docs,
+   source anchors, and obvious constraints.
+2. Present the proposed goal, in-scope work, out-of-scope work, success
+   criteria, and expected files/commands.
+3. Ask for confirmation before writing artifacts, editing files, or running
+   commands with side effects.
+
+When the host exposes a native form tool such as Codex `request_user_input` in
+the current mode, prefer it for the confirmation. Keep it to one short question
+with 2-3 meaningful choices, recommended option first. If the tool is
+unavailable, ask the same confirmation in concise prose instead of faking a form.
+
+Skip this gate only when the user explicitly says to proceed (for example,
+"directly do it", "continue", "execute the existing plan") or when the request
+is purely read-only/trivial. External tracking ids are not gxpm issue ids; use
+`gxpm issue create --auto-id` for local state.
+
 ## Persist Design Before Phase Advance
 
 Any non-trivial proposal (feature design, scope decision, alternative analysis)
