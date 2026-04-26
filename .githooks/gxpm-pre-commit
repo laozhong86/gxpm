@@ -1,0 +1,30 @@
+#!/bin/bash
+# gxpm pre-commit hook
+# Installed by `gxpm-init --install-hooks`. Reads `.gxpm/issues/<id>/state.json`
+# to enforce phase gate. No-op if no state file or no issue id in branch name.
+# Escape hatch: GXPM_GATE_DISABLE=1 git commit ...
+
+set -e
+
+if ! command -v gxpm >/dev/null 2>&1; then
+  exit 0
+fi
+
+current_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
+issue_id=$(printf '%s' "$current_branch" | grep -oEi '(gxg|gxpm)-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
+
+if [ -z "$issue_id" ]; then
+  exit 0
+fi
+
+if [ ! -f ".gxpm/issues/${issue_id}/state.json" ]; then
+  exit 0
+fi
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+# shellcheck disable=SC2086
+exec gxpm gate pre-commit "$issue_id" --staged $staged_files
