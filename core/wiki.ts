@@ -37,6 +37,7 @@ export interface QoderWikiStatus {
   contentRoots: string[];
   pageCount: number;
   topPages: WikiPageSummary[];
+  observedWikiUpdatedAt?: string;
   progressiveRead: string[];
   reminder: QoderWikiReminder;
   commands: {
