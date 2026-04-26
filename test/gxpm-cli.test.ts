@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { output, runCli, runCliWithInput } from "./helpers/workflow";
 
 describe("gxpm CLI", () => {
@@ -274,6 +274,50 @@ describe("gxpm artifact edit CLI", () => {
     });
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("invalid JSON");
+  });
+});
+
+describe("gxpm wiki CLI", () => {
+  test("reports absent Qoder wiki as optional", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-absent-"));
+
+    const r = runCli(root, ["wiki", "status"]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("Qoder wiki: not detected");
+    expect(output(r)).toContain("Normal gxpm workflow continues");
+  });
+
+  test("prints Qoder wiki status as JSON when present", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-present-"));
+    const page = join(root, ".qoder", "repowiki", "en", "content", "Overview.md");
+    mkdirSync(dirname(page), { recursive: true });
+    writeFileSync(page, "# Overview\n\n[state](file://core/state.ts#L1)\n");
+
+    const r = runCli(root, ["wiki", "status", "--json"]);
+
+    expect(r.exitCode).toBe(0);
+    const parsed = JSON.parse(output(r));
+    expect(parsed.detected).toBe(true);
+    expect(parsed.pageCount).toBe(1);
+    expect(parsed.topPages[0].citedFiles).toContain("core/state.ts");
+  });
+
+  test("records manual sync and reminder evidence", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-mark-"));
+
+    const sync = runCli(root, ["wiki", "mark-sync", "--note", "manual sync"]);
+    expect(sync.exitCode).toBe(0);
+    expect(output(sync)).toContain("recorded Qoder wiki manual sync");
+
+    const reminder = runCli(root, ["wiki", "mark-reminder", "--note", "session reminder"]);
+    expect(reminder.exitCode).toBe(0);
+    expect(output(reminder)).toContain("recorded Qoder wiki reminder");
+
+    const stored = JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "qoder.json"), "utf8"));
+    expect(stored.lastSyncAt).toBeTruthy();
+    expect(stored.lastReminderAt).toBeTruthy();
+    expect(stored.note).toBe("session reminder");
   });
 });
 

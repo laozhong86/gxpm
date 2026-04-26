@@ -26,11 +26,15 @@ cd "$CWD"
 # Try active issues first; if none, fall back to recent landed for context.
 ACTIVE_JSON=$(gxpm issue list --json 2>/dev/null || echo "[]")
 RECENT_JSON=$(gxpm issue list --recent 3 --json 2>/dev/null || echo "[]")
+WIKI_JSON=$(gxpm wiki status --json 2>/dev/null || echo "{}")
 
-printf '%s\t%s' "$ACTIVE_JSON" "$RECENT_JSON" | python3 -c '
+printf '%s\t%s\t%s' "$ACTIVE_JSON" "$RECENT_JSON" "$WIKI_JSON" | python3 -c '
 import json, sys
 raw = sys.stdin.read()
-active_raw, recent_raw = raw.split("\t", 1)
+parts_raw = raw.split("\t", 2)
+active_raw = parts_raw[0] if len(parts_raw) > 0 else "[]"
+recent_raw = parts_raw[1] if len(parts_raw) > 1 else "[]"
+wiki_raw = parts_raw[2] if len(parts_raw) > 2 else "{}"
 try:
     active = json.loads(active_raw)
 except Exception:
@@ -39,6 +43,10 @@ try:
     recent = json.loads(recent_raw)
 except Exception:
     recent = []
+try:
+    wiki = json.loads(wiki_raw)
+except Exception:
+    wiki = {}
 
 def fmt(issue):
     return "  - {} (phase={}, updated={})".format(
@@ -52,7 +60,26 @@ if active:
 elif recent:
     parts.append("No active gxpm issues. Most recently landed (for reference):")
     parts.extend(fmt(i) for i in recent[:3])
-else:
+
+if wiki.get("detected"):
+    if parts:
+        parts.append("")
+    parts.append("Qoder repo wiki detected (.qoder/repowiki).")
+    parts.append("Before direct source reads, run `gxpm wiki status` and open the relevant wiki page(s).")
+    top_pages = wiki.get("topPages") or []
+    if top_pages:
+        parts.append("Suggested wiki pages:")
+        for page in top_pages[:3]:
+            path = page.get("path")
+            if path:
+                parts.append("  - {}".format(path))
+    reminder = wiki.get("reminder") or {}
+    if reminder.get("reminderDue"):
+        parts.append("")
+        parts.append("Weekly Qoder wiki resync reminder: {}".format(reminder.get("reason", "manual sync evidence is stale")))
+        parts.append("After reminding, record it with: gxpm wiki mark-reminder --note <reminder-note>")
+
+if not parts:
     sys.exit(0)
 
 parts.append("")

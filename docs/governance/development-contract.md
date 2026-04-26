@@ -13,6 +13,7 @@
 | generated | `bun run gen:skill-docs` | 修改 `*.tmpl`、host config、preamble 后 | 刷新生成的 skill surface |
 | state | `gxpm issue create/status/transition` | state graph 或 phase 规则改动后 | 本地 `.gxpm` 真值写回和恢复验证 |
 | artifact | `gxpm triage init`、`gxpm plan init`、`gxpm dispatch init`、`gxpm implement verify`、`gxpm local-verify ac-check`、`gxpm ac-check self-review`、`gxpm self-review ship`、`gxpm ship pr-check`、`gxpm pr-check verify`、`gxpm verify qa`、`gxpm qa land`、`gxpm artifact list/read` | artifact store 或 phase gate 改动后 | 产物写入、读取、索引和 gate 验证 |
+| context | `gxpm wiki status`、`gxpm wiki mark-sync`、`gxpm wiki mark-reminder` | 仓库存在 `.qoder/repowiki`，或代码改动可能导致 wiki 漂移时 | 会话前 wiki-first 导航、手动同步提醒与提醒证据 |
 | future-e2e | 待实现 | browser/runtime capability 落地后 | 真实浏览器和 agent workflow 证据 |
 | future-eval | 待实现 | 高风险 prompt/capability 改动 | LLM judge 或 paid eval，需先确认成本 |
 
@@ -70,6 +71,13 @@
 - 用户明确说“直接做 / 继续推进 / 按已有计划执行”时，可以跳过确认闸门。
 - 外部 tracking id 只能写入 artifact 作为来源信息，不作为 GXPM-N；本地 issue 永远用 `gxpm issue create --auto-id`。
 - Superpowers 和 gstack 只作为上游交互模式参考，不能引入为 gxpm 运行时依赖。
+
+## Qoder Wiki 可选集成
+
+- `.qoder/repowiki` 是可选导航层，不是 gxpm 状态真值；缺失时不得阻塞正常 issue workflow。
+- 新会话或代码读取前，如目录存在，先运行 `gxpm wiki status`，优先读 content markdown 和其中引用的 source anchors，不把 `repowiki-metadata.json` 大段塞进上下文。
+- 代码改动后，如 `gxpm wiki status` 报告手动同步证据超过 7 天或尚未记录，提醒用户执行 Qoder wiki 手动更新/重新同步。
+- gxpm 不自动调用 Qoder 外部同步；人工同步后用 `gxpm wiki mark-sync --note <说明>` 记录证据，提醒后可用 `gxpm wiki mark-reminder --note <说明>` 降低重复提醒噪音。
 
 ## 长任务规则
 

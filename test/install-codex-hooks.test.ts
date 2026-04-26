@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { installCodexHooks } from "../scripts/install-codex-hooks";
 
 const repoRoot = resolve(import.meta.dir, "..");
@@ -190,6 +190,35 @@ describe("hook script behavior", () => {
       expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
       expect(parsed.hookSpecificOutput.additionalContext).toContain("GXPM-77");
     }
+  });
+
+  test("session-start.sh includes Qoder wiki preflight when repowiki exists", async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wiki-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
+
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wikicwd-"));
+    const gxpmBin = join(repoRoot, "bin", "gxpm");
+    Bun.spawnSync({ cmd: [gxpmBin, "issue", "create", "GXPM-88"], cwd: repoCwd });
+    const wikiPage = join(repoCwd, ".qoder", "repowiki", "en", "content", "Overview.md");
+    execSync(`mkdir -p "${dirname(wikiPage)}"`);
+    writeFileSync(wikiPage, "# Overview\n\n[state](file://core/state.ts)\n");
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ session_id: "x", cwd: repoCwd, hook_event_name: "SessionStart" }),
+      ),
+      env: { ...process.env, PATH: `${join(repoRoot, "bin")}:${process.env.PATH ?? ""}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout.toString());
+    const context = parsed.hookSpecificOutput.additionalContext;
+    expect(context).toContain("Qoder repo wiki detected");
+    expect(context).toContain("gxpm wiki status");
+    expect(context).toContain(".qoder/repowiki/en/content/Overview.md");
   });
 
   test("user-prompt-submit.sh ignores prompts without issue refs", () => {

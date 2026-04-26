@@ -91,6 +91,37 @@ If no state exists, create it before phase work:
 gxpm issue create <issue-id>
 ```
 
+## Optional Qoder Repo Wiki Preflight
+
+When a repo has `.qoder/repowiki`, treat it as an optional navigation aid
+before direct source-code reads. It is not gxpm state truth.
+
+Use the lightweight status command:
+
+```bash
+gxpm wiki status
+```
+
+If the wiki is present:
+
+1. Read gxpm issue state first.
+2. Run `gxpm wiki status`.
+3. Open the relevant wiki page(s) listed by the command.
+4. Follow cited source anchors from those pages into code.
+5. After code changes, run `gxpm wiki status` again and remind the user to
+   manually update or resync Qoder wiki if gxpm reports stale sync evidence.
+
+The absence of `.qoder/repowiki` is a clean no-op and must not block normal
+gxpm workflow. Do not dump `.qoder/repowiki/*/meta/repowiki-metadata.json` into
+context; prefer content pages and their cited source anchors.
+
+Manual sync/reminder evidence lives under `.gxpm/wiki/qoder.json`:
+
+```bash
+gxpm wiki mark-sync --note <manual-qoder-resync-note>
+gxpm wiki mark-reminder --note <reminder-note>
+```
+
 Inspect artifacts when gate evidence matters:
 
 ```bash
