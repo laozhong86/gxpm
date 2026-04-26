@@ -157,6 +157,65 @@ gxpm artifact list <issue-id>
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Browser Investigation (cmux session only)
+
+Use this only when `CMUX_SURFACE_ID` is set and the user asks you to inspect
+the page already open in their cmux browser session. This is an observer path
+for current user state; automated E2E and QA assertions still use
+`agent-browser`.
+
+Native cmux command templates:
+
+```bash
+cmux browser "$CMUX_SURFACE_ID" get-url
+cmux browser "$CMUX_SURFACE_ID" snapshot --compact
+cmux browser "$CMUX_SURFACE_ID" get text --selector "<css>"
+cmux browser "$CMUX_SURFACE_ID" screenshot --out /tmp/gxpm-cmux.png
+cmux browser "$CMUX_SURFACE_ID" console list
+cmux browser "$CMUX_SURFACE_ID" errors list
+cmux browser "$CMUX_SURFACE_ID" eval --script "document.title"
+cmux browser "$CMUX_SURFACE_ID" find text --exact "<visible text>"
+cmux browser "$CMUX_SURFACE_ID" wait --text "<text>" --timeout-ms 3000
+cmux browser "$CMUX_SURFACE_ID" scroll --dy 600
+```
+
+For a disclosure-only click after explicit user confirmation:
+
+```bash
+cmux browser "$CMUX_SURFACE_ID" click --selector "<stable disclosure selector>"
+```
+
+For a fixed evidence capture into `.gxpm/issues/<id>/evidence/`:
+
+```bash
+gxpm-investigate <issue-id> --label "short context label"
+```
+
+Hard rules:
+
+- Always pass the explicit `CMUX_SURFACE_ID` surface token. Missing the surface
+  can produce the misleading error `Unsupported browser subcommand: <verb>`;
+  cmux does not provide a safe implicit default surface for agents.
+- snapshot refs are ephemeral. Use refs only inside the same immediate
+  round trip. Do not persist them, pass them across processes, or reuse them
+  across surfaces; stable selectors must be role, label, text, or test id.
+- cmux uses WebKit/WKWebView. Network requests, network route, and viewport set
+  can return `not_supported on WKWebView`; use `agent-browser` for network
+  interception, request mocking, viewport-controlled E2E, and QA automation.
+
+Observer contract:
+
+- Start by reading context with `get-url`, `snapshot --compact`, or
+  `gxpm-investigate`; do not assume the page is in the expected state.
+- Do not call navigate, back, forward, reload, cookies/storage writes,
+  tab/dialog/state save, addinitscript, addstyle, addscript, network route, or
+  viewport mutation commands.
+- Clicks require explicit user confirmation and must be limited to
+  disclosure-only UI, such as opening a collapsed panel. Never click submit,
+  destructive, navigation, or payment controls, and never click a bare snapshot
+  ref.
+- If a cmux command fails, surface the failure and keep the partial evidence.
+
 ## Task Intake / Brainstorming Gate
 
 For a new non-trivial task or any scope-changing request, do a short
