@@ -48,6 +48,12 @@ gxpm doctor               # human-readable report with ✓ / ✗ + fix commands
 gxpm doctor --json        # machine-readable
 ```
 
+When unsure what to run next on a specific issue:
+
+```bash
+gxpm issue next <issue-id>   # prints recommended next command(s)
+```
+
 If no state exists, create it before phase work:
 
 ```bash

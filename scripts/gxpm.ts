@@ -17,6 +17,7 @@ import {
 } from "../core/gate";
 import { listIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
+import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
@@ -81,6 +82,14 @@ function main(argv: string[]) {
         `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}`,
       );
     }
+    return;
+  }
+
+  if (command === "issue" && subcommand === "next") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue next <issue-id>");
+    }
+    runIssueNext(issueId);
     return;
   }
 
@@ -156,6 +165,34 @@ function main(argv: string[]) {
   }
 
   throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
+}
+
+function runIssueNext(issueId: string) {
+  const state = readIssueState({ issueId });
+  console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
+
+  const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === state.currentPhase);
+  if (!rule) {
+    console.log("");
+    console.log(`Phase ${state.currentPhase} is terminal — no further transition.`);
+    if (state.currentPhase === "land") {
+      console.log("This issue has landed. Mark as Done in upstream issue tracker.");
+    }
+    return;
+  }
+
+  const has = hasArtifact({ issueId, type: rule.requiredArtifact });
+  console.log("");
+  if (!has) {
+    console.log(`Next: ${rule.command.replace("<issue-id>", issueId)}`);
+    console.log(`      → creates draft of artifact: ${rule.requiredArtifact}`);
+    console.log("");
+    console.log(`Then: edit the artifact (or use 'gxpm artifact write ${issueId} ${rule.requiredArtifact} --json ...')`);
+    console.log(`Then: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+  } else {
+    console.log(`Artifact ${rule.requiredArtifact} already exists.`);
+    console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+  }
 }
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {

@@ -41,6 +41,65 @@ describe("gxpm CLI", () => {
   });
 });
 
+describe("gxpm issue next CLI", () => {
+  test("recommends triage init when at triage with no artifact", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-triage-"));
+    expect(runCli(root, ["issue", "create", "GXPM-30"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "next", "GXPM-30"]);
+    expect(r.exitCode).toBe(0);
+    const out = output(r);
+    expect(out).toContain("currentPhase: triage");
+    expect(out).toContain("gxpm triage init GXPM-30");
+    expect(out).toContain("acceptance-contract");
+  });
+
+  test("recommends transition when artifact exists for current phase", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-after-init-"));
+    expect(runCli(root, ["issue", "create", "GXPM-31"]).exitCode).toBe(0);
+    expect(runCli(root, ["triage", "init", "GXPM-31"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "next", "GXPM-31"]);
+    expect(r.exitCode).toBe(0);
+    const out = output(r);
+    expect(out).toContain("gxpm issue transition GXPM-31 plan");
+  });
+
+  test("indicates terminal state when at land", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-land-"));
+    // walk all the way to land
+    expect(runCli(root, ["issue", "create", "GXPM-32"]).exitCode).toBe(0);
+    // Use the helper: create + walk through all phases
+    const phases: Array<[string, string, string]> = [
+      ["triage", "init", "plan"],
+      ["plan", "init", "dispatch"],
+      ["dispatch", "init", "implement"],
+      ["implement", "verify", "local-verify"],
+      ["local-verify", "ac-check", "ac-check"],
+      ["ac-check", "self-review", "self-review"],
+      ["self-review", "ship", "ship"],
+      ["ship", "pr-check", "pr-check"],
+      ["pr-check", "verify", "verify"],
+      ["verify", "qa", "qa"],
+      ["qa", "land", "land"],
+    ];
+    for (const [cmd, sub, next] of phases) {
+      runCli(root, [cmd, sub, "GXPM-32"]);
+      runCli(root, ["issue", "transition", "GXPM-32", next]);
+    }
+
+    const r = runCli(root, ["issue", "next", "GXPM-32"]);
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toMatch(/land|terminal|complete/i);
+  });
+
+  test("returns non-zero for missing issue", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-missing-"));
+    const r = runCli(root, ["issue", "next", "GXPM-NOPE"]);
+    expect(r.exitCode).toBe(1);
+  });
+});
+
 describe("gxpm artifact write CLI", () => {
   test("writes artifact from --json flag", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-art-write-json-"));
