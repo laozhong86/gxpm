@@ -4,11 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   getConfigValue,
+  getResolvedConfigValue,
+  listConfigEntries,
   listConfig,
   parseAgentsMdConfig,
   resolveWorktreePolicy,
   setConfigValue,
 } from "../core/config";
+
+const gxpmBin = join(import.meta.dir, "..", "bin", "gxpm");
 
 describe("setConfigValue + getConfigValue", () => {
   test("repo scope round-trips", () => {
@@ -49,6 +53,62 @@ describe("setConfigValue + getConfigValue", () => {
     expect((list.global as any).worktree.default).toBe("skip");
     expect((list.repo as any).worktree.enforcement).toBe("forbidden");
   });
+
+  test("resolved values include whitelisted defaults", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-default-root-"));
+    const got = getResolvedConfigValue({ root, key: "update_check" });
+
+    expect(got.value).toBe(true);
+    expect(got.source).toBe("default");
+  });
+
+  test("rejects unknown keys", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-unknown-root-"));
+    expect(() => setConfigValue({ root, scope: "repo", key: "random.key", value: true })).toThrow(
+      "Unknown config key",
+    );
+  });
+
+  test("listConfigEntries lists all known keys with current values", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-entries-root-"));
+    setConfigValue({ root, scope: "repo", key: "update_check", value: false });
+
+    const entries = listConfigEntries({ root });
+    expect(entries.map((entry) => entry.key)).toEqual([
+      "worktree.enforcement",
+      "worktree.default",
+      "update_check",
+    ]);
+    expect(entries.find((entry) => entry.key === "update_check")).toMatchObject({
+      value: false,
+      source: "config-repo",
+    });
+  });
+
+  test("gxpm config list prints all whitelisted keys", () => {
+    const home = mkdtempSync(join(tmpdir(), "gxpm-cfg-cli-list-home-"));
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-cli-list-root-"));
+    const set = Bun.spawnSync({
+      cmd: [gxpmBin, "config", "set", "update_check", "false"],
+      cwd: root,
+      env: { ...process.env, HOME: home },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const list = Bun.spawnSync({
+      cmd: [gxpmBin, "config", "list"],
+      cwd: root,
+      env: { ...process.env, HOME: home },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(set.exitCode).toBe(0);
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout.toString()).toContain("worktree.enforcement");
+    expect(list.stdout.toString()).toContain("worktree.default");
+    expect(list.stdout.toString()).toContain("update_check: false");
+  });
 });
 
 describe("parseAgentsMdConfig", () => {
@@ -81,6 +141,12 @@ worktree.enforcement: optional
 
   test("returns empty when no section present", () => {
     expect(parseAgentsMdConfig("# Just a doc\nNo gxpm config here")).toEqual({});
+  });
+
+  test("ignores unknown keys", () => {
+    const cfg = parseAgentsMdConfig("## gxpm Config\n- random.key: true\n- update_check: false");
+    expect((cfg as any).random).toBeUndefined();
+    expect((cfg as any).update_check).toBe(false);
   });
 });
 

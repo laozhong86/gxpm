@@ -8,6 +8,7 @@
     "gxpm": "./bin/gxpm",
     "gxpm-config": "./bin/gxpm-config",
     "gxpm-init": "./bin/gxpm-init",
+    "gxpm-uninstall": "./bin/gxpm-uninstall",
     "gxpm-update-check": "./bin/gxpm-update-check"
   },
   "scripts": {

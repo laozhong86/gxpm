@@ -18,8 +18,8 @@ import {
   evaluatePrePush,
 } from "../core/gate";
 import {
-  getConfigValue,
-  listConfig,
+  getResolvedConfigValue,
+  listConfigEntries,
   resolveWorktreePolicy,
   setConfigValue,
 } from "../core/config";
@@ -285,9 +285,9 @@ function runConfigCommand(
 ) {
   if (subcommand === "get") {
     if (!thirdArg) throw new Error("Usage: gxpm config get <key>");
-    const result = getConfigValue({ key: thirdArg });
-    if (result.value === undefined) {
-      console.log(`${thirdArg}: <unset>`);
+    const result = getResolvedConfigValue({ key: thirdArg });
+    if (argv.includes("--raw")) {
+      console.log(String(result.value));
     } else {
       console.log(`${thirdArg}: ${JSON.stringify(result.value)}`);
       console.log(`source:  ${result.source}`);
@@ -310,16 +310,13 @@ function runConfigCommand(
   }
 
   if (subcommand === "list" || !subcommand) {
-    const all = listConfig();
     if (argv.includes("--json")) {
-      console.log(JSON.stringify(all, null, 2));
+      console.log(JSON.stringify(listConfigEntries(), null, 2));
       return;
     }
-    console.log("=== repo (.gxpm/config.json) ===");
-    console.log(JSON.stringify(all.repo, null, 2));
-    console.log("");
-    console.log("=== global (~/.gxpm/config.json) ===");
-    console.log(JSON.stringify(all.global, null, 2));
+    for (const entry of listConfigEntries()) {
+      console.log(`${entry.key}: ${JSON.stringify(entry.value)} (${entry.source})`);
+    }
     return;
   }
 

@@ -4,6 +4,14 @@ import { dirname, join } from "node:path";
 
 export type WorktreeEnforcement = "required" | "forbidden" | "optional" | "unset";
 export type WorktreeDefault = "use" | "skip" | "ask";
+export type ConfigValueSource = "config-repo" | "config-global" | "default" | "unset";
+
+export interface ConfigEntry {
+  key: KnownConfigKey;
+  value: unknown;
+  source: ConfigValueSource;
+  description: string;
+}
 
 export interface WorktreePolicy {
   enforcement: WorktreeEnforcement;
@@ -37,10 +45,34 @@ interface ConfigDoc {
     enforcement?: WorktreeEnforcement;
     default?: WorktreeDefault;
   };
+  update_check?: boolean;
   [k: string]: unknown;
 }
 
 const CONFIG_FILENAME = "config.json";
+const WORKTREE_ENFORCEMENT_VALUES = ["required", "forbidden", "optional", "unset"] as const;
+const WORKTREE_DEFAULT_VALUES = ["use", "skip", "ask"] as const;
+
+const CONFIG_REGISTRY = {
+  "worktree.enforcement": {
+    defaultValue: "optional" satisfies WorktreeEnforcement,
+    description: "Worktree policy enforcement: required, forbidden, optional, or unset.",
+    normalize: (value: unknown) => normalizeEnum("worktree.enforcement", value, WORKTREE_ENFORCEMENT_VALUES),
+  },
+  "worktree.default": {
+    defaultValue: "ask" satisfies WorktreeDefault,
+    description: "Default worktree choice when enforcement is optional: use, skip, or ask.",
+    normalize: (value: unknown) => normalizeEnum("worktree.default", value, WORKTREE_DEFAULT_VALUES),
+  },
+  update_check: {
+    defaultValue: true,
+    description: "Whether gxpm-update-check should check the remote VERSION.",
+    normalize: normalizeBoolean,
+  },
+} as const;
+
+export type KnownConfigKey = keyof typeof CONFIG_REGISTRY;
+export const KNOWN_CONFIG_KEYS = Object.keys(CONFIG_REGISTRY) as KnownConfigKey[];
 
 function repoConfigPath(root: string) {
   return join(root, ".gxpm", CONFIG_FILENAME);
@@ -78,6 +110,18 @@ export function getConfigValue(input: { root?: string; home?: string; key: strin
   return { value: undefined, source: "unset" };
 }
 
+export function getResolvedConfigValue(input: { root?: string; home?: string; key: string }): {
+  value: unknown;
+  source: ConfigValueSource;
+} {
+  assertKnownConfigKey(input.key);
+  const explicit = getConfigValue(input);
+  if (explicit.value !== undefined) {
+    return { value: explicit.value, source: explicit.source };
+  }
+  return { value: CONFIG_REGISTRY[input.key].defaultValue, source: "default" };
+}
+
 export function setConfigValue(input: {
   root?: string;
   home?: string;
@@ -85,12 +129,13 @@ export function setConfigValue(input: {
   key: string;
   value: unknown;
 }) {
+  assertKnownConfigKey(input.key);
   const path =
     input.scope === "repo"
       ? repoConfigPath(input.root ?? process.cwd())
       : globalConfigPath(input.home ?? homedir());
   const doc = readConfig(path);
-  assign(doc, input.key, input.value);
+  assign(doc, input.key, normalizeConfigValue(input.key, input.value));
   writeConfig(path, doc);
   return path;
 }
@@ -103,6 +148,18 @@ export function listConfig(input: { root?: string; home?: string } = {}): {
     repo: readConfig(repoConfigPath(input.root ?? process.cwd())),
     global: readConfig(globalConfigPath(input.home ?? homedir())),
   };
+}
+
+export function listConfigEntries(input: { root?: string; home?: string } = {}): ConfigEntry[] {
+  return KNOWN_CONFIG_KEYS.map((key) => {
+    const resolved = getResolvedConfigValue({ ...input, key });
+    return {
+      key,
+      value: resolved.value,
+      source: resolved.source,
+      description: CONFIG_REGISTRY[key].description,
+    };
+  });
 }
 
 /**
@@ -137,8 +194,8 @@ export function parseAgentsMdConfig(content: string): ConfigDoc {
     if (!m) continue;
     const key = m[1];
     const valueRaw = m[2].trim().replace(/^["']|["']$/g, "");
-    if (!key.includes(".")) continue;
-    assign(doc, key, normalizeValue(valueRaw));
+    if (!isKnownConfigKey(key)) continue;
+    assign(doc, key, normalizeConfigValue(key, normalizeValue(valueRaw)));
   }
   return doc;
 }
@@ -218,6 +275,34 @@ function assign(doc: Record<string, unknown>, key: string, value: unknown) {
     cur = cur[p];
   }
   cur[parts[parts.length - 1]] = value;
+}
+
+function isKnownConfigKey(key: string): key is KnownConfigKey {
+  return key in CONFIG_REGISTRY;
+}
+
+function assertKnownConfigKey(key: string): asserts key is KnownConfigKey {
+  if (!isKnownConfigKey(key)) {
+    throw new Error(`Unknown config key: ${key}`);
+  }
+}
+
+function normalizeConfigValue(key: KnownConfigKey, value: unknown) {
+  return CONFIG_REGISTRY[key].normalize(value as never);
+}
+
+function normalizeBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("update_check must be true or false");
+}
+
+function normalizeEnum<T extends readonly string[]>(key: string, value: unknown, allowed: T): T[number] {
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new Error(`${key} must be one of: ${allowed.join(", ")}`);
+  }
+  return value as T[number];
 }
 
 function normalizeValue(raw: string): unknown {

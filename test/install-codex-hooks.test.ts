@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { installCodexHooks } from "../scripts/install-codex-hooks";
@@ -158,6 +158,7 @@ describe("hook script behavior", () => {
       stdin: new TextEncoder().encode(
         JSON.stringify({ session_id: "x", cwd: emptyCwd, hook_event_name: "SessionStart" }),
       ),
+      env: { ...process.env, GXPM_UPDATE_CHECK_BIN: "/does/not/exist" },
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -180,6 +181,7 @@ describe("hook script behavior", () => {
       stdin: new TextEncoder().encode(
         JSON.stringify({ session_id: "x", cwd: repoCwd, hook_event_name: "SessionStart" }),
       ),
+      env: { ...process.env, GXPM_UPDATE_CHECK_BIN: "/does/not/exist" },
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -190,6 +192,30 @@ describe("hook script behavior", () => {
       expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
       expect(parsed.hookSpecificOutput.additionalContext).toContain("GXPM-77");
     }
+  });
+
+  test("session-start.sh appends update context when upgrade is available", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-update-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
+    const updateCheck = join(fakeHome, "gxpm-update-check");
+    writeFileSync(updateCheck, "#!/bin/bash\necho 'UPGRADE_AVAILABLE 0.1.0.0 0.1.0.1'\n");
+    chmodSync(updateCheck, 0o755);
+
+    const emptyCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-update-cwd-"));
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ session_id: "x", cwd: emptyCwd, hook_event_name: "SessionStart" }),
+      ),
+      env: { ...process.env, GXPM_UPDATE_CHECK_BIN: updateCheck },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout.toString());
+    expect(parsed.hookSpecificOutput.additionalContext).toContain("gxpm update available: 0.1.0.0 -> 0.1.0.1.");
   });
 
   test("user-prompt-submit.sh ignores prompts without issue refs", () => {
