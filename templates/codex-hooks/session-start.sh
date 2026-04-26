@@ -70,16 +70,43 @@ if [ -n "$UPDATE_CHECK_BIN" ] && [ -x "$UPDATE_CHECK_BIN" ]; then
   esac
 fi
 
-if [ -z "$STATIC_CONTEXT" ] && [ -z "$UPDATE_CONTEXT" ]; then
-  exit 0
+WIKI_JSON="{}"
+if [ -n "$CWD" ] && [ -d "$CWD" ] && command -v gxpm >/dev/null 2>&1; then
+  WIKI_JSON=$(cd "$CWD" && gxpm wiki status --json 2>/dev/null || echo "{}")
 fi
 
-export STATIC_CONTEXT UPDATE_CONTEXT
+export STATIC_CONTEXT UPDATE_CONTEXT WIKI_JSON
 python3 - <<'PY'
 import json
 import os
+import sys
 
 parts = [p for p in [os.environ.get("STATIC_CONTEXT", ""), os.environ.get("UPDATE_CONTEXT", "")] if p]
+try:
+    wiki = json.loads(os.environ.get("WIKI_JSON", "{}"))
+except Exception:
+    wiki = {}
+
+if wiki.get("detected"):
+    wiki_parts = [
+        "Qoder repo wiki detected (.qoder/repowiki). Run `gxpm wiki status` before direct source reads."
+    ]
+    top_pages = wiki.get("topPages") or []
+    page_paths = [page.get("path") for page in top_pages[:3] if page.get("path")]
+    if page_paths:
+        wiki_parts.append("Start with: {}".format(", ".join(page_paths)))
+    reminder = wiki.get("reminder") or {}
+    if reminder.get("reminderDue"):
+        wiki_parts.append(
+            "Weekly Qoder wiki sync reminder: {}".format(
+                reminder.get("reason", "manual sync evidence is stale")
+            )
+        )
+    parts.append("\n".join(wiki_parts))
+
+if not parts:
+    sys.exit(0)
+
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "SessionStart",

@@ -26,6 +26,12 @@ import {
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
+import {
+  getQoderWikiStatus,
+  markQoderWikiReminder,
+  markQoderWikiSync,
+  type QoderWikiStatus,
+} from "../core/wiki";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
@@ -59,6 +65,11 @@ function main(argv: string[]) {
     console.log(`worktree.enforcement: ${policy.enforcement}`);
     console.log(`worktree.default:     ${policy.default}`);
     console.log(`source:               ${policy.source}`);
+    return;
+  }
+
+  if (command === "wiki") {
+    runWikiCommand(argv, subcommand);
     return;
   }
 
@@ -328,6 +339,70 @@ function parseConfigValueLiteral(raw: string): unknown {
   if (raw === "false") return false;
   if (/^-?\d+$/.test(raw)) return Number(raw);
   return raw;
+}
+
+function runWikiCommand(argv: string[], subcommand: string | undefined) {
+  if (!subcommand || subcommand === "status") {
+    const status = getQoderWikiStatus();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(status, null, 2));
+    } else {
+      console.log(formatQoderWikiStatus(status));
+    }
+    return;
+  }
+
+  if (subcommand === "mark-sync") {
+    const record = markQoderWikiSync({ note: optionValue(argv, "--note") ?? undefined });
+    console.log(`recorded Qoder wiki manual sync at ${record.lastSyncAt}`);
+    console.log("state: .gxpm/wiki/qoder.json");
+    return;
+  }
+
+  if (subcommand === "mark-reminder") {
+    const record = markQoderWikiReminder({ note: optionValue(argv, "--note") ?? undefined });
+    console.log(`recorded Qoder wiki reminder at ${record.lastReminderAt}`);
+    console.log("state: .gxpm/wiki/qoder.json");
+    return;
+  }
+
+  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+}
+
+function formatQoderWikiStatus(status: QoderWikiStatus) {
+  const lines: string[] = [];
+  if (!status.detected) {
+    lines.push(`Qoder wiki: not detected (${status.repoWikiRoot})`);
+    lines.push("Normal gxpm workflow continues.");
+    return lines.join("\n");
+  }
+
+  lines.push(`Qoder wiki: detected (${status.repoWikiRoot})`);
+  lines.push(`state: ${status.state}`);
+  lines.push(`pages: ${status.pageCount}`);
+  if (status.contentRoots.length > 0) {
+    lines.push(`content roots: ${status.contentRoots.join(", ")}`);
+  }
+  lines.push("");
+  lines.push("Progressive read before source:");
+  status.progressiveRead.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+  if (status.topPages.length > 0) {
+    lines.push("");
+    lines.push("Top wiki pages:");
+    for (const page of status.topPages.slice(0, 5)) {
+      const cited = page.citedFiles.length > 0 ? ` -> ${page.citedFiles.slice(0, 3).join(", ")}` : "";
+      lines.push(`- ${page.path}${cited}`);
+    }
+  }
+  lines.push("");
+  lines.push(`Weekly sync: ${status.reminder.syncStale ? "stale" : "current"}`);
+  lines.push(`Reminder due: ${status.reminder.reminderDue ? "yes" : "no"}`);
+  lines.push(`Reason: ${status.reminder.reason}`);
+  if (status.reminder.reminderDue) {
+    lines.push(`After reminding, run: ${status.commands.markReminder}`);
+  }
+  lines.push(`After manual Qoder resync, run: ${status.commands.markSync}`);
+  return lines.join("\n");
 }
 
 function runIssueHistory(issueId: string, asJson: boolean) {
