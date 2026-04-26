@@ -57,4 +57,20 @@ describe("install-hooks", () => {
     expect(r.exitCode).toBe(1);
     expect(r.stderr.toString()).toContain("Not a git repository");
   });
+
+  test("creates top-level dispatcher hooks when none exist", () => {
+    const repo = mkdtempSync(join(tmpdir(), "gxpm-install-dispatcher-"));
+    execSync("git init -q", { cwd: repo });
+
+    const r = bunRun(["--target", repo], repo);
+    expect(r.exitCode).toBe(0);
+
+    expect(existsSync(join(repo, ".githooks", "pre-commit"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "commit-msg"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "pre-push"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "post-merge"))).toBe(true);
+
+    const preCommit = readFileSync(join(repo, ".githooks", "pre-commit"), "utf8");
+    expect(preCommit).toContain("gxpm-pre-commit");
+  });
 });
