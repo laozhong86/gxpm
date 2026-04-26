@@ -60,20 +60,20 @@ export function getQoderWikiStatus(input: { root?: string; now?: Date } = {}): Q
   const now = input.now ?? new Date();
   const repoWikiRoot = join(root, QODER_REPOWIKI_ROOT);
   const record = readQoderWikiRecord(root);
-  const observedWikiUpdatedAt = newestKnownWikiTimestamp(root);
 
-  if (!existsSync(repoWikiRoot)) {
+  if (!isDirectory(repoWikiRoot)) {
     return buildStatus({
       detected: false,
       state: "absent",
       contentRoots: [],
       pages: [],
       record,
-      observedWikiUpdatedAt,
+      observedWikiUpdatedAt: undefined,
       now,
     });
   }
 
+  const observedWikiUpdatedAt = newestKnownWikiTimestamp(root);
   const contentRoots = findContentRoots(root, repoWikiRoot);
   const pages = contentRoots.flatMap((contentRoot) => listMarkdownPages(root, contentRoot));
   return buildStatus({
@@ -217,16 +217,22 @@ function computeReminder(
     };
   }
 
-  const syncStale = isOlderThanWeek(lastSyncAt, now);
+  const syncOlderThanWeek = isOlderThanWeek(lastSyncAt, now);
+  const wikiUpdatedAfterSync = isAfter(observedWikiUpdatedAt, lastSyncAt);
+  const syncStale = !lastSyncAt || syncOlderThanWeek || wikiUpdatedAfterSync;
   const reminderDue = syncStale && isOlderThanWeek(lastReminderAt, now);
   let reason = "Qoder repo wiki sync evidence is current.";
   if (!lastSyncAt) {
     reason = "No manual Qoder wiki sync has been recorded in gxpm.";
-  } else if (syncStale) {
+  } else if (wikiUpdatedAfterSync) {
+    reason = "Observed Qoder repo wiki updated since the last manual sync.";
+  } else if (syncOlderThanWeek) {
     reason = "Manual Qoder wiki sync evidence is older than seven days.";
   }
   if (syncStale && !reminderDue) {
-    reason = "Manual Qoder wiki sync is stale, but gxpm has reminded within the last seven days.";
+    reason = wikiUpdatedAfterSync
+      ? "Observed Qoder repo wiki updated since the last manual sync, but gxpm has reminded within the last seven days."
+      : "Manual Qoder wiki sync is stale, but gxpm has reminded within the last seven days.";
   }
 
   return { syncStale, reminderDue, reason, lastSyncAt, lastReminderAt, observedWikiUpdatedAt };
@@ -237,6 +243,21 @@ function isOlderThanWeek(value: string | undefined, now: Date) {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return true;
   return now.getTime() - time >= WEEK_MS;
+}
+
+function isAfter(value: string | undefined, baseline: string | undefined) {
+  if (!value || !baseline) return false;
+  const valueTime = Date.parse(value);
+  const baselineTime = Date.parse(baseline);
+  return Number.isFinite(valueTime) && Number.isFinite(baselineTime) && valueTime > baselineTime;
+}
+
+function isDirectory(path: string) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function readQoderWikiRecord(root: string): QoderWikiRecord | null {

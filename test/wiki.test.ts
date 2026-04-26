@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,6 +50,18 @@ describe("Qoder wiki capability", () => {
     expect(status.pageCount).toBe(0);
     expect(status.reminder.reminderDue).toBe(false);
     expect(status.progressiveRead[0]).toContain("continue normal gxpm workflow");
+  });
+
+  test("treats a non-directory .qoder/repowiki path as absent", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, ".qoder"), { recursive: true });
+    writeFileSync(join(root, ".qoder", "repowiki"), "not a directory");
+
+    const status = getQoderWikiStatus({ root, now: new Date("2026-04-27T00:00:00Z") });
+
+    expect(status.detected).toBe(false);
+    expect(status.state).toBe("absent");
+    expect(status.pageCount).toBe(0);
   });
 
   test("summarizes markdown pages without requiring metadata reads", () => {
@@ -126,5 +139,26 @@ describe("Qoder wiki capability", () => {
     const afterSync = getQoderWikiStatus({ root, now: new Date("2026-04-29T00:00:00Z") });
     expect(afterSync.reminder.syncStale).toBe(false);
     expect(afterSync.reminder.reminderDue).toBe(false);
+  });
+
+  test("marks sync stale when observed wiki metadata is newer than the last sync", () => {
+    const root = tempRoot();
+    writeWikiPage(root, "Overview.md", "# Overview\n");
+    const metadataPath = join(root, ".qoder", "repowiki", "en", "meta", "repowiki-metadata.json");
+    mkdirSync(dirname(metadataPath), { recursive: true });
+    writeFileSync(metadataPath, "{}");
+    utimesSync(metadataPath, new Date("2026-04-29T02:00:00Z"), new Date("2026-04-29T02:00:00Z"));
+
+    markQoderWikiSync({
+      root,
+      now: new Date("2026-04-28T01:00:00Z"),
+      note: "manual qoder sync",
+    });
+
+    const status = getQoderWikiStatus({ root, now: new Date("2026-04-29T03:00:00Z") });
+
+    expect(status.reminder.syncStale).toBe(true);
+    expect(status.reminder.reminderDue).toBe(true);
+    expect(status.reminder.reason).toContain("updated since the last manual sync");
   });
 });
