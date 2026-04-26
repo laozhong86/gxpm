@@ -1,0 +1,21 @@
+#!/bin/bash
+# gxpm post-merge hook (runs after `git merge` or `git pull` completes)
+set -e
+
+if ! command -v gxpm >/dev/null 2>&1; then
+  exit 0
+fi
+
+# When a feature branch merges into develop, the post-merge runs ON the
+# branch that received the merge (usually develop). Use the merged branch
+# name from MERGE_MSG when available.
+issue_id=""
+if [ -f .git/MERGE_MSG ]; then
+  issue_id=$(grep -oEi '(gxg|gxpm)-[0-9]+' .git/MERGE_MSG | head -1 | tr 'a-z' 'A-Z' || true)
+fi
+
+if [ -n "$issue_id" ] && [ -f ".gxpm/issues/${issue_id}/state.json" ]; then
+  gxpm gate post-merge "$issue_id" || true
+fi
+
+exit 0
