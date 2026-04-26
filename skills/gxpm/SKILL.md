@@ -54,6 +54,13 @@ When unsure what to run next on a specific issue:
 gxpm issue next <issue-id>   # prints recommended next command(s)
 ```
 
+To audit an issue's full history (gates, transitions, artifact writes):
+
+```bash
+gxpm issue history <issue-id>           # human timeline
+gxpm issue history <issue-id> --json    # machine-readable
+```
+
 If no state exists, create it before phase work:
 
 ```bash

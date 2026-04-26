@@ -93,6 +93,14 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "issue" && subcommand === "history") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue history <issue-id> [--json]");
+    }
+    runIssueHistory(issueId, argv.includes("--json"));
+    return;
+  }
+
   if (command === "issue" && subcommand === "transition") {
     if (!issueId || !value) {
       throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
@@ -173,6 +181,54 @@ function main(argv: string[]) {
   }
 
   throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
+}
+
+function runIssueHistory(issueId: string, asJson: boolean) {
+  const paths = getIssuePaths(process.cwd(), issueId);
+  if (!existsSync(paths.eventsPath)) {
+    throw new Error(`Issue not found: ${issueId}`);
+  }
+
+  const lines = readFileSync(paths.eventsPath, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const events = lines.map((line) => JSON.parse(line) as StateEvent);
+
+  if (asJson) {
+    console.log(JSON.stringify(events, null, 2));
+    return;
+  }
+
+  console.log(`${issueId} timeline (${events.length} event${events.length === 1 ? "" : "s"})`);
+  console.log("─".repeat(60));
+
+  for (const event of events) {
+    const ts = event.timestamp.replace("T", " ").replace(/\.\d+Z$/, "Z");
+    const type = event.type.padEnd(20);
+    const detail = formatEventDetail(event);
+    console.log(`${ts}  ${type}  ${detail}`);
+  }
+}
+
+function formatEventDetail(event: StateEvent): string {
+  const p = event.payload as Record<string, unknown>;
+  switch (event.type) {
+    case "issue.created":
+      return `phase: ${p.initialPhase ?? "?"}`;
+    case "phase.transitioned":
+      return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"}`;
+    case "artifact.written":
+      return `${p.artifactType ?? "?"} (${p.path ?? ""})`;
+    case "gate.passed":
+      if (p.gate) return `${p.gate} (${p.code ?? ""})`;
+      return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} (${p.requiredArtifact ?? ""})`;
+    case "gate.blocked":
+      if (p.gate) return `${p.gate}: ${p.reason ?? ""}`;
+      return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} blocked: ${p.missingArtifact ?? ""}`;
+    default:
+      return JSON.stringify(p);
+  }
 }
 
 function runIssueNext(issueId: string) {

@@ -41,6 +41,53 @@ describe("gxpm CLI", () => {
   });
 });
 
+describe("gxpm issue history CLI", () => {
+  test("shows event timeline for a freshly created issue", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-history-fresh-"));
+    expect(runCli(root, ["issue", "create", "GXPM-50"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "history", "GXPM-50"]);
+    expect(r.exitCode).toBe(0);
+    const out = output(r);
+    expect(out).toContain("GXPM-50");
+    expect(out).toContain("issue.created");
+    expect(out).toContain("triage");
+  });
+
+  test("includes phase transitions and artifact events", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-history-walk-"));
+    expect(runCli(root, ["issue", "create", "GXPM-51"]).exitCode).toBe(0);
+    expect(runCli(root, ["triage", "init", "GXPM-51"]).exitCode).toBe(0);
+    expect(runCli(root, ["issue", "transition", "GXPM-51", "plan"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "history", "GXPM-51"]);
+    const out = output(r);
+    expect(out).toContain("artifact.written");
+    expect(out).toContain("acceptance-contract");
+    expect(out).toContain("phase.transitioned");
+    expect(out).toContain("triage → plan");
+    expect(out).toContain("gate.passed");
+  });
+
+  test("--json outputs machine-readable timeline", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-history-json-"));
+    expect(runCli(root, ["issue", "create", "GXPM-52"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "history", "GXPM-52", "--json"]);
+    expect(r.exitCode).toBe(0);
+    const events = JSON.parse(output(r));
+    expect(Array.isArray(events)).toBe(true);
+    expect(events[0].type).toBe("issue.created");
+    expect(events[0].issueId).toBe("GXPM-52");
+  });
+
+  test("returns non-zero for unknown issue", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-history-missing-"));
+    const r = runCli(root, ["issue", "history", "GXPM-NOPE"]);
+    expect(r.exitCode).toBe(1);
+  });
+});
+
 describe("gxpm issue next CLI", () => {
   test("recommends triage init when at triage with no artifact", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-next-triage-"));
