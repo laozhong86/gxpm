@@ -203,6 +203,32 @@ EDITOR=vim gxpm artifact edit <issue-id> acceptance-contract
 
 JSON-only on purpose — the artifact contract is machine-readable.
 
+## Codex Runtime Hooks (Layer 4, optional)
+
+Codex CLI v0.117.0+ supports lifecycle hooks. gxpm ships two:
+
+- `SessionStart` — injects active issue list + resume hints when a Codex
+  session opens, so the agent always knows what's in flight.
+- `UserPromptSubmit` — when the user mentions a `GXPM-N` / `GXG-N` issue id
+  in their prompt, gxpm injects that issue's current phase + next-step
+  guidance.
+
+Install:
+
+```bash
+gxpm-init --install-codex-hooks --scope user      # ~/.codex/hooks/
+gxpm-init --install-codex-hooks --scope repo --target /path  # <repo>/.codex/hooks/
+```
+
+Then enable the feature flag in `~/.codex/config.toml`:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+Restart Codex to activate.
+
 ## Hook Defense (Layer 3)
 
 When skill content is unloaded by progressive disclosure, the `gxpm gate` CLI

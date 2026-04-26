@@ -21,6 +21,10 @@ case "${1:-}" in
     shift
     exec bun run "$ROOT/scripts/install-skill.ts" "$@"
     ;;
+  --install-codex-hooks)
+    shift
+    exec bun run "$ROOT/scripts/install-codex-hooks.ts" "$@"
+    ;;
   --install)
     shift
     # Combo: install skill globally to all hosts AND install hooks to a target repo.
