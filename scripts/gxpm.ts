@@ -8,7 +8,7 @@ import {
   transitionIssuePhase,
   type StateEvent,
 } from "../core/state";
-import { hasArtifact, listArtifacts, readArtifact } from "../core/artifacts";
+import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
 import {
   evaluateCommitMsg,
   evaluatePostMerge,
@@ -105,6 +105,14 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "artifact" && subcommand === "write") {
+    if (!issueId || !value) {
+      throw new Error("Usage: gxpm artifact write <issue-id> <type> --json <json> | --from <file> | --stdin");
+    }
+    runArtifactWrite(argv, issueId, value);
+    return;
+  }
+
   if (command === "gate" && subcommand === "pre-commit") {
     runPreCommitGate(argv, issueId);
     return;
@@ -136,6 +144,45 @@ function main(argv: string[]) {
   }
 
   throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
+}
+
+function runArtifactWrite(argv: string[], issueId: string, type: string) {
+  const dashJson = argv.indexOf("--json");
+  const dashFrom = argv.indexOf("--from");
+  const useStdin = argv.includes("--stdin");
+
+  const inputs = [dashJson >= 0, dashFrom >= 0, useStdin].filter(Boolean).length;
+  if (inputs === 0) {
+    throw new Error(
+      "gxpm artifact write requires one of: --json <json> | --from <file> | --stdin",
+    );
+  }
+  if (inputs > 1) {
+    throw new Error("gxpm artifact write: pick exactly one of --json / --from / --stdin");
+  }
+
+  let raw: string;
+  if (dashJson >= 0) {
+    raw = argv[dashJson + 1] ?? "";
+  } else if (dashFrom >= 0) {
+    const file = argv[dashFrom + 1];
+    if (!file) throw new Error("--from requires a file path");
+    raw = readFileSync(file, "utf8");
+  } else {
+    raw = readFileSync("/dev/stdin", "utf8");
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `gxpm artifact write: invalid JSON payload — ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  const record = writeArtifact({ issueId, type, payload });
+  console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
 }
 
 function gateEvent(verdict: { allowed: boolean; code: string; reason: string; details?: Record<string, unknown> }, gate: string, issueId: string): StateEvent {
