@@ -1,0 +1,60 @@
+import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const installScript = resolve(import.meta.dir, "..", "scripts", "install-hooks.ts");
+
+function bunRun(args: string[], cwd: string) {
+  return Bun.spawnSync({
+    cmd: ["bun", "run", installScript, ...args],
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
+describe("install-hooks", () => {
+  test("installs 4 hook files into target repo's .githooks/", () => {
+    const repo = mkdtempSync(join(tmpdir(), "gxpm-install-target-"));
+    execSync("git init -q", { cwd: repo });
+
+    const r = bunRun(["--target", repo], repo);
+    expect(r.exitCode).toBe(0);
+
+    expect(existsSync(join(repo, ".githooks", "gxpm-pre-commit"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "gxpm-commit-msg"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "gxpm-pre-push"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "gxpm-post-merge"))).toBe(true);
+  });
+
+  test("sets git core.hooksPath to .githooks", () => {
+    const repo = mkdtempSync(join(tmpdir(), "gxpm-install-hookspath-"));
+    execSync("git init -q", { cwd: repo });
+
+    bunRun(["--target", repo], repo);
+
+    const hooksPath = execSync("git config core.hooksPath", { cwd: repo }).toString().trim();
+    expect(hooksPath).toBe(".githooks");
+  });
+
+  test("does not overwrite existing .githooks/pre-commit", () => {
+    const repo = mkdtempSync(join(tmpdir(), "gxpm-install-noclobber-"));
+    execSync("git init -q", { cwd: repo });
+    mkdirSync(join(repo, ".githooks"), { recursive: true });
+    writeFileSync(join(repo, ".githooks", "pre-commit"), "#existing\n");
+
+    bunRun(["--target", repo], repo);
+
+    const content = readFileSync(join(repo, ".githooks", "pre-commit"), "utf8");
+    expect(content).toContain("#existing");
+  });
+
+  test("fails when target is not a git repo", () => {
+    const nonRepo = mkdtempSync(join(tmpdir(), "gxpm-install-not-repo-"));
+    const r = bunRun(["--target", nonRepo], nonRepo);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr.toString()).toContain("Not a git repository");
+  });
+});

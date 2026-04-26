@@ -2,4 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec bun run "$ROOT/scripts/gen-skill-docs.ts" "$@"
+
+case "${1:-}" in
+  --install-hooks)
+    shift
+    exec bun run "$ROOT/scripts/install-hooks.ts" "$@"
+    ;;
+  *)
+    exec bun run "$ROOT/scripts/gen-skill-docs.ts" "$@"
+    ;;
+esac
