@@ -87,6 +87,21 @@ describe("Qoder wiki capability", () => {
     expect(JSON.stringify(status)).not.toContain("metadata should not be surfaced");
   });
 
+  test("does not traverse nested content roots twice", () => {
+    const root = tempRoot();
+    writeWikiPage(root, "Overview.md", "# Overview\n");
+    writeWikiPage(root, "generated/content/Deep.md", "# Deep\n");
+
+    const status = getQoderWikiStatus({ root, now: new Date("2026-04-27T00:00:00Z") });
+
+    expect(status.contentRoots).toEqual([".qoder/repowiki/en/content"]);
+    expect(status.pageCount).toBe(2);
+    expect(status.topPages.map((page) => page.path).sort()).toEqual([
+      ".qoder/repowiki/en/content/Overview.md",
+      ".qoder/repowiki/en/content/generated/content/Deep.md",
+    ]);
+  });
+
   test("extracts cited source files from wiki markdown", () => {
     expect(
       extractCitedFiles(
@@ -153,6 +168,32 @@ describe("Qoder wiki capability", () => {
       root,
       now: new Date("2026-04-28T01:00:00Z"),
       note: "manual qoder sync",
+    });
+
+    const status = getQoderWikiStatus({ root, now: new Date("2026-04-29T03:00:00Z") });
+
+    expect(status.reminder.syncStale).toBe(true);
+    expect(status.reminder.reminderDue).toBe(true);
+    expect(status.reminder.reason).toContain("updated since the last manual sync");
+  });
+
+  test("re-arms reminders when observed wiki metadata changes after the last reminder", () => {
+    const root = tempRoot();
+    writeWikiPage(root, "Overview.md", "# Overview\n");
+    const metadataPath = join(root, ".qoder", "repowiki", "en", "meta", "repowiki-metadata.json");
+    mkdirSync(dirname(metadataPath), { recursive: true });
+    writeFileSync(metadataPath, "{}");
+    utimesSync(metadataPath, new Date("2026-04-29T02:00:00Z"), new Date("2026-04-29T02:00:00Z"));
+
+    markQoderWikiSync({
+      root,
+      now: new Date("2026-04-28T01:00:00Z"),
+      note: "manual qoder sync",
+    });
+    markQoderWikiReminder({
+      root,
+      now: new Date("2026-04-29T01:00:00Z"),
+      note: "recent reminder before qoder changed",
     });
 
     const status = getQoderWikiStatus({ root, now: new Date("2026-04-29T03:00:00Z") });

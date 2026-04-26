@@ -139,7 +139,10 @@ function findContentRoots(root: string, repoWikiRoot: string): string[] {
       roots.push(dir);
     }
   });
-  return roots.sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
+  const sortedRoots = roots.sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
+  return sortedRoots.filter(
+    (candidate) => !sortedRoots.some((other) => other !== candidate && isDescendant(candidate, other)),
+  );
 }
 
 function listMarkdownPages(root: string, contentRoot: string): WikiPageSummary[] {
@@ -221,8 +224,9 @@ function computeReminder(
 
   const syncOlderThanWeek = isOlderThanWeek(lastSyncAt, now);
   const wikiUpdatedAfterSync = isAfter(observedWikiUpdatedAt, lastSyncAt);
+  const wikiUpdatedAfterReminder = isAfter(observedWikiUpdatedAt, lastReminderAt);
   const syncStale = !lastSyncAt || syncOlderThanWeek || wikiUpdatedAfterSync;
-  const reminderDue = syncStale && isOlderThanWeek(lastReminderAt, now);
+  const reminderDue = syncStale && (isOlderThanWeek(lastReminderAt, now) || wikiUpdatedAfterReminder);
   let reason = "Qoder repo wiki sync evidence is current.";
   if (!lastSyncAt) {
     reason = "No manual Qoder wiki sync has been recorded in gxpm.";
@@ -245,6 +249,11 @@ function isOlderThanWeek(value: string | undefined, now: Date) {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return true;
   return now.getTime() - time >= WEEK_MS;
+}
+
+function isDescendant(candidate: string, parent: string) {
+  const childPath = relative(parent, candidate);
+  return childPath !== "" && childPath !== ".." && !childPath.startsWith(`..${sep}`);
 }
 
 function isAfter(value: string | undefined, baseline: string | undefined) {
