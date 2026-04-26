@@ -161,4 +161,42 @@ describe("Qoder wiki capability", () => {
     expect(status.reminder.reminderDue).toBe(true);
     expect(status.reminder.reason).toContain("updated since the last manual sync");
   });
+
+  test("preserves epoch metadata timestamps as observed wiki updates", () => {
+    const root = tempRoot();
+    writeWikiPage(root, "Overview.md", "# Overview\n");
+    const metadataPath = join(root, ".qoder", "repowiki", "en", "meta", "repowiki-metadata.json");
+    mkdirSync(dirname(metadataPath), { recursive: true });
+    writeFileSync(metadataPath, "{}");
+    utimesSync(metadataPath, new Date(0), new Date(0));
+
+    const status = getQoderWikiStatus({ root, now: new Date("2026-04-29T03:00:00Z") });
+
+    expect(status.observedWikiUpdatedAt).toBe("1970-01-01T00:00:00.000Z");
+  });
+
+  test("keeps Qoder wiki record canonical fields when updating stale state", () => {
+    const root = tempRoot();
+    const statePath = join(root, ".gxpm", "wiki", "qoder.json");
+    mkdirSync(dirname(statePath), { recursive: true });
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        schemaVersion: 99,
+        provider: "other",
+        repoWikiRoot: ".other/wiki",
+      }),
+    );
+
+    markQoderWikiReminder({
+      root,
+      now: new Date("2026-04-29T01:00:00Z"),
+      note: "reminder",
+    });
+
+    const record = JSON.parse(readFileSync(statePath, "utf8"));
+    expect(record.schemaVersion).toBe(1);
+    expect(record.provider).toBe("qoder");
+    expect(record.repoWikiRoot).toBe(".qoder/repowiki");
+  });
 });

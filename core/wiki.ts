@@ -120,6 +120,7 @@ function buildStatus(input: {
     contentRoots: input.contentRoots,
     pageCount: input.pages.length,
     topPages,
+    observedWikiUpdatedAt: input.observedWikiUpdatedAt,
     progressiveRead: progressiveReadSteps(input.detected, topPages),
     reminder: computeReminder(input.record, input.now, input.observedWikiUpdatedAt, input.detected),
     commands: {
@@ -274,11 +275,11 @@ function writeQoderWikiRecord(root: string, patch: Partial<QoderWikiRecord>) {
   const path = join(root, QODER_STATE_PATH);
   const current = readQoderWikiRecord(root);
   const next: QoderWikiRecord = {
+    ...(current ?? {}),
+    ...definedOnly(patch),
     schemaVersion: 1,
     provider: "qoder",
     repoWikiRoot: QODER_REPOWIKI_ROOT,
-    ...(current ?? {}),
-    ...definedOnly(patch),
   };
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
@@ -304,7 +305,7 @@ function newestKnownWikiTimestamp(root: string) {
     }
   }
   const newest = timestamps.sort((a, b) => b - a)[0];
-  return newest ? new Date(newest).toISOString() : undefined;
+  return newest !== undefined ? new Date(newest).toISOString() : undefined;
 }
 
 function walkDirs(dir: string, visit: (dir: string) => void) {
