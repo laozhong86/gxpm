@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getNextAvailableIssueId, recentLandedIssues } from "../core/issues";
-import { createIssueState, transitionIssuePhase } from "../core/state";
+import { createIssueState, readIssueState, transitionIssuePhase } from "../core/state";
 import { writeArtifact } from "../core/artifacts";
 import { enterPhase, output, runCli } from "./helpers/workflow";
 
@@ -84,6 +84,16 @@ describe("gxpm issue create --auto-id CLI", () => {
     const r = runCli(root, ["issue", "create", "--auto-id"]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("created GXPM-4");
+  });
+
+  test("writes explicit issue type when --type is passed", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-type-"));
+
+    const r = runCli(root, ["issue", "create", "--auto-id", "--type", "meta"]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("created GXPM-1");
+    expect(readIssueState({ root, issueId: "GXPM-1" }).issueType).toBe("meta");
   });
 });
 

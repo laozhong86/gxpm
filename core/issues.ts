@@ -1,9 +1,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { GxpmPhase, IssueState } from "./state";
+import { normalizeIssueType, type GxpmPhase, type IssueState, type IssueType } from "./state";
 
 export interface IssueListEntry {
   issueId: string;
+  issueType: IssueType;
   currentPhase: GxpmPhase;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +18,10 @@ interface ListIssuesInput {
   includeAll?: boolean;
   /** Show only archived issues. Default false. Ignored if includeAll. */
   archivedOnly?: boolean;
+  /** Filter by issue type. Defaults to feature for the focused active list. */
+  types?: IssueType[];
+  /** Limit result count after sorting. Defaults to 5 for the focused active list. */
+  limit?: number;
 }
 
 export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
@@ -53,6 +58,7 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
     if (!state || typeof state !== "object" || !state.issueId) continue;
 
     const archived = state.archived === true;
+    const issueType = normalizeIssueType(state.issueType);
 
     // Filter: default hides archived AND landed; --all overrides; --archived narrows to only archived.
     if (!input.includeAll) {
@@ -63,9 +69,11 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
         if (state.currentPhase === "land") continue;
       }
     }
+    if (input.types && !input.types.includes(issueType)) continue;
 
     entries.push({
       issueId: state.issueId,
+      issueType,
       currentPhase: state.currentPhase,
       createdAt: state.createdAt,
       updatedAt: state.updatedAt,
@@ -75,7 +83,11 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
   }
 
   entries.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
-  return entries;
+  const defaultLimit = input.includeAll || input.archivedOnly ? undefined : 5;
+  const limit = input.limit ?? defaultLimit;
+  const defaultFeatureOnly = !input.includeAll && !input.archivedOnly && !input.types;
+  const filtered = defaultFeatureOnly ? entries.filter((entry) => entry.issueType === "feature") : entries;
+  return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
 }
 
 /**

@@ -4,9 +4,11 @@ import {
   appendIssueEvent,
   createIssueState,
   getIssuePaths,
+  isIssueType,
   readIssueState,
   setIssueArchived,
   transitionIssuePhase,
+  type IssueType,
   type StateEvent,
 } from "../core/state";
 import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
@@ -85,19 +87,9 @@ function main(argv: string[]) {
   }
 
   if (command === "issue" && subcommand === "create") {
-    let resolvedId = issueId;
-    if (!resolvedId || resolvedId === "--auto-id") {
-      if (argv.includes("--auto-id") || !resolvedId) {
-        if (!resolvedId && !argv.includes("--auto-id")) {
-          throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
-        }
-        resolvedId = getNextAvailableIssueId();
-      }
-    }
-    if (!resolvedId) {
-      throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
-    }
-    const state = createIssueState({ issueId: resolvedId });
+    const resolvedId = resolveIssueCreateId(argv);
+    const issueType = parseIssueTypeOption(argv, "feature");
+    const state = createIssueState({ issueId: resolvedId, issueType });
     console.log(`created ${state.issueId} at ${state.currentPhase}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), resolvedId).statePath}`);
     return;
@@ -119,13 +111,15 @@ function main(argv: string[]) {
     const json = argv.includes("--json");
     const includeAll = argv.includes("--all");
     const archivedOnly = argv.includes("--archived");
+    const types = parseIssueTypesOption(argv);
+    const limit = parsePositiveIntegerOption(argv, "--limit");
     const recentIdx = argv.indexOf("--recent");
     const recentN = recentIdx >= 0 ? parseInt(argv[recentIdx + 1] ?? "5", 10) || 5 : 0;
     let entries: ReturnType<typeof listIssues>;
     if (recentN > 0) {
       entries = recentLandedIssues({ limit: recentN });
     } else {
-      entries = listIssues({ includeAll, archivedOnly });
+      entries = listIssues({ includeAll, archivedOnly, types, limit });
     }
     if (json) {
       console.log(JSON.stringify(entries, null, 2));
@@ -139,12 +133,13 @@ function main(argv: string[]) {
       return;
     }
     const idWidth = Math.max(8, ...entries.map((e) => e.issueId.length));
+    const typeWidth = Math.max(7, ...entries.map((e) => e.issueType.length));
     const phaseWidth = Math.max(13, ...entries.map((e) => e.currentPhase.length));
-    console.log(`${"ISSUE".padEnd(idWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
+    console.log(`${"ISSUE".padEnd(idWidth)}  ${"TYPE".padEnd(typeWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
     for (const entry of entries) {
       const flags = entry.archived ? "archived" : "";
       console.log(
-        `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
+        `${entry.issueId.padEnd(idWidth)}  ${entry.issueType.padEnd(typeWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
       );
     }
     return;
@@ -608,6 +603,60 @@ function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
       `${usagePrefix}: invalid JSON payload — ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+function resolveIssueCreateId(argv: string[]) {
+  const args = argv.slice(2);
+  const typeIndex = args.indexOf("--type");
+  const typeValueIndex = typeIndex >= 0 ? typeIndex + 1 : -1;
+  const positional = args.find((arg, index) => !arg.startsWith("--") && index !== typeValueIndex);
+
+  if (positional) return positional;
+  if (args.includes("--auto-id")) return getNextAvailableIssueId();
+  throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+}
+
+function parseIssueTypeOption(argv: string[], fallback: IssueType): IssueType {
+  if (!argv.includes("--type")) return fallback;
+  return parseIssueType(optionRequiredValue(argv, "--type"));
+}
+
+function parseIssueTypesOption(argv: string[]): IssueType[] | undefined {
+  if (!argv.includes("--type")) return undefined;
+  const raw = optionRequiredValue(argv, "--type");
+  const values = raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (values.length === 0) {
+    throw new Error("--type requires one or more of: feature, meta, spike");
+  }
+  return values.map(parseIssueType);
+}
+
+function parseIssueType(value: string): IssueType {
+  if (!isIssueType(value)) {
+    throw new Error(`Invalid issue type: ${value}; expected feature, meta, or spike`);
+  }
+  return value;
+}
+
+function parsePositiveIntegerOption(argv: string[], option: string) {
+  if (!argv.includes(option)) return undefined;
+  const raw = optionRequiredValue(argv, option);
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 1 || String(value) !== raw) {
+    throw new Error(`${option} requires a positive integer`);
+  }
+  return value;
+}
+
+function optionRequiredValue(argv: string[], option: string) {
+  const value = optionValue(argv, option);
+  if (!value) {
+    throw new Error(`${option} requires a value`);
+  }
+  return value;
 }
 
 function optionValue(argv: string[], option: string) {
