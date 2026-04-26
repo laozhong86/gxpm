@@ -83,9 +83,10 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
   }
 
   entries.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
-  const defaultLimit = input.includeAll || input.archivedOnly ? undefined : 5;
+  const hasTypeFilter = (input.types?.length ?? 0) > 0;
+  const defaultLimit = input.includeAll || input.archivedOnly || hasTypeFilter ? undefined : 5;
   const limit = input.limit ?? defaultLimit;
-  const defaultFeatureOnly = !input.includeAll && !input.archivedOnly && !input.types;
+  const defaultFeatureOnly = !input.includeAll && !input.archivedOnly && !hasTypeFilter;
   const filtered = defaultFeatureOnly ? entries.filter((entry) => entry.issueType === "feature") : entries;
   return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
 }

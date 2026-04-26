@@ -95,6 +95,15 @@ describe("gxpm issue create --auto-id CLI", () => {
     expect(output(r)).toContain("created GXPM-1");
     expect(readIssueState({ root, issueId: "GXPM-1" }).issueType).toBe("meta");
   });
+
+  test("rejects mixing a literal issue id with --auto-id", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-auto-positional-"));
+
+    const r = runCli(root, ["issue", "create", "GXPM-1", "--auto-id"]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("Usage: gxpm issue create");
+  });
 });
 
 describe("gxpm issue list --recent CLI", () => {

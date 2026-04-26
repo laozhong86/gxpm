@@ -607,12 +607,30 @@ function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
 
 function resolveIssueCreateId(argv: string[]) {
   const args = argv.slice(2);
-  const typeIndex = args.indexOf("--type");
-  const typeValueIndex = typeIndex >= 0 ? typeIndex + 1 : -1;
-  const positional = args.find((arg, index) => !arg.startsWith("--") && index !== typeValueIndex);
+  const hasAutoId = args.includes("--auto-id");
+  const positional: string[] = [];
 
-  if (positional) return positional;
-  if (args.includes("--auto-id")) return getNextAvailableIssueId();
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--auto-id") continue;
+    if (arg === "--type") {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown option for gxpm issue create: ${arg}`);
+    }
+    positional.push(arg);
+  }
+
+  if (hasAutoId && positional.length > 0) {
+    throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+  }
+  if (positional.length > 1) {
+    throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+  }
+  if (positional[0]) return positional[0];
+  if (hasAutoId) return getNextAvailableIssueId();
   throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
 }
 

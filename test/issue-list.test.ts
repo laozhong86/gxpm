@@ -151,6 +151,18 @@ describe("listIssues filters", () => {
     expect(entries[0].issueId).toBe("GXPM-META");
     expect(entries[0].issueType).toBe("meta");
   });
+
+  test("--type does not inherit the default five issue limit", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-list-type-no-default-limit-"));
+    for (let i = 1; i <= 6; i += 1) {
+      createIssueState({ root, issueId: `GXPM-M${i}`, issueType: "meta" });
+    }
+
+    const entries = listIssues({ root, types: ["meta"] });
+
+    expect(entries).toHaveLength(6);
+    expect(entries.every((entry) => entry.issueType === "meta")).toBe(true);
+  });
 });
 
 describe("gxpm issue archive CLI", () => {
@@ -186,6 +198,18 @@ describe("gxpm issue archive CLI", () => {
     const out = output(list);
     expect(out).toContain("GXPM-F");
     expect(out).toContain("GXPM-M");
+    expect(out).toContain("meta");
+  });
+
+  test("--all flag in CLI shows auto-id meta issues", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-list-cli-all-auto-type-"));
+    const create = runCli(root, ["issue", "create", "--auto-id", "--type", "meta"]);
+    expect(create.exitCode).toBe(0);
+    expect(output(create)).toContain("created GXPM-1");
+
+    const list = runCli(root, ["issue", "list", "--all"]);
+    const out = output(list);
+    expect(out).toContain("GXPM-1");
     expect(out).toContain("meta");
   });
 
@@ -266,5 +290,18 @@ describe("gxpm issue list CLI", () => {
     expect(rows).toHaveLength(1);
     expect(out).toContain("meta");
     expect(out).not.toContain("GXPM-F1");
+  });
+
+  test("--type without --limit returns all matching rows", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-list-cli-type-no-limit-"));
+    for (let i = 1; i <= 6; i += 1) {
+      expect(runCli(root, ["issue", "create", `GXPM-M${i}`, "--type", "meta"]).exitCode).toBe(0);
+    }
+
+    const r = runCli(root, ["issue", "list", "--type", "meta"]);
+    expect(r.exitCode).toBe(0);
+    const rows = output(r).trim().split("\n").slice(1);
+    expect(rows).toHaveLength(6);
+    expect(rows.every((row) => row.includes("meta"))).toBe(true);
   });
 });
