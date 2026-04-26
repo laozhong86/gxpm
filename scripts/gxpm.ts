@@ -28,7 +28,9 @@ import { initializeLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
+import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
+import { readGxpmVersion } from "./version";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -39,10 +41,7 @@ function main(argv: string[]) {
   }
 
   if (command === "version" || command === "--version" || command === "-v") {
-    const pkg = JSON.parse(
-      readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
-    ) as { version: string };
-    console.log(pkg.version);
+    console.log(readGxpmVersion());
     return;
   }
 
@@ -197,6 +196,12 @@ function main(argv: string[]) {
     const before = readIssueState({ issueId });
     const after = transitionIssuePhase({ issueId, nextPhase: value });
     console.log(`transitioned ${after.issueId}: ${before.currentPhase} -> ${after.currentPhase}`);
+    if (after.currentPhase === "land") {
+      const sync = runPostLandSkillSync({ env: process.env });
+      if (!sync.ok) {
+        console.error(`[gxpm land sync] ${sync.message}`);
+      }
+    }
     return;
   }
 
