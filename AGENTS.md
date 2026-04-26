@@ -50,6 +50,7 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 - 完成 land phase 前的 merge 由 post-merge hook 自动 transition qa→land；不手工跳。
 - 不确定下一步时统一查 `gxpm issue next <id>`，不要自己拼 CLI。
 - 进入 implement 前 `git status -sb` 检查未追踪文件；如有 3+ 个来源不明文件，**默认走独立 worktree** 隔离（不依赖 worktree.enforcement 设置）。
+- **`git worktree add` 之后必须 `cd` 进新 worktree 才能动代码**。Codex 的 `apply_patch` / 写文件命令以 cwd 为路径根，光建 worktree 不切目录，写出去的文件仍落主仓库。每次进入 worktree 必须先 `cd /Users/x/Desktop/Project/gxpm-worktrees/<name>` 再编辑。
 - Codex 的 `update_plan` 仅用于阶段内细分任务，**不要与 gxpm phase 平行作为顶层 task list**；顶层进度永远以 `gxpm issue history <id>` 为准。
 
 ## Ask First

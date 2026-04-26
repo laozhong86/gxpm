@@ -131,6 +131,52 @@ during triage). The gxpm phase tree is the top-level execution contract.
   intra-phase steps.
 - Top-level progression always goes through `gxpm issue transition`.
 
+### Concrete examples
+
+✅ **GOOD `update_plan` items** (intra-phase, fine-grained sub-tasks):
+
+```
+- read core/state.ts
+- read core/artifacts.ts
+- compare existing schema with proposed checkpoint payload
+- write triage-report capturing 3 alternatives
+```
+
+❌ **BAD `update_plan` items** (mirror gxpm phases — DON'T do this):
+
+```
+- create gxpm 实现 issue 并推进到 implement
+- 实现 checkpoint/resume packet 命令
+- 补测试、更新生成型 SKILL
+- 推进到 land
+```
+
+The bad example duplicates gxpm phase progression. `gxpm issue history <id>`
+is the canonical timeline; `update_plan` is for the work-of-the-moment.
+
+## Canonical State Location
+
+`.gxpm/issues/<id>/` always lives in the **main repository**, never per-worktree.
+Even when you create a `git worktree` for code isolation, gxpm state stays
+in the main repo's `.gxpm/`. This means:
+
+- All sessions see the same issue tree regardless of which worktree they're in
+- `gxpm issue list` from any worktree returns the same set
+- No state divergence between worktrees
+
+When working in a worktree:
+
+```bash
+# Pattern A (recommended): run gxpm CLI commands in main repo cwd; do code edits in worktree
+cd /Users/x/Desktop/Project/gxpm                  # for gxpm * commands
+cd /Users/x/Desktop/Project/gxpm-worktrees/<name> # for code edits
+
+# Pattern B: symlink .gxpm into the worktree if you must run gxpm from inside
+ln -s /Users/x/Desktop/Project/gxpm/.gxpm <worktree>/.gxpm
+```
+
+Don't create per-worktree `.gxpm/` directories — that fragments the state graph.
+
 ## Issue ID Selection
 
 When creating a new issue without a pre-assigned ID (e.g., from Linear):
