@@ -12,12 +12,15 @@ interface InstallCodexHooksOptions {
   home?: string;
   /** Override gxpm repo root for testing. */
   gxpmRoot?: string;
+  /** When true (default), enable codex_hooks feature flag in ~/.codex/config.toml if missing. */
+  enableFeatureFlag?: boolean;
 }
 
 interface InstallResult {
   installedScripts: string[];
   hooksJsonPath: string;
   rootDir: string;
+  featureFlagEnabled: "already-set" | "enabled-now" | "skipped" | "config-missing";
 }
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
@@ -84,7 +87,50 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
   const merged = mergeWithExisting(hooksJsonPath, newConfig);
   writeFileSync(hooksJsonPath, JSON.stringify(merged, null, 2) + "\n");
 
-  return { installedScripts, hooksJsonPath, rootDir };
+  const featureFlagEnabled = (options.enableFeatureFlag ?? true)
+    ? ensureCodexHooksFeatureFlag(home)
+    : "skipped";
+
+  return { installedScripts, hooksJsonPath, rootDir, featureFlagEnabled };
+}
+
+/**
+ * Codex requires `[features] codex_hooks = true` in ~/.codex/config.toml for hooks
+ * to fire. Per official spec we ensure it's set; idempotent + creates timestamped
+ * backup before any write.
+ */
+function ensureCodexHooksFeatureFlag(home: string): "already-set" | "enabled-now" | "config-missing" {
+  const configPath = join(home, ".codex", "config.toml");
+  if (!existsSync(configPath)) return "config-missing";
+
+  const content = readFileSync(configPath, "utf8");
+  if (/^codex_hooks\s*=\s*true\s*$/m.test(content)) return "already-set";
+
+  const ts = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const backup = `${configPath}.bak-codex-hooks-${ts}`;
+  writeFileSync(backup, content);
+
+  // Insert into existing [features] section, or create one at end of file.
+  const featuresMatch = content.match(/^\[features\]\s*$/m);
+  let updated: string;
+  if (featuresMatch) {
+    const lines = content.split("\n");
+    const idx = lines.findIndex((line) => /^\[features\]\s*$/.test(line));
+    // Find end of this section (next [section] or EOF)
+    let endIdx = lines.length;
+    for (let i = idx + 1; i < lines.length; i += 1) {
+      if (/^\[/.test(lines[i])) { endIdx = i; break; }
+    }
+    // Insert before next section, skipping trailing blank lines
+    let insertAt = endIdx;
+    while (insertAt > idx + 1 && lines[insertAt - 1].trim() === "") insertAt -= 1;
+    lines.splice(insertAt, 0, "codex_hooks = true");
+    updated = lines.join("\n");
+  } else {
+    updated = content.replace(/\n*$/, "\n\n[features]\ncodex_hooks = true\n");
+  }
+  writeFileSync(configPath, updated);
+  return "enabled-now";
 }
 
 function mergeWithExisting(path: string, fresh: Record<string, any>) {
@@ -124,6 +170,7 @@ function parseArgs(argv: string[]): InstallCodexHooksOptions {
     if (a === "--scope") opts.scope = argv[++i] as "user" | "repo";
     else if (a === "--target") opts.target = argv[++i];
     else if (a === "--home") opts.home = argv[++i];
+    else if (a === "--no-feature-flag") opts.enableFeatureFlag = false;
     else throw new Error(`Unknown argument: ${a}`);
   }
   return opts;
@@ -137,15 +184,28 @@ if (import.meta.main) {
     }
     console.log(`wrote: ${result.hooksJsonPath}`);
     console.log("");
-    console.log("Hooks scope:", result.rootDir.includes(homedir() + "/.codex") ? "user (~/.codex/)" : "repo (<repo>/.codex/)");
+    console.log(
+      "scope:",
+      result.rootDir.includes(homedir() + "/.codex") ? "user (~/.codex/)" : "repo (<repo>/.codex/)",
+    );
+
+    switch (result.featureFlagEnabled) {
+      case "already-set":
+        console.log("feature flag: codex_hooks = true (already enabled)");
+        break;
+      case "enabled-now":
+        console.log("feature flag: codex_hooks = true (enabled now; backup written)");
+        break;
+      case "config-missing":
+        console.log("feature flag: ⚠️  ~/.codex/config.toml not found; create it with [features]\\ncodex_hooks = true");
+        break;
+      case "skipped":
+        console.log("feature flag: skipped per --no-feature-flag");
+        break;
+    }
     console.log("");
-    console.log("⚠️  IMPORTANT: enable the codex_hooks feature flag in ~/.codex/config.toml:");
-    console.log("");
-    console.log("  [features]");
-    console.log("  codex_hooks = true");
-    console.log("");
-    console.log("For repo-scope hooks: also trust the .codex/ layer when Codex prompts.");
-    console.log("Then restart Codex to activate hooks.");
+    console.log("For repo-scope hooks: trust the .codex/ layer when Codex prompts.");
+    console.log("Restart Codex to activate hooks.");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

@@ -30,6 +30,18 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 - browser/QA/review/ship 相关结论必须能落到可复核证据。
 - 新增 host、skill、生成规则时同步补测试或检查入口。
 
+## gxpm Workflow (本仓库自托管)
+
+本仓库使用 gxpm 自托管 issue delivery。任何涉及 issue / phase / artifact 的工作，都必须遵循以下流程，不得绕过：
+
+- 启动会话时若 `gxpm doctor` 显示有活跃 issue（state.json 存在且 phase ≠ land），先 `gxpm issue status <id>` + `gxpm issue next <id>` 拉取上下文，**不要从聊天记忆推断 phase**。
+- 任何代码改动开始前，确认有对应 GXPM-N issue 处于 `dispatch` / `implement` 之间的阶段；否则先 `gxpm issue create GXPM-N` 并走 triage → plan → dispatch 三阶段。
+- Phase 推进前先写完 artifact，再 `gxpm issue transition`（顺序：`gxpm <phase> init <id>` → `gxpm artifact write <id> <type> --json '...'` → `gxpm issue transition <id> <next>`）。
+- 不要直接编辑 `.gxpm/issues/<id>/*.json`，统一通过 `gxpm artifact write` / `gxpm artifact edit`。
+- Commit message 必须含 `GXPM-N` 引用；feature 分支用 `gxpm-N-<topic>` 命名以触发 git hook gate。
+- 完成 land phase 前的 merge 由 post-merge hook 自动 transition qa→land；不手工跳。
+- 不确定下一步时统一查 `gxpm issue next <id>`，不要自己拼 CLI。
+
 ## Ask First
 
 - destructive cleanup、发布、合并、远端写操作。

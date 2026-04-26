@@ -67,6 +67,51 @@ describe("installCodexHooks", () => {
     expect(cfg.hooks.UserPromptSubmit[0].hooks.length).toBe(1);
   });
 
+  test("auto-enables codex_hooks feature flag in ~/.codex/config.toml when missing", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-flag-add-"));
+    const codexDir = join(fakeHome, ".codex");
+    execSync(`mkdir -p "${codexDir}"`);
+    writeFileSync(
+      join(codexDir, "config.toml"),
+      "model = \"gpt-5.5\"\n\n[features]\nfast_mode = true\n",
+    );
+
+    const result = installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    expect(result.featureFlagEnabled).toBe("enabled-now");
+
+    const cfg = readFileSync(join(codexDir, "config.toml"), "utf8");
+    expect(cfg).toMatch(/codex_hooks\s*=\s*true/);
+    expect(cfg).toMatch(/fast_mode\s*=\s*true/); // existing flag preserved
+  });
+
+  test("does not re-enable codex_hooks if already true (idempotent)", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-flag-already-"));
+    const codexDir = join(fakeHome, ".codex");
+    execSync(`mkdir -p "${codexDir}"`);
+    writeFileSync(
+      join(codexDir, "config.toml"),
+      "[features]\ncodex_hooks = true\n",
+    );
+
+    const result = installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    expect(result.featureFlagEnabled).toBe("already-set");
+  });
+
+  test("--no-feature-flag option skips feature flag mutation", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-flag-skip-"));
+    const codexDir = join(fakeHome, ".codex");
+    execSync(`mkdir -p "${codexDir}"`);
+    writeFileSync(join(codexDir, "config.toml"), "model = \"x\"\n");
+
+    const result = installCodexHooks({
+      scope: "user", home: fakeHome, gxpmRoot: repoRoot, enableFeatureFlag: false,
+    });
+    expect(result.featureFlagEnabled).toBe("skipped");
+
+    const cfg = readFileSync(join(codexDir, "config.toml"), "utf8");
+    expect(cfg).not.toMatch(/codex_hooks/);
+  });
+
   test("preserves unrelated user hooks in existing hooks.json", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-hooks-merge-"));
     const codexDir = join(fakeHome, ".codex");

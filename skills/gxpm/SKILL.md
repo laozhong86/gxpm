@@ -221,12 +221,7 @@ gxpm-init --install-codex-hooks --target <repo>   # <repo>/.codex/hooks/
 gxpm-init --install-codex-hooks --scope user      # ~/.codex/hooks/  (broader, more invasive)
 ```
 
-Then enable the feature flag once in `~/.codex/config.toml`:
-
-```toml
-[features]
-codex_hooks = true
-```
+The installer automatically writes `[features] codex_hooks = true` into `~/.codex/config.toml` (with backup) per Codex official requirement. Pass `--no-feature-flag` to skip.
 
 Repo-scope hooks also require trusting the `.codex/` layer when Codex prompts. Restart Codex to activate.
 
