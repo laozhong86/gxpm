@@ -8,6 +8,13 @@ import { installCodexHooks } from "../scripts/install-codex-hooks";
 const repoRoot = resolve(import.meta.dir, "..");
 
 describe("installCodexHooks", () => {
+  test("default scope is 'repo' (writes to <target>/.codex/)", () => {
+    const fakeRepo = mkdtempSync(join(tmpdir(), "gxpm-codex-default-"));
+    const result = installCodexHooks({ target: fakeRepo, gxpmRoot: repoRoot });
+    expect(result.rootDir).toBe(join(fakeRepo, ".codex"));
+    expect(existsSync(join(fakeRepo, ".codex", "hooks.json"))).toBe(true);
+  });
+
   test("user scope: writes scripts to ~/.codex/hooks/ and hooks.json", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-hooks-user-"));
 

@@ -130,21 +130,22 @@ Codex CLI v0.117.0+ supports lifecycle hooks. gxpm ships two:
   in their prompt, gxpm injects that issue's current phase + next-step
   guidance.
 
-Install:
+Install (defaults to repo scope — only fires when Codex opens that repo):
 
 ```bash
-gxpm-init --install-codex-hooks --scope user      # ~/.codex/hooks/
-gxpm-init --install-codex-hooks --scope repo --target /path  # <repo>/.codex/hooks/
+gxpm-init --install-codex-hooks                   # <cwd>/.codex/hooks/  (default, recommended)
+gxpm-init --install-codex-hooks --target <repo>   # <repo>/.codex/hooks/
+gxpm-init --install-codex-hooks --scope user      # ~/.codex/hooks/  (broader, more invasive)
 ```
 
-Then enable the feature flag in `~/.codex/config.toml`:
+Then enable the feature flag once in `~/.codex/config.toml`:
 
 ```toml
 [features]
 codex_hooks = true
 ```
 
-Restart Codex to activate.
+Repo-scope hooks also require trusting the `.codex/` layer when Codex prompts. Restart Codex to activate.
 
 ## Hook Defense (Layer 3)
 

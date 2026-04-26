@@ -4,9 +4,9 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 interface InstallCodexHooksOptions {
-  /** "user" → ~/.codex/, "repo" → <target>/.codex/. Default "user". */
+  /** "repo" → <target>/.codex/ (default), "user" → ~/.codex/ (broader, more invasive). */
   scope?: "user" | "repo";
-  /** Target repo (only used when scope === "repo"). */
+  /** Target repo (only used when scope === "repo"). Defaults to cwd. */
   target?: string;
   /** Override $HOME for testing. */
   home?: string;
@@ -25,7 +25,7 @@ const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
 const HOOK_SCRIPTS = ["session-start.sh", "user-prompt-submit.sh"];
 
 export function installCodexHooks(options: InstallCodexHooksOptions = {}): InstallResult {
-  const scope = options.scope ?? "user";
+  const scope = options.scope ?? "repo";
   const home = options.home ?? homedir();
   const gxpmRoot = options.gxpmRoot ?? DEFAULT_GXPM_ROOT;
 
@@ -136,11 +136,14 @@ if (import.meta.main) {
     }
     console.log(`wrote: ${result.hooksJsonPath}`);
     console.log("");
+    console.log("Hooks scope:", result.rootDir.includes(homedir() + "/.codex") ? "user (~/.codex/)" : "repo (<repo>/.codex/)");
+    console.log("");
     console.log("⚠️  IMPORTANT: enable the codex_hooks feature flag in ~/.codex/config.toml:");
     console.log("");
     console.log("  [features]");
     console.log("  codex_hooks = true");
     console.log("");
+    console.log("For repo-scope hooks: also trust the .codex/ layer when Codex prompts.");
     console.log("Then restart Codex to activate hooks.");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
