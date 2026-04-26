@@ -52,6 +52,9 @@ V0 已实现的本地目录：
   evidence/
     screenshots/
   memory/
+    resume-packet.json
+    checkpoints/
+      20260427-044500-handoff.md
 ```
 
 V0 已支持 JSON artifact store。当前 artifact type：
@@ -71,6 +74,15 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `land-findings`
 
 V0 只写 JSON artifact，不渲染 markdown report。
+
+### Resume Packet / Checkpoint
+
+V0 的上下文恢复入口是 issue-local memory，而不是聊天历史或 gstack runtime：
+
+- `gxpm issue checkpoint <issue-id> --title <title> --stdin`：读取 JSON payload，写入 append-only markdown checkpoint，并更新 `memory/resume-packet.json`。
+- `gxpm issue resume <issue-id>`：读取 `resume-packet.json`，打印 phase、checkpoint path、summary、remaining work 和 notes，供新对话恢复上下文。
+
+checkpoint payload 至少包含 `summary`，可选 `decisions`、`remainingWork`、`notes`、`filesModified`、`status`、`sessionDurationSeconds`。`memory/resume-packet.json` 是恢复流程的机器可读入口，markdown checkpoint 是人类可读交接文档。
 
 ### Phase
 
@@ -207,6 +219,8 @@ V0 阶段如果出现以下情况，应停止并生成 report，而不是继续�
 gxpm issue create <issue-id>
 gxpm issue status <issue-id>
 gxpm issue transition <issue-id> <phase>
+gxpm issue checkpoint <issue-id> --title "handoff" --stdin
+gxpm issue resume <issue-id>
 gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> <type>
 gxpm triage init <issue-id>

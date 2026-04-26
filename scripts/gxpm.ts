@@ -10,6 +10,7 @@ import {
   type StateEvent,
 } from "../core/state";
 import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
+import { readResumePacket, writeIssueCheckpoint } from "../core/checkpoint";
 import {
   evaluateCommitMsg,
   evaluatePostMerge,
@@ -162,6 +163,22 @@ function main(argv: string[]) {
       throw new Error("Usage: gxpm issue next <issue-id>");
     }
     runIssueNext(issueId);
+    return;
+  }
+
+  if (command === "issue" && subcommand === "checkpoint") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue checkpoint <issue-id> --title <title> --json <json> | --from <file> | --stdin");
+    }
+    runIssueCheckpoint(argv, issueId);
+    return;
+  }
+
+  if (command === "issue" && subcommand === "resume") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue resume <issue-id>");
+    }
+    runIssueResume(issueId);
     return;
   }
 
@@ -348,6 +365,8 @@ function formatEventDetail(event: StateEvent): string {
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"}`;
     case "artifact.written":
       return `${p.artifactType ?? "?"} (${p.path ?? ""})`;
+    case "checkpoint.written":
+      return `${p.checkpointPath ?? "?"} (${p.resumePacketPath ?? ""})`;
     case "gate.passed":
       if (p.gate) return `${p.gate} (${p.code ?? ""})`;
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} (${p.requiredArtifact ?? ""})`;
@@ -385,6 +404,50 @@ function runIssueNext(issueId: string) {
     console.log(`Artifact ${rule.requiredArtifact} already exists.`);
     console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
   }
+}
+
+function runIssueCheckpoint(argv: string[], issueId: string) {
+  const payload = readJsonPayloadFromArgs(argv, "gxpm issue checkpoint");
+  const title = optionValue(argv, "--title") ?? payloadTitle(payload) ?? "checkpoint";
+  const record = writeIssueCheckpoint({
+    issueId,
+    title,
+    branch: currentGitBranch(),
+    payload,
+  });
+  console.log(`checkpoint saved for ${issueId}`);
+  console.log(`file: ${record.path}`);
+  console.log(`resume: ${record.resumePacketPath}`);
+}
+
+function runIssueResume(issueId: string) {
+  const packet = readResumePacket({ issueId });
+  console.log(`${issueId} resume packet`);
+  console.log(`phase: ${packet.phase}`);
+  console.log(`status: ${packet.status}`);
+  console.log(`title: ${packet.title}`);
+  console.log(`branch: ${packet.branch}`);
+  console.log(`saved: ${packet.writtenAt}`);
+  console.log(`checkpoint: ${packet.checkpointPath}`);
+  console.log("");
+  console.log("Summary:");
+  console.log(packet.summary);
+  console.log("");
+  console.log("Remaining Work:");
+  if (packet.remainingWork.length === 0) {
+    console.log("1. none");
+  } else {
+    packet.remainingWork.forEach((item, index) => console.log(`${index + 1}. ${item}`));
+  }
+  console.log("");
+  console.log("Notes:");
+  if (packet.notes.length === 0) {
+    console.log("- none");
+  } else {
+    packet.notes.forEach((item) => console.log(`- ${item}`));
+  }
+  console.log("");
+  console.log(`Next: gxpm issue next ${issueId}`);
 }
 
 function runArtifactEdit(issueId: string, type: string) {
@@ -432,18 +495,22 @@ function runArtifactEdit(issueId: string, type: string) {
 }
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {
+  const payload = readJsonPayloadFromArgs(argv, "gxpm artifact write");
+  const record = writeArtifact({ issueId, type, payload });
+  console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
+}
+
+function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
   const dashJson = argv.indexOf("--json");
   const dashFrom = argv.indexOf("--from");
   const useStdin = argv.includes("--stdin");
 
   const inputs = [dashJson >= 0, dashFrom >= 0, useStdin].filter(Boolean).length;
   if (inputs === 0) {
-    throw new Error(
-      "gxpm artifact write requires one of: --json <json> | --from <file> | --stdin",
-    );
+    throw new Error(`${usagePrefix} requires one of: --json <json> | --from <file> | --stdin`);
   }
   if (inputs > 1) {
-    throw new Error("gxpm artifact write: pick exactly one of --json / --from / --stdin");
+    throw new Error(`${usagePrefix}: pick exactly one of --json / --from / --stdin`);
   }
 
   let raw: string;
@@ -457,17 +524,38 @@ function runArtifactWrite(argv: string[], issueId: string, type: string) {
     raw = readFileSync("/dev/stdin", "utf8");
   }
 
-  let payload: unknown;
   try {
-    payload = JSON.parse(raw);
+    return JSON.parse(raw);
   } catch (error) {
     throw new Error(
-      `gxpm artifact write: invalid JSON payload — ${error instanceof Error ? error.message : String(error)}`,
+      `${usagePrefix}: invalid JSON payload — ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
 
-  const record = writeArtifact({ issueId, type, payload });
-  console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
+function optionValue(argv: string[], option: string) {
+  const index = argv.indexOf(option);
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  return value && !value.startsWith("--") ? value : null;
+}
+
+function payloadTitle(payload: unknown) {
+  if (!payload || typeof payload !== "object") return null;
+  const title = (payload as Record<string, unknown>).title;
+  return typeof title === "string" && title.trim() ? title : null;
+}
+
+function currentGitBranch() {
+  const result = Bun.spawnSync({
+    cmd: ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return undefined;
+  const branch = result.stdout.toString().trim();
+  return branch || undefined;
 }
 
 function gateEvent(verdict: { allowed: boolean; code: string; reason: string; details?: Record<string, unknown> }, gate: string, issueId: string): StateEvent {

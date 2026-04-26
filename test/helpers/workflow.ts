@@ -11,6 +11,16 @@ export function runCli(root: string, args: string[]) {
   return runScript([cliPath, ...args], root);
 }
 
+export function runCliWithInput(root: string, args: string[], stdin: string) {
+  return Bun.spawnSync({
+    cmd: ["bun", "run", cliPath, ...args],
+    cwd: root,
+    stdin: new TextEncoder().encode(stdin),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
 export function runScript(args: string[], cwd = process.cwd()) {
   return Bun.spawnSync({
     cmd: ["bun", "run", ...args],

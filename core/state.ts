@@ -48,6 +48,7 @@ export interface StateEvent {
     | "issue.created"
     | "phase.transitioned"
     | "artifact.written"
+    | "checkpoint.written"
     | "gate.blocked"
     | "gate.passed";
   issueId: string;

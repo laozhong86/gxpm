@@ -62,6 +62,20 @@ gxpm issue history <issue-id>           # human timeline
 gxpm issue history <issue-id> --json    # machine-readable
 ```
 
+To save and restore a clean handoff checkpoint for a fresh conversation:
+
+```bash
+gxpm issue checkpoint <issue-id> --title "handoff" --stdin
+gxpm issue resume <issue-id>
+```
+
+`checkpoint` expects a JSON object with at least `summary`, and optional
+`decisions`, `remainingWork`, `notes`, `filesModified`, `status`, and
+`sessionDurationSeconds`. It writes append-only markdown under
+`.gxpm/issues/<issue-id>/memory/checkpoints/` and updates
+`.gxpm/issues/<issue-id>/memory/resume-packet.json`. A new session should run
+`gxpm issue resume <issue-id>` before continuing issue work.
+
 If no state exists, create it before phase work:
 
 ```bash
