@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   appendIssueEvent,
@@ -134,6 +134,14 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "artifact" && subcommand === "edit") {
+    if (!issueId || !value) {
+      throw new Error("Usage: gxpm artifact edit <issue-id> <type>");
+    }
+    runArtifactEdit(issueId, value);
+    return;
+  }
+
   if (command === "gate" && subcommand === "pre-commit") {
     runPreCommitGate(argv, issueId);
     return;
@@ -193,6 +201,50 @@ function runIssueNext(issueId: string) {
     console.log(`Artifact ${rule.requiredArtifact} already exists.`);
     console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
   }
+}
+
+function runArtifactEdit(issueId: string, type: string) {
+  const editor = process.env.EDITOR ?? process.env.VISUAL ?? "vi";
+
+  let initial = "{}\n";
+  if (hasArtifact({ issueId, type })) {
+    const stored = readArtifact({ issueId, type });
+    initial = `${JSON.stringify(stored.payload, null, 2)}\n`;
+  }
+
+  const tmpFile = `/tmp/gxpm-edit-${issueId}-${type}-${Date.now()}.json`;
+  writeFileSync(tmpFile, initial);
+
+  const editorResult = Bun.spawnSync({
+    cmd: [editor, tmpFile],
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+
+  if (editorResult.exitCode !== 0) {
+    console.error(`editor "${editor}" exited with code ${editorResult.exitCode}; tempfile preserved at ${tmpFile}`);
+    process.exit(1);
+  }
+
+  const after = readFileSync(tmpFile, "utf8");
+  let payload: unknown;
+  try {
+    payload = JSON.parse(after);
+  } catch (error) {
+    console.error(
+      `gxpm artifact edit: invalid JSON saved by editor — ${error instanceof Error ? error.message : String(error)}`,
+    );
+    console.error(`Your edit is preserved at: ${tmpFile}`);
+    process.exit(1);
+  }
+
+  writeArtifact({ issueId, type, payload });
+  // best-effort cleanup
+  try {
+    require("node:fs").unlinkSync(tmpFile);
+  } catch {}
+  console.log(`updated ${type} for ${issueId}`);
 }
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {

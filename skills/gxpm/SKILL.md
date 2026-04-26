@@ -171,16 +171,20 @@ V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-pha
 
 ## Populating Artifact Content
 
-`gxpm <phase> init` writes an empty draft. Use `gxpm artifact write` to put
-real content in (no need to vim JSON):
+`gxpm <phase> init` writes an empty draft. Use `gxpm artifact write` (CLI)
+or `gxpm artifact edit` ($EDITOR) to put real content in:
 
 ```bash
+# CLI input (scripts / agents)
 gxpm artifact write <issue-id> acceptance-contract --json '{"criteria":[...]}'
 gxpm artifact write <issue-id> implementation-plan --from ./plan.json
 cat payload.json | gxpm artifact write <issue-id> verify-findings --stdin
+
+# Interactive editor (humans)
+EDITOR=vim gxpm artifact edit <issue-id> acceptance-contract
 ```
 
-This is JSON-only on purpose — the artifact contract is machine-readable.
+JSON-only on purpose — the artifact contract is machine-readable.
 
 ## Hook Defense (Layer 3)
 

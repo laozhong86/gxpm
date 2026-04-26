@@ -165,3 +165,67 @@ describe("gxpm artifact write CLI", () => {
     expect(output(r)).toContain("--json");
   });
 });
+
+describe("gxpm artifact edit CLI", () => {
+  test("with EDITOR=true (no-op) preserves payload", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-edit-noop-"));
+    expect(runCli(root, ["issue", "create", "GXPM-40"]).exitCode).toBe(0);
+    expect(runCli(root, ["triage", "init", "GXPM-40"]).exitCode).toBe(0);
+
+    // EDITOR=true exits 0 without modifying the file
+    const result = Bun.spawnSync({
+      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-40", "acceptance-contract"],
+      cwd: root,
+      env: { ...process.env, EDITOR: "true" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+
+    const read = runCli(root, ["artifact", "read", "GXPM-40", "acceptance-contract"]);
+    expect(read.exitCode).toBe(0);
+    // Original draft payload still intact
+    expect(output(read)).toContain('"acceptance-contract"');
+  });
+
+  test("with EDITOR replacing content updates payload", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-edit-replace-"));
+    expect(runCli(root, ["issue", "create", "GXPM-41"]).exitCode).toBe(0);
+
+    // fake editor: writes new JSON to the file
+    const fakeEditor = join(root, "fake-editor.sh");
+    await Bun.write(fakeEditor, '#!/bin/bash\necho \'{"replaced":true}\' > "$1"\n');
+    Bun.spawnSync({ cmd: ["chmod", "+x", fakeEditor] });
+
+    const result = Bun.spawnSync({
+      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-41", "issue-intake"],
+      cwd: root,
+      env: { ...process.env, EDITOR: fakeEditor },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+
+    const read = runCli(root, ["artifact", "read", "GXPM-41", "issue-intake"]);
+    expect(output(read)).toContain('"replaced": true');
+  });
+
+  test("rejects invalid JSON saved by editor and preserves tempfile", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-edit-bad-"));
+    expect(runCli(root, ["issue", "create", "GXPM-42"]).exitCode).toBe(0);
+
+    const fakeEditor = join(root, "fake-bad-editor.sh");
+    await Bun.write(fakeEditor, '#!/bin/bash\necho "not json" > "$1"\n');
+    Bun.spawnSync({ cmd: ["chmod", "+x", fakeEditor] });
+
+    const result = Bun.spawnSync({
+      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-42", "issue-intake"],
+      cwd: root,
+      env: { ...process.env, EDITOR: fakeEditor },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("invalid JSON");
+  });
+});
