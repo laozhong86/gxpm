@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateSkillDocs } from "../scripts/gen-skill-docs";
+import { getHostConfig } from "../hosts";
+import { generateSkillDocs, renderSkillContentForHost } from "../scripts/gen-skill-docs";
 
 describe("generateSkillDocs", () => {
   test("renders templates with a generated header and host-aware preamble", () => {
@@ -42,5 +43,15 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("gxpm qa land <issue-id>");
     expect(generated).toContain("`qa -> land` is blocked until `land-findings` exists");
     expect(generated).not.toContain("{{");
+  });
+
+  test("generated gxpm skill keeps the task intake brainstorming gate", () => {
+    const root = join(import.meta.dir, "..");
+    const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
+
+    expect(generated).toContain("## Task Intake / Brainstorming Gate");
+    expect(generated).toContain("Codex `request_user_input`");
+    expect(generated).toContain("External tracking ids are not gxpm issue ids");
+    expect(generated).toContain("`gxpm issue create --auto-id`");
   });
 });
