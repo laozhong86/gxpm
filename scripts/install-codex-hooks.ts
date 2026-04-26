@@ -65,7 +65,7 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
             {
               type: "command",
               command: sessionStartCmd,
-              statusMessage: "gxpm: scanning active issues",
+              statusMessage: "gxpm: loading capability hint",
             },
           ],
         },

@@ -1,11 +1,39 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { installCodexHooks } from "../scripts/install-codex-hooks";
 
 const repoRoot = resolve(import.meta.dir, "..");
+
+function runSessionStart(script: string, cwd: string, env: Record<string, string> = {}) {
+  return Bun.spawnSync({
+    cmd: ["bash", script],
+    stdin: new TextEncoder().encode(
+      JSON.stringify({ session_id: "x", cwd, hook_event_name: "SessionStart" }),
+    ),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, ...env },
+  });
+}
+
+function readAdditionalContext(stdout: string) {
+  return JSON.parse(stdout).hookSpecificOutput.additionalContext as string;
+}
+
+function createGxpmRepo(root: string, options: { schema?: number; version?: string } = {}) {
+  mkdirSync(join(root, ".gxpm", "issues"), { recursive: true });
+  mkdirSync(join(root, "core"), { recursive: true });
+  writeFileSync(
+    join(root, "core", "state.ts"),
+    `export const CURRENT_SCHEMA_VERSION = ${options.schema ?? 1};\n`,
+  );
+  if (options.version !== undefined) {
+    writeFileSync(join(root, "VERSION"), `${options.version}\n`);
+  }
+}
 
 describe("installCodexHooks", () => {
   test("default scope is 'repo' (writes to <target>/.codex/)", () => {
@@ -165,31 +193,59 @@ describe("hook script behavior", () => {
     expect(result.stdout.toString().trim()).toBe("");
   });
 
-  test("session-start.sh emits additionalContext when issues exist", async () => {
+  test("session-start.sh emits short static capability hint without active issue ids", async () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-issues-"));
     installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
     const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
 
     const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-repocwd-"));
-    // Use full path to gxpm CLI to ensure it works regardless of PATH
-    const gxpmBin = join(repoRoot, "bin", "gxpm");
-    Bun.spawnSync({ cmd: [gxpmBin, "issue", "create", "GXPM-77"], cwd: repoCwd });
+    createGxpmRepo(repoCwd, { schema: 7 });
+    for (let i = 1; i <= 5; i += 1) {
+      const issueDir = join(repoCwd, ".gxpm", "issues", `GXPM-${i}`);
+      mkdirSync(issueDir, { recursive: true });
+      writeFileSync(
+        join(issueDir, "state.json"),
+        JSON.stringify({ schemaVersion: 1, issueId: `GXPM-${i}`, currentPhase: "triage" }),
+      );
+    }
 
-    const result = Bun.spawnSync({
-      cmd: ["bash", script],
-      stdin: new TextEncoder().encode(
-        JSON.stringify({ session_id: "x", cwd: repoCwd, hook_event_name: "SessionStart" }),
-      ),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = runSessionStart(script, repoCwd);
     expect(result.exitCode).toBe(0);
     const out = result.stdout.toString();
-    if (out.trim() !== "") {
-      const parsed = JSON.parse(out);
-      expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
-      expect(parsed.hookSpecificOutput.additionalContext).toContain("GXPM-77");
-    }
+    const parsed = JSON.parse(out);
+    const context = parsed.hookSpecificOutput.additionalContext;
+    expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(context.length).toBeLessThanOrEqual(200);
+    expect(context).toContain("This repo uses gxpm (schema v7, version dev).");
+    expect(context).toContain("gxpm issue list");
+    expect(context).toContain("gxpm issue status <id>");
+    expect(context).not.toMatch(/\bGXPM-\d+\b/);
+  });
+
+  test("session-start.sh honors GXPM_SESSION_START_DISABLE kill switch", async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-disable-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-disabledcwd-"));
+    createGxpmRepo(repoCwd);
+
+    const result = runSessionStart(script, repoCwd, { GXPM_SESSION_START_DISABLE: "1" });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("");
+  });
+
+  test("session-start.sh substitutes schema and VERSION values", async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-vars-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-varscwd-"));
+    createGxpmRepo(repoCwd, { schema: 42, version: "0.3.0" });
+
+    const result = runSessionStart(script, repoCwd);
+    expect(result.exitCode).toBe(0);
+    expect(readAdditionalContext(result.stdout.toString())).toContain(
+      "schema v42, version 0.3.0",
+    );
   });
 
   test("user-prompt-submit.sh ignores prompts without issue refs", () => {
@@ -207,5 +263,32 @@ describe("hook script behavior", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString().trim()).toBe("");
+  });
+
+  test("user-prompt-submit.sh injects status for referenced issue ids", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-ref-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-user-prompt-submit.sh");
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-repocwd-"));
+    const gxpmBin = join(repoRoot, "bin", "gxpm");
+
+    const created = Bun.spawnSync({ cmd: [gxpmBin, "issue", "create", "GXPM-1"], cwd: repoCwd });
+    expect(created.exitCode).toBe(0);
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ cwd: repoCwd, prompt: "继续 GXPM-1" }),
+      ),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, PATH: `${join(repoRoot, "bin")}:${process.env.PATH ?? ""}` },
+    });
+    const out = result.stdout.toString();
+
+    expect(result.exitCode).toBe(0);
+    expect(out).toContain("gxpm context for GXPM-1");
+    expect(out).toContain("currentPhase: triage");
+    expect(out).toContain("Next: gxpm triage init GXPM-1");
   });
 });

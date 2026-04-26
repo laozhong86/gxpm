@@ -1,13 +1,13 @@
 #!/bin/bash
 # gxpm SessionStart hook for Codex CLI
-# Reads JSON from stdin, injects active gxpm issues as additionalContext.
+# Reads JSON from stdin, injects a short gxpm capability hint as additionalContext.
 #
 # Codex provides on stdin: {session_id, transcript_path, cwd, hook_event_name, model, source}
 # We respond with JSON: {hookSpecificOutput: {hookEventName, additionalContext}}
 
 set -e
 
-if ! command -v gxpm >/dev/null 2>&1; then exit 0; fi
+if [ "${GXPM_SESSION_START_DISABLE:-}" = "1" ]; then exit 0; fi
 if ! command -v python3 >/dev/null 2>&1; then exit 0; fi
 
 INPUT=$(cat)
@@ -15,56 +15,50 @@ CWD=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
 try:
     print(json.load(sys.stdin).get("cwd",""))
 except Exception:
-    print("")
+    pass
 ')
 
 if [ -z "$CWD" ] || [ ! -d "$CWD/.gxpm/issues" ]; then
   exit 0
 fi
 
-cd "$CWD"
-# Try active issues first; if none, fall back to recent landed for context.
-ACTIVE_JSON=$(gxpm issue list --json 2>/dev/null || echo "[]")
-RECENT_JSON=$(gxpm issue list --recent 3 --json 2>/dev/null || echo "[]")
+SCHEMA="1"
+STATE_FILE="$CWD/core/state.ts"
+if [ -f "$STATE_FILE" ]; then
+  SCHEMA_CANDIDATE=$(python3 - "$STATE_FILE" <<'PY' 2>/dev/null || true
+import re
+import sys
 
-printf '%s\t%s' "$ACTIVE_JSON" "$RECENT_JSON" | python3 -c '
-import json, sys
-raw = sys.stdin.read()
-active_raw, recent_raw = raw.split("\t", 1)
-try:
-    active = json.loads(active_raw)
-except Exception:
-    active = []
-try:
-    recent = json.loads(recent_raw)
-except Exception:
-    recent = []
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r"\bCURRENT_SCHEMA_VERSION\s*=\s*([0-9]+)\b", text)
+if match:
+    print(match.group(1))
+PY
+)
+  if [ -n "$SCHEMA_CANDIDATE" ]; then
+    SCHEMA="$SCHEMA_CANDIDATE"
+  fi
+fi
 
-def fmt(issue):
-    return "  - {} (phase={}, updated={})".format(
-        issue["issueId"], issue["currentPhase"], issue["updatedAt"][:19] + "Z"
-    )
+VERSION="dev"
+VERSION_FILE="$CWD/VERSION"
+if [ -f "$VERSION_FILE" ]; then
+  VERSION_CANDIDATE=$(sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;q;}' "$VERSION_FILE" 2>/dev/null || true)
+  if [ -n "$VERSION_CANDIDATE" ]; then
+    VERSION="${VERSION_CANDIDATE:0:40}"
+  fi
+fi
 
-parts = []
-if active:
-    parts.append("Active gxpm issues in this repo:")
-    parts.extend(fmt(i) for i in active[:5])
-elif recent:
-    parts.append("No active gxpm issues. Most recently landed (for reference):")
-    parts.extend(fmt(i) for i in recent[:3])
-else:
-    sys.exit(0)
+CONTEXT="This repo uses gxpm (schema v$SCHEMA, version $VERSION). Run \`gxpm issue list\` to see active work, \`gxpm issue status <id>\` to load context."
 
-parts.append("")
-parts.append("Recommended commands when working an issue:")
-parts.append("  gxpm issue next <id>      # what to do next")
-parts.append("  gxpm issue history <id>   # full audit timeline")
-parts.append("  gxpm issue create --auto-id  # start a new issue with next free id")
+CONTEXT="$CONTEXT" python3 - <<'PY'
+import json
+import os
 
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "SessionStart",
-        "additionalContext": "\n".join(parts)
-    }
+        "additionalContext": os.environ["CONTEXT"],
+    },
 }))
-'
+PY
