@@ -68,15 +68,9 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
   const checkpointDir = join(paths.issueDir, "memory", "checkpoints");
   mkdirSync(checkpointDir, { recursive: true });
 
-  const relativeCheckpointPath = uniqueCheckpointPath({
-    issueDir: paths.issueDir,
-    timestamp: formatTimestamp(now),
-    titleSlug: slugTitle(title),
-  });
   const resumePacketPath = "memory/resume-packet.json";
-  const checkpointPath = join(paths.issueDir, relativeCheckpointPath);
 
-  const packet: ResumePacket = {
+  const basePacket: Omit<ResumePacket, "checkpointPath"> = {
     schemaVersion: 1,
     issueId: input.issueId,
     phase: state.currentPhase,
@@ -84,7 +78,6 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
     status: payload.status ?? "in-progress",
     branch,
     writtenAt,
-    checkpointPath: relativeCheckpointPath,
     summary: payload.summary,
     decisions: payload.decisions ?? [],
     remainingWork: payload.remainingWork ?? [],
@@ -95,7 +88,15 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
       : { sessionDurationSeconds: payload.sessionDurationSeconds }),
   };
 
-  writeFileSync(checkpointPath, renderCheckpointMarkdown(packet));
+  const relativeCheckpointPath = writeUniqueCheckpointMarkdown({
+    issueDir: paths.issueDir,
+    timestamp: formatTimestamp(now),
+    titleSlug: slugTitle(title),
+    renderMarkdown: (checkpointPath) =>
+      renderCheckpointMarkdown({ ...basePacket, checkpointPath }),
+  });
+  const packet: ResumePacket = { ...basePacket, checkpointPath: relativeCheckpointPath };
+
   writeFileSync(join(paths.issueDir, resumePacketPath), `${JSON.stringify(packet, null, 2)}\n`);
   appendIssueEvent({
     issueDir: paths.issueDir,
@@ -190,28 +191,41 @@ function formatTimestamp(date: Date) {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
 }
 
-function uniqueCheckpointPath(input: { issueDir: string; timestamp: string; titleSlug: string }) {
+function writeUniqueCheckpointMarkdown(input: {
+  issueDir: string;
+  timestamp: string;
+  titleSlug: string;
+  renderMarkdown: (relativePath: string) => string;
+}) {
   const base = `memory/checkpoints/${input.timestamp}-${input.titleSlug}`;
-  let candidate = `${base}.md`;
-  let suffix = 2;
+  let suffix = 1;
 
-  while (existsSync(join(input.issueDir, candidate))) {
-    candidate = `${base}-${suffix}.md`;
-    suffix += 1;
+  while (true) {
+    const relativePath = suffix === 1 ? `${base}.md` : `${base}-${suffix}.md`;
+    try {
+      writeFileSync(join(input.issueDir, relativePath), input.renderMarkdown(relativePath), {
+        flag: "wx",
+      });
+      return relativePath;
+    } catch (error) {
+      if (isFileExistsError(error)) {
+        suffix += 1;
+        continue;
+      }
+      throw error;
+    }
   }
-
-  return candidate;
 }
 
 function renderCheckpointMarkdown(packet: ResumePacket) {
   return `---
 schemaVersion: 1
-issueId: ${packet.issueId}
-status: ${packet.status}
-phase: ${packet.phase}
-branch: ${packet.branch}
-timestamp: ${packet.writtenAt}
-checkpointPath: ${packet.checkpointPath}
+issueId: ${yamlScalar(packet.issueId)}
+status: ${yamlScalar(packet.status)}
+phase: ${yamlScalar(packet.phase)}
+branch: ${yamlScalar(packet.branch)}
+timestamp: ${yamlScalar(packet.writtenAt)}
+checkpointPath: ${yamlScalar(packet.checkpointPath)}
 ${renderFilesModifiedFrontmatter(packet.filesModified)}
 ---
 
@@ -247,5 +261,18 @@ function renderNumberedList(items: string[]) {
 
 function renderFilesModifiedFrontmatter(filesModified: string[]) {
   if (filesModified.length === 0) return "files_modified: []";
-  return `files_modified:\n${filesModified.map((path) => `  - ${path}`).join("\n")}`;
+  return `files_modified:\n${filesModified.map((path) => `  - ${yamlScalar(path)}`).join("\n")}`;
+}
+
+function yamlScalar(value: string) {
+  return JSON.stringify(value);
+}
+
+function isFileExistsError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "EEXIST"
+  );
 }

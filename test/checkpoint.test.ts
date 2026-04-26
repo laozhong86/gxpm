@@ -105,4 +105,29 @@ describe("issue checkpoint store", () => {
     expect(markdown).toContain("files_modified: []");
     expect(markdown).not.toContain("files_modified:\n  []");
   });
+
+  test("quotes YAML frontmatter scalars with special characters", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-checkpoint-yaml-"));
+    createIssueState({ root, issueId: "GXPM-63" });
+
+    const result = writeIssueCheckpoint({
+      root,
+      issueId: "GXPM-63",
+      title: "Quoted YAML",
+      branch: "feature: checkpoint #1",
+      now: new Date("2026-04-27T04:45:00.000Z"),
+      payload: {
+        status: "needs: review #1",
+        summary: "checkpoint with YAML-sensitive frontmatter",
+        filesModified: ["docs/notes: draft #1.md", "line\nbreak.ts"],
+      },
+    });
+
+    const markdown = readFileSync(join(root, ".gxpm", "issues", "GXPM-63", result.path), "utf8");
+    expect(markdown).toContain('status: "needs: review #1"');
+    expect(markdown).toContain('branch: "feature: checkpoint #1"');
+    expect(markdown).toContain('checkpointPath: "memory/checkpoints/20260427-044500-quoted-yaml.md"');
+    expect(markdown).toContain('  - "docs/notes: draft #1.md"');
+    expect(markdown).toContain('  - "line\\nbreak.ts"');
+  });
 });
