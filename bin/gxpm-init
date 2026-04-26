@@ -21,6 +21,13 @@ case "${1:-}" in
     shift
     exec bun run "$ROOT/scripts/install-skill.ts" "$@"
     ;;
+  --install)
+    shift
+    # Combo: install skill globally to all hosts AND install hooks to a target repo.
+    # Usage: gxpm-init --install [--target <repo>]
+    bun run "$ROOT/scripts/install-skill.ts" --host all
+    exec bun run "$ROOT/scripts/install-hooks.ts" "$@"
+    ;;
   *)
     exec bun run "$ROOT/scripts/gen-skill-docs.ts" "$@"
     ;;

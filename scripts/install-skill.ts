@@ -13,8 +13,12 @@ interface InstallSkillOptions {
 
 const SKILL_TEMPLATE_RELATIVE = "skills/gxpm/SKILL.md.tmpl";
 
+// Default root is the gxpm repo itself (the parent of scripts/), not cwd —
+// install-skill must read templates from gxpm regardless of where it's invoked.
+const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
+
 export function installSkill(options: InstallSkillOptions = {}): string[] {
-  const root = options.root ?? process.cwd();
+  const root = options.root ?? DEFAULT_GXPM_ROOT;
   const home = options.home ?? homedir();
   const targets = resolveTargets(options.hostName);
 

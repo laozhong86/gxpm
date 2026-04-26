@@ -156,15 +156,35 @@ V0 phase transitions are strict. Use `gxpm issue transition <issue-id> <next-pha
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Populating Artifact Content
+
+`gxpm <phase> init` writes an empty draft. Use `gxpm artifact write` to put
+real content in (no need to vim JSON):
+
+```bash
+gxpm artifact write <issue-id> acceptance-contract --json '{"criteria":[...]}'
+gxpm artifact write <issue-id> implementation-plan --from ./plan.json
+cat payload.json | gxpm artifact write <issue-id> verify-findings --stdin
+```
+
+This is JSON-only on purpose — the artifact contract is machine-readable.
+
 ## Hook Defense (Layer 3)
 
 When skill content is unloaded by progressive disclosure, the `gxpm gate` CLI
 plus git hooks still enforce phase gates physically.
 
-Install hooks in target repo:
+One-shot install in target repo (skill globally + hooks in repo):
 
 ```bash
-gxpm-init --install-hooks --target /path/to/repo
+gxpm-init --install --target /path/to/repo
+```
+
+Or install separately:
+
+```bash
+gxpm-init --install-skill --host all              # SKILL.md to ~/.codex/.claude/...
+gxpm-init --install-hooks --target /path/to/repo  # git hooks in target repo
 ```
 
 This copies four hook templates to `<repo>/.githooks/`:
