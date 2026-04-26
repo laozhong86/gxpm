@@ -693,6 +693,12 @@ function runPostMergeGate(issueId: string | undefined) {
 
   const updated = transitionIssuePhase({ root: stateRoot, issueId, nextPhase: outcome.transitionTo });
   console.log(`transitioned ${issueId}: ${state.currentPhase} -> ${updated.currentPhase}`);
+  if (updated.currentPhase === "land") {
+    const sync = runPostLandSkillSync({ env: process.env });
+    if (!sync.ok) {
+      console.error(`[gxpm land sync] ${sync.message}`);
+    }
+  }
 }
 
 try {
