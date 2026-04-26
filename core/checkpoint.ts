@@ -212,8 +212,7 @@ phase: ${packet.phase}
 branch: ${packet.branch}
 timestamp: ${packet.writtenAt}
 checkpointPath: ${packet.checkpointPath}
-files_modified:
-${packet.filesModified.map((path) => `  - ${path}`).join("\n") || "  []"}
+${renderFilesModifiedFrontmatter(packet.filesModified)}
 ---
 
 ## Working on: ${packet.title}
@@ -244,4 +243,9 @@ function renderList(items: string[]) {
 function renderNumberedList(items: string[]) {
   if (items.length === 0) return "1. none";
   return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
+}
+
+function renderFilesModifiedFrontmatter(filesModified: string[]) {
+  if (filesModified.length === 0) return "files_modified: []";
+  return `files_modified:\n${filesModified.map((path) => `  - ${path}`).join("\n")}`;
 }

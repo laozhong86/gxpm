@@ -88,4 +88,21 @@ describe("issue checkpoint store", () => {
       "first",
     );
   });
+
+  test("renders empty files_modified frontmatter as an inline array", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-checkpoint-empty-files-"));
+    createIssueState({ root, issueId: "GXPM-62" });
+
+    const result = writeIssueCheckpoint({
+      root,
+      issueId: "GXPM-62",
+      title: "No Files",
+      now: new Date("2026-04-27T04:45:00.000Z"),
+      payload: { summary: "checkpoint without modified files" },
+    });
+
+    const markdown = readFileSync(join(root, ".gxpm", "issues", "GXPM-62", result.path), "utf8");
+    expect(markdown).toContain("files_modified: []");
+    expect(markdown).not.toContain("files_modified:\n  []");
+  });
 });
