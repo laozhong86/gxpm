@@ -17,6 +17,7 @@ import {
 } from "../core/gate";
 import { listIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
+import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
 
@@ -25,6 +26,17 @@ function main(argv: string[]) {
 
   if (!command || command === "check") {
     console.log(runScaffoldCheck());
+    return;
+  }
+
+  if (command === "doctor") {
+    const json = argv.includes("--json");
+    const report = runDoctor();
+    if (json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatDoctorReport(report));
+    }
     return;
   }
 

@@ -41,6 +41,13 @@ gxpm issue list           # human table
 gxpm issue list --json    # machine-readable
 ```
 
+To check if gxpm is correctly installed in this machine + this repo:
+
+```bash
+gxpm doctor               # human-readable report with ✓ / ✗ + fix commands
+gxpm doctor --json        # machine-readable
+```
+
 If no state exists, create it before phase work:
 
 ```bash
