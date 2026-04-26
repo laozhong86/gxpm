@@ -103,6 +103,45 @@ gxpm artifact list <issue-id>
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Persist Design Before Phase Advance
+
+Any non-trivial proposal (feature design, scope decision, alternative analysis)
+generated during a phase MUST be written to an artifact before you transition.
+Do not leave the proposal only in the chat transcript.
+
+- During `triage`: write `triage-report` artifact capturing user's exact words,
+  your understanding, and the candidate options.
+- During `plan`: write `implementation-plan` artifact with the chosen approach,
+  ordered tasks, alternatives considered.
+- Rule of thumb: if a future agent restarts the session and reads only
+  `.gxpm/issues/<id>/`, can they reconstruct your reasoning? If not, the
+  artifact is incomplete.
+
+This is gxpm's checkpoint discipline: the artifact tree is the source of truth,
+chat history is volatile.
+
+## Codex `update_plan` vs gxpm Phase
+
+Codex CLI provides a native `update_plan` tool for transient task lists. Use it
+ONLY for sub-tasks WITHIN the current gxpm phase (e.g., "read 3 source files"
+during triage). The gxpm phase tree is the top-level execution contract.
+
+- ❌ Don't mirror gxpm phases as Codex plan items (duplicate truth).
+- ✅ Do use Codex plan for "first read X, then read Y, then write artifact Z"
+  intra-phase steps.
+- Top-level progression always goes through `gxpm issue transition`.
+
+## Issue ID Selection
+
+When creating a new issue without a pre-assigned ID (e.g., from Linear):
+
+```bash
+gxpm issue create --auto-id
+```
+
+This picks the next free `GXPM-N` and avoids collisions with existing tracked
+issues. Only specify a literal ID when migrating from an external tracker.
+
 ## Worktree Policy (resolution chain)
 
 Whether a feature must be developed in a worktree depends on the resolved
