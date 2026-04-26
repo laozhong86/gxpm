@@ -22,7 +22,7 @@ import {
   resolveWorktreePolicy,
   setConfigValue,
 } from "../core/config";
-import { listIssues } from "../core/issues";
+import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { formatDoctorReport, runDoctor } from "./doctor";
@@ -74,12 +74,21 @@ function main(argv: string[]) {
   }
 
   if (command === "issue" && subcommand === "create") {
-    if (!issueId) {
-      throw new Error("Usage: gxpm issue create <issue-id>");
+    let resolvedId = issueId;
+    if (!resolvedId || resolvedId === "--auto-id") {
+      if (argv.includes("--auto-id") || !resolvedId) {
+        if (!resolvedId && !argv.includes("--auto-id")) {
+          throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
+        }
+        resolvedId = getNextAvailableIssueId();
+      }
     }
-    const state = createIssueState({ issueId });
+    if (!resolvedId) {
+      throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
+    }
+    const state = createIssueState({ issueId: resolvedId });
     console.log(`created ${state.issueId} at ${state.currentPhase}`);
-    console.log(`statePath: ${getIssuePaths(process.cwd(), issueId).statePath}`);
+    console.log(`statePath: ${getIssuePaths(process.cwd(), resolvedId).statePath}`);
     return;
   }
 
@@ -99,7 +108,14 @@ function main(argv: string[]) {
     const json = argv.includes("--json");
     const includeAll = argv.includes("--all");
     const archivedOnly = argv.includes("--archived");
-    const entries = listIssues({ includeAll, archivedOnly });
+    const recentIdx = argv.indexOf("--recent");
+    const recentN = recentIdx >= 0 ? parseInt(argv[recentIdx + 1] ?? "5", 10) || 5 : 0;
+    let entries: ReturnType<typeof listIssues>;
+    if (recentN > 0) {
+      entries = recentLandedIssues({ limit: recentN });
+    } else {
+      entries = listIssues({ includeAll, archivedOnly });
+    }
     if (json) {
       console.log(JSON.stringify(entries, null, 2));
       return;

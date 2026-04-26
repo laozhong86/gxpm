@@ -23,25 +23,48 @@ if [ -z "$CWD" ] || [ ! -d "$CWD/.gxpm/issues" ]; then
 fi
 
 cd "$CWD"
-gxpm issue list --json 2>/dev/null | python3 -c '
+# Try active issues first; if none, fall back to recent landed for context.
+ACTIVE_JSON=$(gxpm issue list --json 2>/dev/null || echo "[]")
+RECENT_JSON=$(gxpm issue list --recent 3 --json 2>/dev/null || echo "[]")
+
+printf '%s\t%s' "$ACTIVE_JSON" "$RECENT_JSON" | python3 -c '
 import json, sys
+raw = sys.stdin.read()
+active_raw, recent_raw = raw.split("\t", 1)
 try:
-    issues = json.load(sys.stdin)
+    active = json.loads(active_raw)
 except Exception:
+    active = []
+try:
+    recent = json.loads(recent_raw)
+except Exception:
+    recent = []
+
+def fmt(issue):
+    return "  - {} (phase={}, updated={})".format(
+        issue["issueId"], issue["currentPhase"], issue["updatedAt"][:19] + "Z"
+    )
+
+parts = []
+if active:
+    parts.append("Active gxpm issues in this repo:")
+    parts.extend(fmt(i) for i in active[:5])
+elif recent:
+    parts.append("No active gxpm issues. Most recently landed (for reference):")
+    parts.extend(fmt(i) for i in recent[:3])
+else:
     sys.exit(0)
-if not issues:
-    sys.exit(0)
-lines = []
-for i in issues[:5]:
-    issue_id = i["issueId"]
-    phase = i["currentPhase"]
-    updated = i["updatedAt"][:19] + "Z"
-    lines.append("  - {} (phase={}, updated={})".format(issue_id, phase, updated))
-context = "Active gxpm issues in this repo:\n" + "\n".join(lines) + "\n\nResume with: gxpm issue next <id>  /  gxpm issue history <id>  /  gxpm artifact list <id>"
+
+parts.append("")
+parts.append("Recommended commands when working an issue:")
+parts.append("  gxpm issue next <id>      # what to do next")
+parts.append("  gxpm issue history <id>   # full audit timeline")
+parts.append("  gxpm issue create --auto-id  # start a new issue with next free id")
+
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "SessionStart",
-        "additionalContext": context
+        "additionalContext": "\n".join(parts)
     }
 }))
 '

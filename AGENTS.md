@@ -42,12 +42,15 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 本仓库使用 gxpm 自托管 issue delivery。任何涉及 issue / phase / artifact 的工作，都必须遵循以下流程，不得绕过：
 
 - 启动会话时若 `gxpm doctor` 显示有活跃 issue（state.json 存在且 phase ≠ land），先 `gxpm issue status <id>` + `gxpm issue next <id>` 拉取上下文，**不要从聊天记忆推断 phase**。
-- 任何代码改动开始前，确认有对应 GXPM-N issue 处于 `dispatch` / `implement` 之间的阶段；否则先 `gxpm issue create GXPM-N` 并走 triage → plan → dispatch 三阶段。
+- 任何代码改动开始前，确认有对应 GXPM-N issue 处于 `dispatch` / `implement` 之间的阶段；否则先 `gxpm issue create --auto-id` 并走 triage → plan → dispatch 三阶段。**永远使用 `--auto-id`**，不要硬编码 GXPM-N 数字（避免与已有跟踪 issue 冲突）。
 - Phase 推进前先写完 artifact，再 `gxpm issue transition`（顺序：`gxpm <phase> init <id>` → `gxpm artifact write <id> <type> --json '...'` → `gxpm issue transition <id> <next>`）。
+- **设计提议必须落盘**：在 triage/plan 阶段产出的方案、取舍、替代选项必须写到对应 artifact (triage-report / implementation-plan)，**不能只留在聊天里**；下一个会话只读 `.gxpm/issues/<id>/` 也能恢复上下文是底线。
 - 不要直接编辑 `.gxpm/issues/<id>/*.json`，统一通过 `gxpm artifact write` / `gxpm artifact edit`。
 - Commit message 必须含 `GXPM-N` 引用；feature 分支用 `gxpm-N-<topic>` 命名以触发 git hook gate。
 - 完成 land phase 前的 merge 由 post-merge hook 自动 transition qa→land；不手工跳。
 - 不确定下一步时统一查 `gxpm issue next <id>`，不要自己拼 CLI。
+- 进入 implement 前 `git status -sb` 检查未追踪文件；如有 3+ 个来源不明文件，**默认走独立 worktree** 隔离（不依赖 worktree.enforcement 设置）。
+- Codex 的 `update_plan` 仅用于阶段内细分任务，**不要与 gxpm phase 平行作为顶层 task list**；顶层进度永远以 `gxpm issue history <id>` 为准。
 
 ## Ask First
 
