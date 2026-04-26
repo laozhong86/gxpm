@@ -1,6 +1,27 @@
 import { type ArtifactType } from "./artifacts";
 import { type GxpmPhase } from "./state";
 
+export const CODE_COMMIT_PHASES: ReadonlySet<GxpmPhase> = new Set([
+  "dispatch",
+  "implement",
+  "local-verify",
+  "ac-check",
+  "self-review",
+  "ship",
+  "pr-check",
+  "verify",
+]);
+
+export const PROTECTED_PATH_PATTERNS: readonly RegExp[] = [
+  /^apps\//,
+  /^server\//,
+  /^packages\//,
+  /^scripts\//,
+  /^tests\//,
+  /^supabase\//,
+  /^e2e\//,
+];
+
 export interface PhaseGateRule {
   command: string;
   fromPhase: GxpmPhase;
