@@ -55,6 +55,7 @@ To check if gxpm is correctly installed in this machine + this repo:
 ```bash
 gxpm doctor               # human-readable report with ✓ / ✗ + fix commands
 gxpm doctor --json        # machine-readable
+gxpm version              # print installed version (also: --version / -v)
 ```
 
 When unsure what to run next on a specific issue:
