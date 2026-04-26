@@ -51,6 +51,9 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
   const sessionStartCmd = join(hooksDir, "gxpm-session-start.sh");
   const promptSubmitCmd = join(hooksDir, "gxpm-user-prompt-submit.sh");
 
+  // Per Codex official spec: "If timeout is omitted, Codex uses 600 seconds."
+  // We omit timeout to inherit the official default rather than override it.
+  // statusMessage and type are kept because they are official supported fields.
   const newConfig = {
     hooks: {
       SessionStart: [
@@ -59,7 +62,6 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
             {
               type: "command",
               command: sessionStartCmd,
-              timeout: 10,
               statusMessage: "gxpm: scanning active issues",
             },
           ],
@@ -71,7 +73,6 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
             {
               type: "command",
               command: promptSubmitCmd,
-              timeout: 10,
               statusMessage: "gxpm: resolving referenced issue",
             },
           ],
