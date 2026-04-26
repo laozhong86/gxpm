@@ -8,6 +8,8 @@ import {
 import { join } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
 export const GXPM_PHASES = [
   "triage",
   "plan",
