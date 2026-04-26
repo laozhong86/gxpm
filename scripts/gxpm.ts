@@ -16,6 +16,12 @@ import {
   evaluatePreCommit,
   evaluatePrePush,
 } from "../core/gate";
+import {
+  getConfigValue,
+  listConfig,
+  resolveWorktreePolicy,
+  setConfigValue,
+} from "../core/config";
 import { listIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
@@ -36,6 +42,23 @@ function main(argv: string[]) {
       readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
     ) as { version: string };
     console.log(pkg.version);
+    return;
+  }
+
+  if (command === "config") {
+    runConfigCommand(argv, subcommand, issueId, value);
+    return;
+  }
+
+  if (command === "worktree" && subcommand === "policy") {
+    const policy = resolveWorktreePolicy();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(policy, null, 2));
+      return;
+    }
+    console.log(`worktree.enforcement: ${policy.enforcement}`);
+    console.log(`worktree.default:     ${policy.default}`);
+    console.log(`source:               ${policy.source}`);
     return;
   }
 
@@ -214,6 +237,62 @@ function main(argv: string[]) {
   }
 
   throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
+}
+
+function runConfigCommand(
+  argv: string[],
+  subcommand: string | undefined,
+  thirdArg: string | undefined,
+  fourthArg: string | undefined,
+) {
+  if (subcommand === "get") {
+    if (!thirdArg) throw new Error("Usage: gxpm config get <key>");
+    const result = getConfigValue({ key: thirdArg });
+    if (result.value === undefined) {
+      console.log(`${thirdArg}: <unset>`);
+    } else {
+      console.log(`${thirdArg}: ${JSON.stringify(result.value)}`);
+      console.log(`source:  ${result.source}`);
+    }
+    return;
+  }
+
+  if (subcommand === "set") {
+    if (!thirdArg || fourthArg === undefined) {
+      throw new Error("Usage: gxpm config set <key> <value> [--global]");
+    }
+    const scope = argv.includes("--global") ? "global" : "repo";
+    const path = setConfigValue({
+      scope,
+      key: thirdArg,
+      value: parseConfigValueLiteral(fourthArg),
+    });
+    console.log(`set ${thirdArg} = ${fourthArg} (${scope}); wrote ${path}`);
+    return;
+  }
+
+  if (subcommand === "list" || !subcommand) {
+    const all = listConfig();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(all, null, 2));
+      return;
+    }
+    console.log("=== repo (.gxpm/config.json) ===");
+    console.log(JSON.stringify(all.repo, null, 2));
+    console.log("");
+    console.log("=== global (~/.gxpm/config.json) ===");
+    console.log(JSON.stringify(all.global, null, 2));
+    return;
+  }
+
+  throw new Error(`Unknown config subcommand: ${subcommand}`);
+}
+
+function parseConfigValueLiteral(raw: string): unknown {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (/^-?\d+$/.test(raw)) return Number(raw);
+  return raw;
 }
 
 function runIssueHistory(issueId: string, asJson: boolean) {

@@ -103,6 +103,42 @@ gxpm artifact list <issue-id>
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Worktree Policy (resolution chain)
+
+Whether a feature must be developed in a worktree depends on the resolved
+policy. The LLM should query the policy before starting any code change:
+
+```bash
+gxpm worktree policy
+```
+
+Output reports the resolved values + source. The resolution chain (highest
+to lowest precedence):
+
+1. **`config.json`** (repo-level `.gxpm/config.json` first, then global
+   `~/.gxpm/config.json`) — set by maintainer; **wins everything**, even
+   user message and AGENTS.md.
+2. **User message in current conversation** — if user explicitly says
+   "use a worktree" or "stay on main", honor that when no config override
+   exists.
+3. **AGENTS.md `## gxpm Config` block** — repo-level convention via
+   `worktree.enforcement: required|optional|forbidden` and
+   `worktree.default: use|skip|ask`.
+4. **Default**: `enforcement: optional`, `default: ask`.
+
+When `enforcement = required`: always create a worktree before code edits.
+When `enforcement = forbidden`: never use a worktree.
+When `enforcement = optional`: follow `default` (use / skip / ask).
+
+To set/inspect:
+
+```bash
+gxpm config get worktree.enforcement
+gxpm config set worktree.enforcement required           # repo
+gxpm config set worktree.enforcement required --global  # ~/.gxpm/
+gxpm config list
+```
+
 ## Populating Artifact Content
 
 `gxpm <phase> init` writes an empty draft. Use `gxpm artifact write` (CLI)

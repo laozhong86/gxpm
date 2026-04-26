@@ -30,6 +30,13 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 - browser/QA/review/ship 相关结论必须能落到可复核证据。
 - 新增 host、skill、生成规则时同步补测试或检查入口。
 
+## gxpm Config
+
+- worktree.enforcement: optional
+- worktree.default: ask
+
+如需强制走 worktree-first，把 enforcement 改为 `required`；如禁用 worktree，改为 `forbidden`。任何 `.gxpm/config.json` 中显式设置都会覆盖本段。
+
 ## gxpm Workflow (本仓库自托管)
 
 本仓库使用 gxpm 自托管 issue delivery。任何涉及 issue / phase / artifact 的工作，都必须遵循以下流程，不得绕过：
