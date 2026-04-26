@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { discoverTemplates } from "./discover-skills";
 import { getHostConfig } from "../hosts";
+import type { HostConfig } from "./host-config";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 
 export interface GenerateSkillDocsOptions {
@@ -13,6 +14,17 @@ export interface GenerateSkillDocsOptions {
 
 const GENERATED_MARK = "<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->";
 
+export function renderSkillContentForHost(root: string, host: HostConfig, templateRelative: string): string {
+  const templatePath = join(root, templateRelative);
+  const rendered = renderTemplate(readFileSync(templatePath, "utf8"), {
+    artifactReadCommands: buildArtifactReadCommands(),
+    phaseGateCommands: buildPhaseGateCommands(),
+    phaseTransitionSummary: buildPhaseTransitionSummary(),
+    preamble: buildPreamble(root, host),
+  });
+  return insertGeneratedMark(rendered);
+}
+
 export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): string[] {
   const root = options.root ?? process.cwd();
   const host = getHostConfig(options.host ?? "codex");
@@ -20,15 +32,8 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
   const stale: string[] = [];
 
   for (const template of discoverTemplates(root)) {
-    const templatePath = join(root, template.tmpl);
     const outputPath = join(root, template.output);
-    const rendered = renderTemplate(readFileSync(templatePath, "utf8"), {
-      artifactReadCommands: buildArtifactReadCommands(),
-      phaseGateCommands: buildPhaseGateCommands(),
-      phaseTransitionSummary: buildPhaseTransitionSummary(),
-      preamble: buildPreamble(root, host),
-    });
-    const generated = insertGeneratedMark(rendered);
+    const generated = renderSkillContentForHost(root, host, template.tmpl);
 
     if (options.dryRun) {
       const current = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";

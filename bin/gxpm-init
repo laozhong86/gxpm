@@ -8,6 +8,10 @@ case "${1:-}" in
     shift
     exec bun run "$ROOT/scripts/install-hooks.ts" "$@"
     ;;
+  --install-skill)
+    shift
+    exec bun run "$ROOT/scripts/install-skill.ts" "$@"
+    ;;
   *)
     exec bun run "$ROOT/scripts/gen-skill-docs.ts" "$@"
     ;;
