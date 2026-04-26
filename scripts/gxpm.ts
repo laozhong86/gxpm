@@ -15,6 +15,7 @@ import {
   evaluatePreCommit,
   evaluatePrePush,
 } from "../core/gate";
+import { listIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
@@ -46,6 +47,28 @@ function main(argv: string[]) {
     console.log(`currentPhase: ${state.currentPhase}`);
     console.log(`updatedAt: ${state.updatedAt}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), issueId).statePath}`);
+    return;
+  }
+
+  if (command === "issue" && subcommand === "list") {
+    const json = argv.includes("--json");
+    const entries = listIssues();
+    if (json) {
+      console.log(JSON.stringify(entries, null, 2));
+      return;
+    }
+    if (entries.length === 0) {
+      console.log("no issues tracked under .gxpm/issues/");
+      return;
+    }
+    const idWidth = Math.max(8, ...entries.map((e) => e.issueId.length));
+    const phaseWidth = Math.max(13, ...entries.map((e) => e.currentPhase.length));
+    console.log(`${"ISSUE".padEnd(idWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED`);
+    for (const entry of entries) {
+      console.log(
+        `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}`,
+      );
+    }
     return;
   }
 

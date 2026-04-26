@@ -16,14 +16,15 @@ export GXPM_ROOT GXPM_STATE_DIR
 
 # gxpm
 
-gxpm is a draft skill entry for this repository. It is not installed globally yet.
-Its product goal is to replace PMC and gstack, not wrap them.
+gxpm is a unified project management runtime for agent-executed delivery.
+Its product goal is to replace PMC and gstack with one native state graph,
+capability runtime, and gate-enforced phase progression — not to wrap them.
 
 ## Role
 
-Act as a unified project management runtime for agent-executed delivery.
 Read state first, route to the correct phase, call the right gxpm capability,
-and persist artifacts before claiming progress.
+and persist artifacts before claiming progress. Treat `.gxpm/issues/<id>/` as
+the single source of truth, not chat memory or Linear comments.
 
 ## State First
 
@@ -31,6 +32,13 @@ Before doing phase work, read:
 
 ```bash
 gxpm issue status <issue-id>
+```
+
+To see all tracked issues at once:
+
+```bash
+gxpm issue list           # human table
+gxpm issue list --json    # machine-readable
 ```
 
 If no state exists, create it before phase work:
