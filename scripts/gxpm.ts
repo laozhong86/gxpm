@@ -31,6 +31,14 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "version" || command === "--version" || command === "-v") {
+    const pkg = JSON.parse(
+      readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
+    ) as { version: string };
+    console.log(pkg.version);
+    return;
+  }
+
   if (command === "doctor") {
     const json = argv.includes("--json");
     const report = runDoctor();
