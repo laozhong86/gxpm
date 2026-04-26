@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { initializeLandFindings } from "../core/land";
 import { createIssueState, transitionIssuePhase } from "../core/state";
-import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
+import { enterPhase, enterPhaseCli, output, runCli, runCliWithEnv } from "./helpers/workflow";
 
 describe("land gate", () => {
   test("initializes land findings only in QA phase", () => {
@@ -85,5 +85,66 @@ describe("land gate", () => {
     const transition = runCli(root, ["issue", "transition", "GXPM-133", "land"]);
     expect(transition.exitCode).toBe(0);
     expect(output(transition)).toContain("transitioned GXPM-133: qa -> land");
+  });
+
+  test("CLI land transition runs post-land skill sync with install-skill all", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-land-sync-"));
+    const calls = join(root, "install-calls.txt");
+    const fakeInit = join(root, "gxpm-init");
+    writeFileSync(
+      fakeInit,
+      `#!/bin/bash\nprintf '%s\\n' \"$*\" >> \"${calls}\"\n`,
+    );
+    chmodSync(fakeInit, 0o755);
+    enterPhaseCli(root, "GXPM-134", "qa");
+    expect(runCli(root, ["qa", "land", "GXPM-134"]).exitCode).toBe(0);
+
+    const transition = runCliWithEnv(root, ["issue", "transition", "GXPM-134", "land"], {
+      GXPM_INIT_BIN: fakeInit,
+      GXPM_SKIP_POST_LAND_SYNC: "0",
+    });
+
+    expect(transition.exitCode).toBe(0);
+    expect(output(transition)).toContain("transitioned GXPM-134: qa -> land");
+    expect(readFileSync(calls, "utf8").trim()).toBe("--install-skill --host all");
+  });
+
+  test("CLI non-land transition does not run post-land skill sync", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-non-land-sync-"));
+    const calls = join(root, "install-calls.txt");
+    const fakeInit = join(root, "gxpm-init");
+    writeFileSync(
+      fakeInit,
+      `#!/bin/bash\nprintf '%s\\n' \"$*\" >> \"${calls}\"\n`,
+    );
+    chmodSync(fakeInit, 0o755);
+    expect(runCli(root, ["issue", "create", "GXPM-135"]).exitCode).toBe(0);
+    expect(runCli(root, ["triage", "init", "GXPM-135"]).exitCode).toBe(0);
+
+    const transition = runCliWithEnv(root, ["issue", "transition", "GXPM-135", "plan"], {
+      GXPM_INIT_BIN: fakeInit,
+      GXPM_SKIP_POST_LAND_SYNC: "0",
+    });
+
+    expect(transition.exitCode).toBe(0);
+    expect(existsSync(calls)).toBe(false);
+  });
+
+  test("post-land skill sync failure logs but does not block transition", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-land-sync-fail-"));
+    const fakeInit = join(root, "gxpm-init");
+    writeFileSync(fakeInit, "#!/bin/bash\necho install failed >&2\nexit 42\n");
+    chmodSync(fakeInit, 0o755);
+    enterPhaseCli(root, "GXPM-136", "qa");
+    expect(runCli(root, ["qa", "land", "GXPM-136"]).exitCode).toBe(0);
+
+    const transition = runCliWithEnv(root, ["issue", "transition", "GXPM-136", "land"], {
+      GXPM_INIT_BIN: fakeInit,
+      GXPM_SKIP_POST_LAND_SYNC: "0",
+    });
+
+    expect(transition.exitCode).toBe(0);
+    expect(output(transition)).toContain("transitioned GXPM-136: qa -> land");
+    expect(output(transition)).toContain("[gxpm land sync] post-land skill install failed: install failed");
   });
 });

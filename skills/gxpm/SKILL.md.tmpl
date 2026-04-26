@@ -312,11 +312,15 @@ JSON-only on purpose — the artifact contract is machine-readable.
 
 Codex CLI v0.117.0+ supports lifecycle hooks. gxpm ships two:
 
-- `SessionStart` — injects active issue list + resume hints when a Codex
-  session opens, so the agent always knows what's in flight.
+- `SessionStart` — injects a short gxpm capability hint; it does not list
+  active issues by design. Run `gxpm issue list` explicitly when active work is
+  relevant.
 - `UserPromptSubmit` — when the user mentions a `GXPM-N` / `GXG-N` issue id
   in their prompt, gxpm injects that issue's current phase + next-step
   guidance.
+
+Set `GXPM_SESSION_START_DISABLE=1` to silence the `SessionStart` hint for a
+session. This is an env-var kill switch; config CLI bridging can be added later.
 
 Install (defaults to repo scope — only fires when Codex opens that repo):
 

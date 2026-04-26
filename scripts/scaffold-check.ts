@@ -3,6 +3,7 @@ import { ALL_HOST_CONFIGS } from "../hosts";
 import { generateSkillDocs } from "./gen-skill-docs";
 import { validateGovernanceDocs } from "./governance-check";
 import { validateAllConfigs } from "./host-config";
+import { validateVersionTruth } from "./version";
 
 // Default to the gxpm repo itself (parent of scripts/) so the check is
 // meaningful regardless of the cwd the CLI was invoked from.
@@ -17,9 +18,11 @@ export function runScaffoldCheck(options: RunScaffoldCheckOptions = {}) {
 
   const hostErrors = validateAllConfigs(ALL_HOST_CONFIGS);
   const governanceErrors = validateGovernanceDocs({ root });
+  const versionErrors = validateVersionTruth({ root });
   const errors = [
     ...hostErrors.map((error) => `host config: ${error}`),
     ...governanceErrors.map((error) => `governance: ${error}`),
+    ...versionErrors.map((error) => `version: ${error}`),
   ];
 
   if (errors.length > 0) {

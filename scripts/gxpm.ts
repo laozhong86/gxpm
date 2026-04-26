@@ -18,8 +18,8 @@ import {
   evaluatePrePush,
 } from "../core/gate";
 import {
-  getConfigValue,
-  listConfig,
+  getResolvedConfigValue,
+  listConfigEntries,
   resolveWorktreePolicy,
   setConfigValue,
 } from "../core/config";
@@ -34,7 +34,9 @@ import {
 } from "../core/wiki";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
+import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
+import { readGxpmVersion } from "./version";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -45,10 +47,7 @@ function main(argv: string[]) {
   }
 
   if (command === "version" || command === "--version" || command === "-v") {
-    const pkg = JSON.parse(
-      readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
-    ) as { version: string };
-    console.log(pkg.version);
+    console.log(readGxpmVersion());
     return;
   }
 
@@ -208,6 +207,12 @@ function main(argv: string[]) {
     const before = readIssueState({ issueId });
     const after = transitionIssuePhase({ issueId, nextPhase: value });
     console.log(`transitioned ${after.issueId}: ${before.currentPhase} -> ${after.currentPhase}`);
+    if (after.currentPhase === "land") {
+      const sync = runPostLandSkillSync({ env: process.env });
+      if (!sync.ok) {
+        console.error(`[gxpm land sync] ${sync.message}`);
+      }
+    }
     return;
   }
 
@@ -291,9 +296,9 @@ function runConfigCommand(
 ) {
   if (subcommand === "get") {
     if (!thirdArg) throw new Error("Usage: gxpm config get <key>");
-    const result = getConfigValue({ key: thirdArg });
-    if (result.value === undefined) {
-      console.log(`${thirdArg}: <unset>`);
+    const result = getResolvedConfigValue({ key: thirdArg });
+    if (argv.includes("--raw")) {
+      console.log(String(result.value));
     } else {
       console.log(`${thirdArg}: ${JSON.stringify(result.value)}`);
       console.log(`source:  ${result.source}`);
@@ -316,16 +321,13 @@ function runConfigCommand(
   }
 
   if (subcommand === "list" || !subcommand) {
-    const all = listConfig();
     if (argv.includes("--json")) {
-      console.log(JSON.stringify(all, null, 2));
+      console.log(JSON.stringify(listConfigEntries(), null, 2));
       return;
     }
-    console.log("=== repo (.gxpm/config.json) ===");
-    console.log(JSON.stringify(all.repo, null, 2));
-    console.log("");
-    console.log("=== global (~/.gxpm/config.json) ===");
-    console.log(JSON.stringify(all.global, null, 2));
+    for (const entry of listConfigEntries()) {
+      console.log(`${entry.key}: ${JSON.stringify(entry.value)} (${entry.source})`);
+    }
     return;
   }
 
@@ -763,6 +765,12 @@ function runPostMergeGate(issueId: string | undefined) {
 
   const updated = transitionIssuePhase({ root: stateRoot, issueId, nextPhase: outcome.transitionTo });
   console.log(`transitioned ${issueId}: ${state.currentPhase} -> ${updated.currentPhase}`);
+  if (updated.currentPhase === "land") {
+    const sync = runPostLandSkillSync({ env: process.env });
+    if (!sync.ok) {
+      console.error(`[gxpm land sync] ${sync.message}`);
+    }
+  }
 }
 
 try {

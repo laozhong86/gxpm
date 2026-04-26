@@ -41,7 +41,7 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 
 本仓库使用 gxpm 自托管 issue delivery。任何涉及 issue / phase / artifact 的工作，都必须遵循以下流程，不得绕过：
 
-- 启动会话时若 `gxpm doctor` 显示有活跃 issue（state.json 存在且 phase ≠ land），先 `gxpm issue status <id>` + `gxpm issue next <id>` 拉取上下文，**不要从聊天记忆推断 phase**。
+- 纯启动时 SessionStart hook 只注入 gxpm 能力提醒，不会列出 issue；用户在 prompt 里提及 `GXPM-N` / `GXG-N` 时，UserPromptSubmit hook 才注入该 issue 的 status + next。继续某个 issue 时先明确 id，再 `gxpm issue status <id>` + `gxpm issue next <id>` 拉取上下文，**不要从聊天记忆推断 phase**。
 - 任何代码改动开始前，确认有对应 GXPM-N issue 处于 `dispatch` / `implement` 之间的阶段；否则先 `gxpm issue create --auto-id` 并走 triage → plan → dispatch 三阶段。**永远使用 `--auto-id`**，不要硬编码 GXPM-N 数字（避免与已有跟踪 issue 冲突）。
 - 新的非平凡任务先走 brainstorming/需求确认：只做 read-only 真值检查，向用户确认目标、范围、非目标、成功标准和预计改动；用户点头后再写 artifact、改文件或执行有副作用命令。用户明确说“直接做 / 继续推进 / 按已有计划执行”时可跳过。
 - Phase 推进前先写完 artifact，再 `gxpm issue transition`（顺序：`gxpm <phase> init <id>` → `gxpm artifact write <id> <type> --json '...'` → `gxpm issue transition <id> <next>`）。

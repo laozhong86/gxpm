@@ -11,6 +11,10 @@ export function runCli(root: string, args: string[]) {
   return runScript([cliPath, ...args], root);
 }
 
+export function runCliWithEnv(root: string, args: string[], env: Record<string, string>) {
+  return runScript([cliPath, ...args], root, env);
+}
+
 export function runCliWithInput(root: string, args: string[], stdin: string) {
   return Bun.spawnSync({
     cmd: ["bun", "run", cliPath, ...args],
@@ -21,10 +25,11 @@ export function runCliWithInput(root: string, args: string[], stdin: string) {
   });
 }
 
-export function runScript(args: string[], cwd = process.cwd()) {
+export function runScript(args: string[], cwd = process.cwd(), env?: Record<string, string>) {
   return Bun.spawnSync({
     cmd: ["bun", "run", ...args],
     cwd,
+    env: { ...process.env, GXPM_SKIP_POST_LAND_SYNC: "1", ...(env ?? {}) },
     stdout: "pipe",
     stderr: "pipe",
   });

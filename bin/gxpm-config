@@ -12,4 +12,4 @@ while [ -L "$SOURCE" ]; do
 done
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
-exec bun run "$ROOT/scripts/gxpm-check.ts" "$@"
+exec bun run "$ROOT/scripts/gxpm.ts" config "$@"

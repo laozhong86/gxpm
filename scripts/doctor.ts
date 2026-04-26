@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS } from "../hosts";
+import { readGxpmVersion } from "./version";
 
 export interface SkillCheck {
   host: string;
@@ -69,10 +70,7 @@ function checkRuntime(gxpmRoot: string): RuntimeCheck {
 
   let version: string | null = null;
   try {
-    const pkg = JSON.parse(readFileSync(join(gxpmRoot, "package.json"), "utf8")) as {
-      version?: string;
-    };
-    version = pkg.version ?? null;
+    version = readGxpmVersion({ root: gxpmRoot });
   } catch {}
 
   return { bunAvailable, gxpmVersion: version, gxpmRepoRoot: gxpmRoot };

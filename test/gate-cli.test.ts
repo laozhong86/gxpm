@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initializeDispatch } from "../core/dispatch";
-import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
+import { enterPhase, enterPhaseCli, output, runCli, runCliWithEnv } from "./helpers/workflow";
 
 describe("gxpm gate pre-commit CLI", () => {
   test("blocks code commits in triage", () => {
@@ -94,6 +94,27 @@ describe("gxpm gate post-merge CLI", () => {
     const r = runCli(root, ["gate", "post-merge", "GXPM-500"]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("transitioned GXPM-500: qa -> land");
+  });
+
+  test("post-merge land transition runs post-land skill sync with install-skill all", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-gate-merge-sync-"));
+    const calls = join(root, "install-calls.txt");
+    const fakeInit = join(root, "gxpm-init");
+    writeFileSync(
+      fakeInit,
+      `#!/bin/bash\nprintf '%s\\n' "$*" >> "${calls}"\n`,
+    );
+    chmodSync(fakeInit, 0o755);
+    enterPhaseCli(root, "GXPM-502", "qa");
+
+    const r = runCliWithEnv(root, ["gate", "post-merge", "GXPM-502"], {
+      GXPM_INIT_BIN: fakeInit,
+      GXPM_SKIP_POST_LAND_SYNC: "0",
+    });
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("transitioned GXPM-502: qa -> land");
+    expect(readFileSync(calls, "utf8").trim()).toBe("--install-skill --host all");
   });
 
   test("no-ops when phase=triage", () => {
