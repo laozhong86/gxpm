@@ -65,6 +65,43 @@ gxpm artifact list <issue-id>
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
+## Hook Defense (Layer 3)
+
+When skill content is unloaded by progressive disclosure, the `gxpm gate` CLI
+plus git hooks still enforce phase gates physically.
+
+Install hooks in target repo:
+
+```bash
+gxpm-init --install-hooks --target /path/to/repo
+```
+
+This copies four hook templates to `<repo>/.githooks/`:
+
+- `gxpm-pre-commit` — blocks commits to protected paths (`apps/`, `server/`, `packages/`, `scripts/`, `tests/`, `supabase/`, `e2e/`) when `currentPhase` is not in `{dispatch, implement, local-verify, ac-check, self-review, ship, pr-check, verify}`.
+- `gxpm-commit-msg` — requires every commit message to reference a `GXG-NNN` or `GXPM-NNN` issue.
+- `gxpm-pre-push` — refuses to push when the current phase's required artifact is missing.
+- `gxpm-post-merge` — auto-initializes `land-findings` and transitions `qa → land` when a feature branch merges.
+
+Manual gate check (the hooks call these under the hood):
+
+```bash
+gxpm gate pre-commit <issue-id> --staged "<file1> <file2> ..."
+gxpm gate commit-msg <msg-file> --issue <issue-id>
+gxpm gate pre-push <issue-id>
+gxpm gate post-merge <issue-id>
+```
+
+Exit code 0 = allowed; exit 1 = blocked with stderr explanation.
+
+Escape hatch for legitimate exceptions:
+
+```bash
+GXPM_GATE_DISABLE=1 git commit ...
+```
+
+All four gate commands respect this env var. Use sparingly and document why.
+
 ## Read Next
 
 - `docs/architecture/gxpm-replacement-architecture.md`
