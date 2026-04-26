@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { output, runCli } from "./helpers/workflow";
+import { output, runCli, runCliWithInput } from "./helpers/workflow";
 
 describe("gxpm CLI", () => {
   test("creates, reads, and transitions local issue state", () => {
@@ -274,5 +274,47 @@ describe("gxpm artifact edit CLI", () => {
     });
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("invalid JSON");
+  });
+});
+
+describe("gxpm issue checkpoint/resume CLI", () => {
+  test("saves checkpoint JSON from stdin and prints it through resume", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-checkpoint-"));
+    expect(runCli(root, ["issue", "create", "GXPM-70"]).exitCode).toBe(0);
+
+    const checkpoint = runCliWithInput(
+      root,
+      ["issue", "checkpoint", "GXPM-70", "--title", "fresh handoff", "--stdin"],
+      JSON.stringify({
+        summary: "Fresh sessions should resume from issue memory.",
+        decisions: ["Keep checkpoint truth under .gxpm."],
+        remainingWork: ["Run the next implementation step."],
+        notes: ["No gstack runtime dependency."],
+      }),
+    );
+
+    expect(checkpoint.exitCode).toBe(0);
+    expect(output(checkpoint)).toContain("checkpoint saved for GXPM-70");
+    expect(output(checkpoint)).toContain("resume-packet.json");
+
+    const resume = runCli(root, ["issue", "resume", "GXPM-70"]);
+    expect(resume.exitCode).toBe(0);
+    const out = output(resume);
+    expect(out).toContain("GXPM-70 resume packet");
+    expect(out).toContain("phase: triage");
+    expect(out).toContain("Fresh sessions should resume from issue memory.");
+    expect(out).toContain("Run the next implementation step.");
+    expect(out).toContain("Next: gxpm issue next GXPM-70");
+  });
+
+  test("resume explains how to create a checkpoint when none exists", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-no-checkpoint-"));
+    expect(runCli(root, ["issue", "create", "GXPM-71"]).exitCode).toBe(0);
+
+    const resume = runCli(root, ["issue", "resume", "GXPM-71"]);
+
+    expect(resume.exitCode).toBe(1);
+    expect(output(resume)).toContain("No resume packet found for GXPM-71");
+    expect(output(resume)).toContain("gxpm issue checkpoint GXPM-71");
   });
 });
