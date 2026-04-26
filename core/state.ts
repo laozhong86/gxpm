@@ -33,6 +33,8 @@ export interface IssueState {
   updatedAt: string;
   stateRoot: string;
   artifactRoot: string;
+  archived?: boolean;
+  archivedAt?: string | null;
   phaseHistory: Array<{
     phase: GxpmPhase;
     enteredAt: string;
@@ -203,6 +205,22 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
 
 export function appendIssueEvent(input: { issueDir: string; event: StateEvent }) {
   appendFileSync(join(input.issueDir, "events.jsonl"), `${JSON.stringify(input.event)}\n`);
+}
+
+export function setIssueArchived(input: IssueInput & { archived: boolean }): IssueState {
+  const root = input.root ?? process.cwd();
+  const paths = getIssuePaths(root, input.issueId);
+  const state = readIssueState({ root, issueId: input.issueId });
+
+  const now = new Date().toISOString();
+  const updated: IssueState = {
+    ...state,
+    archived: input.archived,
+    archivedAt: input.archived ? now : null,
+    updatedAt: now,
+  };
+  writeJson(paths.statePath, updated);
+  return updated;
 }
 
 export function getNextPhase(phase: GxpmPhase) {

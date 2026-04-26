@@ -5,6 +5,7 @@ import {
   createIssueState,
   getIssuePaths,
   readIssueState,
+  setIssueArchived,
   transitionIssuePhase,
   type StateEvent,
 } from "../core/state";
@@ -65,23 +66,47 @@ function main(argv: string[]) {
 
   if (command === "issue" && subcommand === "list") {
     const json = argv.includes("--json");
-    const entries = listIssues();
+    const includeAll = argv.includes("--all");
+    const archivedOnly = argv.includes("--archived");
+    const entries = listIssues({ includeAll, archivedOnly });
     if (json) {
       console.log(JSON.stringify(entries, null, 2));
       return;
     }
     if (entries.length === 0) {
-      console.log("no issues tracked under .gxpm/issues/");
+      const hint = includeAll
+        ? "no issues tracked under .gxpm/issues/"
+        : "no active issues (use 'gxpm issue list --all' to include landed/archived)";
+      console.log(hint);
       return;
     }
     const idWidth = Math.max(8, ...entries.map((e) => e.issueId.length));
     const phaseWidth = Math.max(13, ...entries.map((e) => e.currentPhase.length));
-    console.log(`${"ISSUE".padEnd(idWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED`);
+    console.log(`${"ISSUE".padEnd(idWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
     for (const entry of entries) {
+      const flags = entry.archived ? "archived" : "";
       console.log(
-        `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}`,
+        `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
       );
     }
+    return;
+  }
+
+  if (command === "issue" && subcommand === "archive") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue archive <issue-id>");
+    }
+    setIssueArchived({ issueId, archived: true });
+    console.log(`archived ${issueId}`);
+    return;
+  }
+
+  if (command === "issue" && subcommand === "unarchive") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue unarchive <issue-id>");
+    }
+    setIssueArchived({ issueId, archived: false });
+    console.log(`unarchived ${issueId}`);
     return;
   }
 

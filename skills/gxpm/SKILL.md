@@ -37,8 +37,17 @@ gxpm issue status <issue-id>
 To see all tracked issues at once:
 
 ```bash
-gxpm issue list           # human table
-gxpm issue list --json    # machine-readable
+gxpm issue list             # active issues (hides land + archived)
+gxpm issue list --all       # everything including landed/archived
+gxpm issue list --archived  # only archived
+gxpm issue list --json      # machine-readable
+```
+
+To stash a finished or abandoned issue out of the active list:
+
+```bash
+gxpm issue archive <issue-id>     # hide from default list
+gxpm issue unarchive <issue-id>   # restore to default list
 ```
 
 To check if gxpm is correctly installed in this machine + this repo:

@@ -8,10 +8,15 @@ export interface IssueListEntry {
   createdAt: string;
   updatedAt: string;
   stateRoot: string;
+  archived: boolean;
 }
 
 interface ListIssuesInput {
   root?: string;
+  /** Show all issues (including land + archived). Default false. */
+  includeAll?: boolean;
+  /** Show only archived issues. Default false. Ignored if includeAll. */
+  archivedOnly?: boolean;
 }
 
 export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
@@ -42,11 +47,22 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
     try {
       state = JSON.parse(readFileSync(statePath, "utf8")) as IssueState;
     } catch {
-      // skip corrupt or non-json state files
       continue;
     }
 
     if (!state || typeof state !== "object" || !state.issueId) continue;
+
+    const archived = state.archived === true;
+
+    // Filter: default hides archived AND landed; --all overrides; --archived narrows to only archived.
+    if (!input.includeAll) {
+      if (input.archivedOnly) {
+        if (!archived) continue;
+      } else {
+        if (archived) continue;
+        if (state.currentPhase === "land") continue;
+      }
+    }
 
     entries.push({
       issueId: state.issueId,
@@ -54,6 +70,7 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
       createdAt: state.createdAt,
       updatedAt: state.updatedAt,
       stateRoot: state.stateRoot,
+      archived,
     });
   }
 
