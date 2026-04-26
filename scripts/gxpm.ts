@@ -24,7 +24,7 @@ import {
   setConfigValue,
 } from "../core/config";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../core/issues";
-import { initializeLandFindings } from "../core/land";
+import { initializeLandFindings, reconcileLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import {
   getQoderWikiStatus,
@@ -275,6 +275,11 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "gate" && subcommand === "post-merge-reconcile") {
+    runPostMergeReconcileGate(argv, issueId);
+    return;
+  }
+
   const phaseArtifactCommand = findPhaseArtifactCommand(command, subcommand);
   if (phaseArtifactCommand) {
     if (!issueId) {
@@ -442,6 +447,8 @@ function formatEventDetail(event: StateEvent): string {
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"}`;
     case "artifact.written":
       return `${p.artifactType ?? "?"} (${p.path ?? ""})`;
+    case "artifact.reconciled":
+      return `${p.artifactType ?? "?"} (${p.mergedSha ?? ""})`;
     case "checkpoint.written":
       return `${p.checkpointPath ?? "?"} (${p.resumePacketPath ?? ""})`;
     case "gate.passed":
@@ -771,6 +778,30 @@ function runPostMergeGate(issueId: string | undefined) {
       console.error(`[gxpm land sync] ${sync.message}`);
     }
   }
+}
+
+function runPostMergeReconcileGate(argv: string[], issueId: string | undefined) {
+  if (!issueId) {
+    throw new Error("Usage: gxpm gate post-merge-reconcile <issue-id> --sha <sha>");
+  }
+  const sha = optionValue(argv, "--sha");
+  if (!sha) {
+    throw new Error("Usage: gxpm gate post-merge-reconcile <issue-id> --sha <sha>");
+  }
+
+  const stateRoot = process.cwd();
+  const paths = getIssuePaths(stateRoot, issueId);
+  if (!existsSync(paths.statePath)) {
+    console.log(`no-state: ${issueId} not tracked by gxpm`);
+    return;
+  }
+
+  const result = reconcileLandFindings({ root: stateRoot, issueId, sha });
+  if (result.reconciled) {
+    console.log(`[gxpm gate post-merge-reconcile] reconciled land-findings for ${issueId}`);
+    return;
+  }
+  console.log(`[gxpm gate post-merge-reconcile] ${result.reason}`);
 }
 
 try {

@@ -50,6 +50,11 @@ interface WriteArtifactInput extends ArtifactInput {
   payload: unknown;
 }
 
+interface RewriteArtifactInput extends WriteArtifactInput {
+  timestamp?: string;
+  event?: StateEvent;
+}
+
 interface ReadArtifactInput extends ArtifactInput {
   type: ArtifactType | string;
 }
@@ -86,6 +91,46 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
     issueDir: paths.issueDir,
     event: artifactWrittenEvent(input.issueId, type, now, relativePath),
   });
+
+  return record;
+}
+
+export function rewriteArtifact(input: RewriteArtifactInput): ArtifactRecord {
+  const root = input.root ?? process.cwd();
+  const type = assertValidArtifactType(input.type);
+  const paths = getIssuePaths(root, input.issueId);
+  readIssueState({ root, issueId: input.issueId });
+
+  const artifactPath = join(paths.issueDir, "artifacts", `${type}.json`);
+  if (!existsSync(artifactPath)) {
+    throw new Error(`Artifact not found: ${type}`);
+  }
+
+  const now = input.timestamp ?? new Date().toISOString();
+  const relativePath = `artifacts/${type}.json`;
+  const artifact: StoredArtifact = {
+    schemaVersion: 1,
+    issueId: input.issueId,
+    type,
+    writtenAt: now,
+    payload: input.payload,
+  };
+  writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
+
+  const record: ArtifactRecord = {
+    schemaVersion: 1,
+    type,
+    path: relativePath,
+    writtenAt: now,
+  };
+  writeArtifactIndex(
+    paths.artifactIndexPath,
+    input.issueId,
+    upsertRecord(listArtifacts({ root, issueId: input.issueId }), record),
+  );
+  if (input.event) {
+    appendIssueEvent({ issueDir: paths.issueDir, event: input.event });
+  }
 
   return record;
 }

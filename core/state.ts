@@ -50,6 +50,7 @@ export interface StateEvent {
     | "issue.created"
     | "phase.transitioned"
     | "artifact.written"
+    | "artifact.reconciled"
     | "checkpoint.written"
     | "gate.blocked"
     | "gate.passed";
