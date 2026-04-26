@@ -1,10 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,8 +18,19 @@ import {
 } from "../core/wiki";
 
 function tempRoot() {
-  return mkdtempSync(join(tmpdir(), "gxpm-wiki-"));
+  const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-"));
+  createdRoots.push(root);
+  return root;
 }
+
+const createdRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of createdRoots) {
+    rmSync(root, { recursive: true, force: true });
+  }
+  createdRoots.length = 0;
+});
 
 function writeWikiPage(root: string, relativePath: string, content: string) {
   const path = join(root, ".qoder", "repowiki", "en", "content", relativePath);

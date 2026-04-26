@@ -274,9 +274,15 @@ function newestKnownWikiTimestamp(root: string) {
   walkFiles(repoWikiRoot, (file) => {
     if (file.endsWith(`${sep}repowiki-metadata.json`)) metadataFiles.push(file);
   });
-  const newest = metadataFiles
-    .map((file) => statSync(file).mtime.getTime())
-    .sort((a, b) => b - a)[0];
+  const timestamps: number[] = [];
+  for (const file of metadataFiles) {
+    try {
+      timestamps.push(statSync(file).mtime.getTime());
+    } catch {
+      // Metadata files are only freshness hints; skip them if they drift mid-scan.
+    }
+  }
+  const newest = timestamps.sort((a, b) => b - a)[0];
   return newest ? new Date(newest).toISOString() : undefined;
 }
 
