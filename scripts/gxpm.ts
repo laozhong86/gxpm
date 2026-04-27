@@ -36,6 +36,7 @@ import {
   markQoderWikiSync,
   type QoderWikiStatus,
 } from "../core/wiki";
+import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
@@ -286,6 +287,14 @@ function main(argv: string[]) {
 
   if (command === "gate" && subcommand === "post-merge-reconcile") {
     runPostMergeReconcileGate(argv, issueId);
+    return;
+  }
+
+  if (command === "cleanup" && subcommand === "land") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm cleanup land <issue-id> [--execute] [--force]");
+    }
+    runCleanupLandCommand(argv, issueId);
     return;
   }
 

@@ -58,7 +58,8 @@ export interface StateEvent {
     | "artifact.reconciled"
     | "checkpoint.written"
     | "gate.blocked"
-    | "gate.passed";
+    | "gate.passed"
+    | "cleanup.executed";
   issueId: string;
   timestamp: string;
   payload: Record<string, unknown>;

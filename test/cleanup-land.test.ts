@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeArtifact } from "../core/artifacts";
@@ -9,14 +9,15 @@ import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { enterPhase, output, runCli } from "./helpers/workflow";
 
 describe("cleanup land command", () => {
-  test("dry-run rejects cleanup land with Unknown command error", () => {
+  test("dry-run prints WOULD REMOVE and WOULD DELETE lines", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-dry-run-"));
     enterLandedIssue(root, "GXPM-700");
 
     const result = runCli(root, ["cleanup", "land", "GXPM-700"]);
 
-    expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain("Unknown command: cleanup land");
+    expect(result.exitCode).toBe(0);
+    expect(output(result)).toContain("WOULD REMOVE worktree:");
+    expect(output(result)).toContain("WOULD DELETE branch:");
   });
 
   test("refusal-path: phase is not land", () => {
@@ -43,29 +44,30 @@ describe("cleanup land command", () => {
     const result = runCli(root, ["cleanup", "land", "GXPM-701"]);
 
     expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain("Unknown command: cleanup land");
+    expect(output(result)).toContain("cleanup only applies to landed issues");
   });
 
   test("refusal-path: dispatch-handoff missing", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-missing-handoff-"));
-    // Set up issue in land phase without dispatch-handoff artifact
+    // Set up issue in land phase, then remove the dispatch-handoff artifact
     enterPhase(root, "GXPM-702", "land");
+    rmSync(join(root, ".gxpm", "issues", "GXPM-702", "artifacts", "dispatch-handoff.json"));
 
     const result = runCli(root, ["cleanup", "land", "GXPM-702"]);
 
     expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain("Unknown command: cleanup land");
+    expect(output(result)).toContain("cleanup requires dispatch-handoff artifact");
   });
 
-  test("execute-path rejects cleanup land with Unknown command error", () => {
+  test("execute-path: no cleanup.executed event written when execution fails", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-execute-"));
     enterLandedIssue(root, "GXPM-703");
 
     const paths = getIssuePaths(root, "GXPM-703");
+    // --execute with a nonexistent worktree path will fail at git status or worktree remove
     const result = runCli(root, ["cleanup", "land", "GXPM-703", "--execute"]);
 
     expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain("Unknown command: cleanup land");
 
     // Verify no cleanup.executed event was added
     const eventsContent = readFileSync(paths.eventsPath, "utf8");
