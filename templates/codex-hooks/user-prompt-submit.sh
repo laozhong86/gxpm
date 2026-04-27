@@ -35,9 +35,25 @@ ISSUE_ID=$(printf '%s' "$RESULT" | cut -f2)
 
 if [ ! -f "$CWD/.gxpm/issues/$ISSUE_ID/state.json" ]; then exit 0; fi
 
+SESSION_ID=$(cd "$CWD" && gxpm session-id 2>/dev/null || true)
+CURRENT_OWNER=$(cd "$CWD" && gxpm issue ownership "$ISSUE_ID" --field currentSession 2>/dev/null || true)
+if [ -n "$SESSION_ID" ]; then
+  if cd "$CWD" && gxpm issue ownership "$ISSUE_ID" --history-contains "$SESSION_ID" >/dev/null 2>&1; then
+    WAS_OWNER=1
+  else
+    WAS_OWNER=0
+  fi
+else
+  WAS_OWNER=0
+fi
+
 # Print status + next-step guidance to stdout (becomes additional context)
 {
   echo "gxpm context for $ISSUE_ID (referenced in prompt):"
+  if [ "$WAS_OWNER" = "1" ] && [ -n "$CURRENT_OWNER" ] && [ "$CURRENT_OWNER" != "$SESSION_ID" ]; then
+    echo ""
+    echo "ownership transferred: current owner is $CURRENT_OWNER"
+  fi
   echo ""
   cd "$CWD" && gxpm issue status "$ISSUE_ID" 2>/dev/null
   echo ""

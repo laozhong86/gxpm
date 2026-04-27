@@ -7,6 +7,7 @@ import {
   readIssueState,
   transitionIssuePhase,
 } from "../core/state";
+import { writeArtifact } from "../core/artifacts";
 import { initializeTriage } from "../core/triage";
 
 describe("gxpm state graph", () => {
@@ -16,6 +17,10 @@ describe("gxpm state graph", () => {
     const state = createIssueState({ root, issueId: "GXPM-1" });
 
     expect(state.currentPhase).toBe("triage");
+    expect((state as any).ownership).toMatchObject({
+      currentSession: expect.any(String),
+      lastTouchedAt: expect.any(String),
+    });
     expect(state.issueType).toBe("feature");
     expect(state.phaseHistory).toEqual([
       expect.objectContaining({ phase: "triage", fromPhase: null }),
@@ -84,5 +89,45 @@ describe("gxpm state graph", () => {
       "Invalid phase transition",
     );
     expect(readIssueState({ root, issueId: "GXPM-3" }).currentPhase).toBe("triage");
+  });
+
+  test("reads legacy state files without ownership metadata", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-legacy-state-"));
+    createIssueState({ root, issueId: "GXPM-4" });
+
+    const statePath = join(root, ".gxpm", "issues", "GXPM-4", "state.json");
+    const legacy = JSON.parse(readFileSync(statePath, "utf8"));
+    delete legacy.ownership;
+    readFileSync(statePath, "utf8");
+    require("node:fs").writeFileSync(statePath, `${JSON.stringify(legacy, null, 2)}\n`);
+
+    const state = readIssueState({ root, issueId: "GXPM-4" }) as any;
+    expect(state.currentPhase).toBe("triage");
+    expect(state.ownership).toBeUndefined();
+  });
+
+  test("records session id on phase transition events", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-transition-session-"));
+    process.env.CODEX_COMPANION_SESSION_ID = "transition-session";
+    createIssueState({ root, issueId: "GXPM-5" });
+    writeArtifact({ root, issueId: "GXPM-5", type: "acceptance-contract", payload: {} });
+
+    transitionIssuePhase({ root, issueId: "GXPM-5", nextPhase: "plan" });
+
+    const events = readFileSync(join(root, ".gxpm", "issues", "GXPM-5", "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events.at(-1)).toMatchObject({
+      type: "phase.transitioned",
+      sessionId: "codex:transition-session",
+    });
+    expect(readIssueState({ root, issueId: "GXPM-5" }) as any).toMatchObject({
+      ownership: {
+        currentSession: "codex:transition-session",
+        lastTouchedAt: expect.any(String),
+      },
+    });
+    delete process.env.CODEX_COMPANION_SESSION_ID;
   });
 });

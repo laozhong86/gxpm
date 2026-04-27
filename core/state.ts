@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
+import { resolveSessionId } from "./session";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -31,6 +32,18 @@ export const ISSUE_TYPES = ["feature", "meta", "spike"] as const;
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
+export interface IssueOwnershipHistoryEntry {
+  sessionId: string;
+  firstTouch: string;
+  lastTouch: string;
+}
+
+export interface IssueOwnership {
+  currentSession: string;
+  lastTouchedAt: string;
+  history: IssueOwnershipHistoryEntry[];
+}
+
 export interface IssueState {
   schemaVersion: 1;
   issueId: string;
@@ -40,6 +53,7 @@ export interface IssueState {
   updatedAt: string;
   stateRoot: string;
   artifactRoot: string;
+  ownership?: IssueOwnership;
   archived?: boolean;
   archivedAt?: string | null;
   phaseHistory: Array<{
@@ -58,9 +72,11 @@ export interface StateEvent {
     | "artifact.reconciled"
     | "checkpoint.written"
     | "gate.blocked"
-    | "gate.passed";
+    | "gate.passed"
+    | "ownership.changed";
   issueId: string;
   timestamp: string;
+  sessionId?: string;
   payload: Record<string, unknown>;
 }
 
@@ -107,6 +123,7 @@ export function createIssueState(input: IssueInput): IssueState {
   mkdirSync(join(paths.issueDir, "memory"), { recursive: true });
 
   const now = new Date().toISOString();
+  const sessionId = resolveSessionId();
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
@@ -116,6 +133,11 @@ export function createIssueState(input: IssueInput): IssueState {
     updatedAt: now,
     stateRoot: paths.issueRoot,
     artifactRoot: paths.artifactRoot,
+    ownership: {
+      currentSession: sessionId,
+      lastTouchedAt: now,
+      history: [{ sessionId, firstTouch: now, lastTouch: now }],
+    },
     phaseHistory: [{ phase: "triage", enteredAt: now, fromPhase: null }],
   };
 
@@ -139,6 +161,7 @@ export function createIssueState(input: IssueInput): IssueState {
       type: "issue.created",
       issueId: input.issueId,
       timestamp: now,
+      sessionId,
       payload: { initialPhase: "triage", issueType: state.issueType },
     },
   });
@@ -155,7 +178,11 @@ export function readIssueState(input: IssueInput): IssueState {
   }
 
   const state = JSON.parse(readFileSync(paths.statePath, "utf8")) as IssueState;
-  return { ...state, issueType: normalizeIssueType(state.issueType) };
+  return {
+    ...state,
+    issueType: normalizeIssueType(state.issueType),
+    ownership: normalizeOwnership(state.ownership),
+  };
 }
 
 export function transitionIssuePhase(input: TransitionInput): IssueState {
@@ -181,15 +208,19 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
   });
 
   const now = new Date().toISOString();
-  const updated: IssueState = {
-    ...state,
-    currentPhase: nextPhase,
-    updatedAt: now,
-    phaseHistory: [
-      ...state.phaseHistory,
-      { phase: nextPhase, enteredAt: now, fromPhase: state.currentPhase },
-    ],
-  };
+  const sessionId = resolveSessionId();
+  const updated: IssueState = touchIssueOwnership({
+    state: {
+      ...state,
+      currentPhase: nextPhase,
+      updatedAt: now,
+      phaseHistory: [
+        ...state.phaseHistory,
+        { phase: nextPhase, enteredAt: now, fromPhase: state.currentPhase },
+      ],
+    },
+    sessionId,
+  });
 
   writeJson(paths.statePath, updated);
   const graph = JSON.parse(readFileSync(paths.graphPath, "utf8"));
@@ -201,6 +232,16 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
       { fromPhase: state.currentPhase, toPhase: nextPhase, timestamp: now },
     ],
   });
+  const ownershipEvent = buildOwnershipChangedEvent({
+    issueId: input.issueId,
+    timestamp: now,
+    previousState: state,
+    nextState: updated,
+    sessionId,
+  });
+  if (ownershipEvent) {
+    appendIssueEvent({ issueDir: paths.issueDir, event: ownershipEvent });
+  }
   appendIssueEvent({
     issueDir: paths.issueDir,
     event: {
@@ -208,6 +249,7 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
       type: "phase.transitioned",
       issueId: input.issueId,
       timestamp: now,
+      sessionId,
       payload: { fromPhase: state.currentPhase, toPhase: nextPhase },
     },
   });
@@ -269,6 +311,126 @@ function writeJson(path: string, value: unknown) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+export function touchIssueOwnership(input: { state: IssueState; sessionId: string }): IssueState {
+  const ownership = normalizeOwnership(input.state.ownership);
+  const touchedAt = input.state.updatedAt;
+  if (!ownership) {
+    return {
+      ...input.state,
+      ownership: {
+        currentSession: input.sessionId,
+        lastTouchedAt: touchedAt,
+        history: [{ sessionId: input.sessionId, firstTouch: touchedAt, lastTouch: touchedAt }],
+      },
+    };
+  }
+
+  const existingEntry = ownership.history.find((entry) => entry.sessionId === input.sessionId);
+  const nextHistory = existingEntry
+    ? ownership.history.map((entry) =>
+        entry.sessionId === input.sessionId ? { ...entry, lastTouch: touchedAt } : entry,
+      )
+    : [...ownership.history, { sessionId: input.sessionId, firstTouch: touchedAt, lastTouch: touchedAt }];
+
+  return {
+    ...input.state,
+    ownership: {
+      currentSession: input.sessionId,
+      lastTouchedAt: touchedAt,
+      history: nextHistory,
+    },
+  };
+}
+
+export function buildOwnershipChangedEvent(input: {
+  issueId: string;
+  timestamp: string;
+  previousState: IssueState;
+  nextState: IssueState;
+  sessionId: string;
+}): StateEvent | null {
+  const before = normalizeOwnership(input.previousState.ownership);
+  const after = normalizeOwnership(input.nextState.ownership);
+  if (!before || !after || before.currentSession === after.currentSession) {
+    return null;
+  }
+  return {
+    schemaVersion: 1,
+    type: "ownership.changed",
+    issueId: input.issueId,
+    timestamp: input.timestamp,
+    sessionId: input.sessionId,
+    payload: {
+      fromSession: before.currentSession,
+      toSession: after.currentSession,
+      changedAt: input.timestamp,
+    },
+  };
+}
+
+function normalizeOwnership(value: unknown): IssueOwnership | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const currentSession = (value as { currentSession?: unknown }).currentSession;
+  if (typeof currentSession !== "string" || !currentSession.trim()) {
+    return undefined;
+  }
+
+  const history = normalizeOwnershipHistory((value as { history?: unknown }).history);
+  const lastTouchedAt =
+    typeof (value as { lastTouchedAt?: unknown }).lastTouchedAt === "string"
+      ? ((value as { lastTouchedAt?: string }).lastTouchedAt as string)
+      : history.find((entry) => entry.sessionId === currentSession)?.lastTouch;
+
+  const ensuredHistory = ensureCurrentSessionHistory(history, currentSession, lastTouchedAt);
+  return {
+    currentSession,
+    lastTouchedAt: lastTouchedAt ?? ensuredHistory.find((entry) => entry.sessionId === currentSession)?.lastTouch ?? new Date(0).toISOString(),
+    history: ensuredHistory,
+  };
+}
+
+function normalizeOwnershipHistory(value: unknown): IssueOwnershipHistoryEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  if (value.every((item) => typeof item === "string" && item.trim().length > 0)) {
+    return value.map((sessionId) => ({
+      sessionId,
+      firstTouch: new Date(0).toISOString(),
+      lastTouch: new Date(0).toISOString(),
+    }));
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map((item) => {
+      const sessionId = typeof item.sessionId === "string" ? item.sessionId : "";
+      const firstTouch = typeof item.firstTouch === "string" ? item.firstTouch : "";
+      const lastTouch = typeof item.lastTouch === "string" ? item.lastTouch : firstTouch;
+      return { sessionId, firstTouch, lastTouch };
+    })
+    .filter((entry) => entry.sessionId.trim().length > 0 && entry.firstTouch && entry.lastTouch);
+}
+
+function ensureCurrentSessionHistory(
+  history: IssueOwnershipHistoryEntry[],
+  currentSession: string,
+  lastTouchedAt?: string,
+): IssueOwnershipHistoryEntry[] {
+  const existing = history.find((entry) => entry.sessionId === currentSession);
+  if (existing) {
+    if (lastTouchedAt && existing.lastTouch !== lastTouchedAt) {
+      return history.map((entry) =>
+        entry.sessionId === currentSession ? { ...entry, lastTouch: lastTouchedAt } : entry,
+      );
+    }
+    return history;
+  }
+  const touch = lastTouchedAt ?? new Date(0).toISOString();
+  return [...history, { sessionId: currentSession, firstTouch: touch, lastTouch: touch }];
+}
+
 function assertPhaseGate(input: {
   issueId: string;
   fromPhase: GxpmPhase;
@@ -290,6 +452,7 @@ function assertPhaseGate(input: {
         type: "gate.passed",
         issueId: input.issueId,
         timestamp: now,
+        sessionId: resolveSessionId(),
         payload: {
           fromPhase: input.fromPhase,
           toPhase: input.nextPhase,
@@ -308,6 +471,7 @@ function assertPhaseGate(input: {
       type: "gate.blocked",
       issueId: input.issueId,
       timestamp: now,
+      sessionId: resolveSessionId(),
       payload: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
