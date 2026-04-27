@@ -264,6 +264,22 @@ gxpm issue create --auto-id
 This picks the next free `GXPM-N` and avoids collisions with existing tracked
 issues. Only specify a literal ID when migrating from an external tracker.
 
+## Issue Types
+
+Use `feature` for normal delivery work, `meta` for long-lived trackers such as
+retro notes or observation logs, and `spike` for bounded investigation work:
+
+```bash
+gxpm issue create --auto-id --type meta
+gxpm issue create --auto-id --type spike
+```
+
+`feature` is the default when `--type` is omitted or an older state file has no
+`issueType`. Issue type is only classification: it must not alter phase gates,
+required artifacts, review/ship governance, or archive behavior. The default
+`gxpm issue list` view shows recent feature work; use `--type`, `--limit`, or
+`--all` when you need a different slice.
+
 ## Worktree Policy (resolution chain)
 
 Whether a feature must be developed in a worktree depends on the resolved
