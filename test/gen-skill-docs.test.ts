@@ -56,4 +56,17 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("## Issue Types");
     expect(generated).toContain("gxpm issue create --auto-id --type meta");
   });
+
+  test("generated gxpm skill documents cmux browser investigation rules", () => {
+    const root = join(import.meta.dir, "..");
+    const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
+
+    expect(generated).toContain("## Browser Investigation (cmux session only)");
+    expect(generated).toContain("CMUX_SURFACE_ID");
+    expect(generated).toContain("snapshot refs are ephemeral");
+    expect(generated).toContain("Unsupported browser subcommand");
+    expect(generated).toContain("not_supported on WKWebView");
+    expect(generated).toContain("agent-browser");
+    expect(generated).toContain("disclosure-only click after explicit user confirmation");
+  });
 });
