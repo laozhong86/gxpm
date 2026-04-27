@@ -41,6 +41,7 @@ import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
+import { probeArtifactPayloadCommands } from "../core/command-probe";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -250,7 +251,7 @@ function main(argv: string[]) {
 
   if (command === "artifact" && subcommand === "write") {
     if (!issueId || !value) {
-      throw new Error("Usage: gxpm artifact write <issue-id> <type> --json <json> | --from <file> | --stdin");
+      throw new Error("Usage: gxpm artifact write <issue-id> <type> [--probe-cli] --json <json> | --from <file> | --stdin");
     }
     runArtifactWrite(argv, issueId, value);
     return;
@@ -286,6 +287,11 @@ function main(argv: string[]) {
 
   if (command === "gate" && subcommand === "post-merge-reconcile") {
     runPostMergeReconcileGate(argv, issueId);
+    return;
+  }
+
+  if (command === "gate" && subcommand === "brainstorm-skip") {
+    runBrainstormSkipGate(argv, issueId);
     return;
   }
 
@@ -609,8 +615,50 @@ function runArtifactEdit(issueId: string, type: string) {
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {
   const payload = readJsonPayloadFromArgs(argv, "gxpm artifact write");
+  if (argv.includes("--probe-cli")) {
+    const findings = probeArtifactPayloadCommands(payload);
+    if (findings.length > 0) {
+      const detail = findings.map((finding) => `${finding.command} (${finding.reason})`).join("\n");
+      throw new Error(`gxpm artifact write: invalid command references\n${detail}`);
+    }
+  }
   const record = writeArtifact({ issueId, type, payload });
   console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
+}
+
+function runBrainstormSkipGate(argv: string[], issueId: string | undefined) {
+  if (!issueId) {
+    throw new Error("Usage: gxpm gate brainstorm-skip <issue-id> --reason <text>");
+  }
+  const reason = optionValue(argv, "--reason");
+  if (!reason) {
+    throw new Error("Usage: gxpm gate brainstorm-skip <issue-id> --reason <text>");
+  }
+
+  const stateRoot = process.cwd();
+  const paths = getIssuePaths(stateRoot, issueId);
+  const intake = readArtifact({ root: stateRoot, issueId, type: "issue-intake" });
+  const payload = asRecord(intake.payload);
+  const acceptance = Array.isArray(payload.acceptance) ? payload.acceptance : [];
+  const antiPatterns = Array.isArray(payload.verified_pitfalls_to_avoid)
+    ? payload.verified_pitfalls_to_avoid
+    : [];
+
+  const event: StateEvent = {
+    schemaVersion: 1,
+    type: "gate.brainstorm.skipped",
+    issueId,
+    timestamp: new Date().toISOString(),
+    payload: {
+      reason,
+      intake_completeness_score: acceptance.length > 0 ? 1 : 0,
+      ac_count: acceptance.length,
+      anti_pattern_count: antiPatterns.length,
+    },
+  };
+
+  appendIssueEvent({ issueDir: paths.issueDir, event });
+  console.log(`[gxpm gate brainstorm-skip] gate.brainstorm.skipped: ${reason}`);
 }
 
 function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
@@ -734,6 +782,12 @@ function payloadTitle(payload: unknown) {
   if (!payload || typeof payload !== "object") return null;
   const title = (payload as Record<string, unknown>).title;
   return typeof title === "string" && title.trim() ? title : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function currentGitBranch() {
