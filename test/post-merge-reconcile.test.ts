@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
@@ -174,7 +174,9 @@ function readEvents(root: string, issueId: string): Array<{
   type: string;
   payload: Record<string, unknown>;
 }> {
-  const raw = readFileSync(join(root, ".gxpm", "issues", issueId, "events.jsonl"), "utf8").trim();
+  const eventsPath = join(root, ".gxpm", "issues", issueId, "events.jsonl");
+  if (!existsSync(eventsPath)) return [];
+  const raw = readFileSync(eventsPath, "utf8").trim();
   if (!raw) return [];
   return raw.split("\n").map((line) => JSON.parse(line));
 }
@@ -183,8 +185,9 @@ function initGitCommit(root: string) {
   execSync("git init -q", { cwd: root });
   writeFileSync(join(root, "tracked.txt"), "initial\n");
   execSync("git add tracked.txt", { cwd: root });
-  execSync("git -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial", {
-    cwd: root,
-  });
+  execSync(
+    "git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial",
+    { cwd: root },
+  );
   return execSync("git rev-parse HEAD", { cwd: root }).toString().trim();
 }
