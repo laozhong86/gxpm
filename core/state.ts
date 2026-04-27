@@ -27,9 +27,14 @@ export const GXPM_PHASES = [
 
 export type GxpmPhase = (typeof GXPM_PHASES)[number];
 
+export const ISSUE_TYPES = ["feature", "meta", "spike"] as const;
+
+export type IssueType = (typeof ISSUE_TYPES)[number];
+
 export interface IssueState {
   schemaVersion: 1;
   issueId: string;
+  issueType?: IssueType;
   currentPhase: GxpmPhase;
   createdAt: string;
   updatedAt: string;
@@ -62,6 +67,7 @@ export interface StateEvent {
 interface IssueInput {
   root?: string;
   issueId: string;
+  issueType?: IssueType;
 }
 
 interface TransitionInput extends IssueInput {
@@ -104,6 +110,7 @@ export function createIssueState(input: IssueInput): IssueState {
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
+    issueType: input.issueType ?? "feature",
     currentPhase: "triage",
     createdAt: now,
     updatedAt: now,
@@ -132,7 +139,7 @@ export function createIssueState(input: IssueInput): IssueState {
       type: "issue.created",
       issueId: input.issueId,
       timestamp: now,
-      payload: { initialPhase: "triage" },
+      payload: { initialPhase: "triage", issueType: state.issueType },
     },
   });
 
@@ -147,7 +154,8 @@ export function readIssueState(input: IssueInput): IssueState {
     throw new Error(`Issue state not found: ${input.issueId}`);
   }
 
-  return JSON.parse(readFileSync(paths.statePath, "utf8")) as IssueState;
+  const state = JSON.parse(readFileSync(paths.statePath, "utf8")) as IssueState;
+  return { ...state, issueType: normalizeIssueType(state.issueType) };
 }
 
 export function transitionIssuePhase(input: TransitionInput): IssueState {
@@ -234,6 +242,14 @@ export function getNextPhase(phase: GxpmPhase) {
 
 export function isGxpmPhase(value: string): value is GxpmPhase {
   return GXPM_PHASES.includes(value as GxpmPhase);
+}
+
+export function isIssueType(value: string): value is IssueType {
+  return ISSUE_TYPES.includes(value as IssueType);
+}
+
+export function normalizeIssueType(value: unknown): IssueType {
+  return typeof value === "string" && isIssueType(value) ? value : "feature";
 }
 
 function assertValidIssueId(issueId: string) {

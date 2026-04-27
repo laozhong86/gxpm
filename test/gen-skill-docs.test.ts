@@ -53,5 +53,7 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("Codex `request_user_input`");
     expect(generated).toContain("External tracking ids are not gxpm issue ids");
     expect(generated).toContain("`gxpm issue create --auto-id`");
+    expect(generated).toContain("## Issue Types");
+    expect(generated).toContain("gxpm issue create --auto-id --type meta");
   });
 });

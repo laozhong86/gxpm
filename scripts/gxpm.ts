@@ -4,9 +4,12 @@ import {
   appendIssueEvent,
   createIssueState,
   getIssuePaths,
+  isIssueType,
+  ISSUE_TYPES,
   readIssueState,
   setIssueArchived,
   transitionIssuePhase,
+  type IssueType,
   type StateEvent,
 } from "../core/state";
 import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
@@ -26,6 +29,7 @@ import {
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../core/issues";
 import { initializeLandFindings, reconcileLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
+import { ensureQoderWikiLink } from "../core/qoder";
 import {
   getQoderWikiStatus,
   markQoderWikiReminder,
@@ -37,6 +41,10 @@ import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
+
+const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
+const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
+const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}]`;
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -73,6 +81,11 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "qoder") {
+    runQoderCommand(argv, subcommand);
+    return;
+  }
+
   if (command === "doctor") {
     const json = argv.includes("--json");
     const report = runDoctor();
@@ -85,19 +98,9 @@ function main(argv: string[]) {
   }
 
   if (command === "issue" && subcommand === "create") {
-    let resolvedId = issueId;
-    if (!resolvedId || resolvedId === "--auto-id") {
-      if (argv.includes("--auto-id") || !resolvedId) {
-        if (!resolvedId && !argv.includes("--auto-id")) {
-          throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
-        }
-        resolvedId = getNextAvailableIssueId();
-      }
-    }
-    if (!resolvedId) {
-      throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id)");
-    }
-    const state = createIssueState({ issueId: resolvedId });
+    const resolvedId = resolveIssueCreateId(argv);
+    const issueType = parseIssueTypeOption(argv, "feature");
+    const state = createIssueState({ issueId: resolvedId, issueType });
     console.log(`created ${state.issueId} at ${state.currentPhase}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), resolvedId).statePath}`);
     return;
@@ -119,13 +122,18 @@ function main(argv: string[]) {
     const json = argv.includes("--json");
     const includeAll = argv.includes("--all");
     const archivedOnly = argv.includes("--archived");
+    const types = parseIssueTypesOption(argv);
+    const limit = parsePositiveIntegerOption(argv, "--limit");
     const recentIdx = argv.indexOf("--recent");
     const recentN = recentIdx >= 0 ? parseInt(argv[recentIdx + 1] ?? "5", 10) || 5 : 0;
     let entries: ReturnType<typeof listIssues>;
     if (recentN > 0) {
+      if (types || limit !== undefined) {
+        throw new Error("gxpm issue list --recent cannot be combined with --type or --limit");
+      }
       entries = recentLandedIssues({ limit: recentN });
     } else {
-      entries = listIssues({ includeAll, archivedOnly });
+      entries = listIssues({ includeAll, archivedOnly, types, limit });
     }
     if (json) {
       console.log(JSON.stringify(entries, null, 2));
@@ -139,12 +147,13 @@ function main(argv: string[]) {
       return;
     }
     const idWidth = Math.max(8, ...entries.map((e) => e.issueId.length));
+    const typeWidth = Math.max(7, ...entries.map((e) => e.issueType.length));
     const phaseWidth = Math.max(13, ...entries.map((e) => e.currentPhase.length));
-    console.log(`${"ISSUE".padEnd(idWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
+    console.log(`${"ISSUE".padEnd(idWidth)}  ${"TYPE".padEnd(typeWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
     for (const entry of entries) {
       const flags = entry.archived ? "archived" : "";
       console.log(
-        `${entry.issueId.padEnd(idWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
+        `${entry.issueId.padEnd(idWidth)}  ${entry.issueType.padEnd(typeWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
       );
     }
     return;
@@ -372,6 +381,26 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
   }
 
   throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+}
+
+function runQoderCommand(argv: string[], subcommand: string | undefined) {
+  if (subcommand === "link") {
+    const result = ensureQoderWikiLink({
+      target: optionValue(argv, "--target") ?? undefined,
+      sharedRoot: optionValue(argv, "--shared-root") ?? undefined,
+      replace: argv.includes("--replace"),
+    });
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`linked .qoder/repowiki -> ${result.sharedRoot}`);
+    console.log(`target: ${result.targetRoot}`);
+    console.log(`action: ${result.action}`);
+    return;
+  }
+
+  throw new Error("Usage: gxpm qoder link [--target <repo-or-worktree>] [--shared-root <path>] [--replace] [--json]");
 }
 
 function formatQoderWikiStatus(status: QoderWikiStatus) {
@@ -615,6 +644,83 @@ function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
       `${usagePrefix}: invalid JSON payload — ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+function resolveIssueCreateId(argv: string[]) {
+  const args = argv.slice(2);
+  const hasAutoId = args.includes("--auto-id");
+  const positional: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--auto-id") continue;
+    if (arg === "--type") {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown option for gxpm issue create: ${arg}`);
+    }
+    positional.push(arg);
+  }
+
+  if (hasAutoId && positional.length > 0) {
+    throw new Error(ISSUE_CREATE_USAGE);
+  }
+  if (positional.length > 1) {
+    throw new Error(ISSUE_CREATE_USAGE);
+  }
+  if (positional[0]) return positional[0];
+  if (hasAutoId) return getNextAvailableIssueId();
+  throw new Error(ISSUE_CREATE_USAGE);
+}
+
+function parseIssueTypeOption(argv: string[], fallback: IssueType): IssueType {
+  if (!argv.includes("--type")) return fallback;
+  return parseIssueType(optionRequiredValue(argv, "--type"));
+}
+
+function parseIssueTypesOption(argv: string[]): IssueType[] | undefined {
+  if (!argv.includes("--type")) return undefined;
+  const raw = optionRequiredValue(argv, "--type");
+  const values = raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (values.length === 0) {
+    throw new Error(`--type requires one or more of: ${ISSUE_TYPE_LIST}`);
+  }
+  return values.map(parseIssueType);
+}
+
+function parseIssueType(value: string): IssueType {
+  if (!isIssueType(value)) {
+    throw new Error(`Invalid issue type: ${value}; expected ${ISSUE_TYPE_LIST}`);
+  }
+  return value;
+}
+
+function formatList(values: readonly string[]) {
+  if (values.length <= 1) return values.join("");
+  return `${values.slice(0, -1).join(", ")}, or ${values.at(-1)}`;
+}
+
+function parsePositiveIntegerOption(argv: string[], option: string) {
+  if (!argv.includes(option)) return undefined;
+  const raw = optionRequiredValue(argv, option);
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 1 || String(value) !== raw) {
+    throw new Error(`${option} requires a positive integer`);
+  }
+  return value;
+}
+
+function optionRequiredValue(argv: string[], option: string) {
+  const value = optionValue(argv, option);
+  if (!value) {
+    throw new Error(`${option} requires a value`);
+  }
+  return value;
 }
 
 function optionValue(argv: string[], option: string) {

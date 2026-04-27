@@ -16,6 +16,7 @@ describe("gxpm state graph", () => {
     const state = createIssueState({ root, issueId: "GXPM-1" });
 
     expect(state.currentPhase).toBe("triage");
+    expect(state.issueType).toBe("feature");
     expect(state.phaseHistory).toEqual([
       expect.objectContaining({ phase: "triage", fromPhase: null }),
     ]);
@@ -33,6 +34,16 @@ describe("gxpm state graph", () => {
       .map((line) => JSON.parse(line));
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ schemaVersion: 1, type: "issue.created", issueId: "GXPM-1" });
+  });
+
+  test("creates explicit issue types without changing the phase graph", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-state-type-"));
+
+    const state = createIssueState({ root, issueId: "GXPM-META", issueType: "meta" });
+
+    expect(state.issueType).toBe("meta");
+    expect(state.currentPhase).toBe("triage");
+    expect(readIssueState({ root, issueId: "GXPM-META" }).issueType).toBe("meta");
   });
 
   test("advances to the next phase and records history plus event log", () => {

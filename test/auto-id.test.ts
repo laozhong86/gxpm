@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getNextAvailableIssueId, recentLandedIssues } from "../core/issues";
-import { createIssueState, transitionIssuePhase } from "../core/state";
+import { createIssueState, readIssueState, transitionIssuePhase } from "../core/state";
 import { writeArtifact } from "../core/artifacts";
 import { enterPhase, output, runCli } from "./helpers/workflow";
 
@@ -85,6 +85,25 @@ describe("gxpm issue create --auto-id CLI", () => {
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("created GXPM-4");
   });
+
+  test("writes explicit issue type when --type is passed", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-type-"));
+
+    const r = runCli(root, ["issue", "create", "--auto-id", "--type", "meta"]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("created GXPM-1");
+    expect(readIssueState({ root, issueId: "GXPM-1" }).issueType).toBe("meta");
+  });
+
+  test("rejects mixing a literal issue id with --auto-id", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-auto-positional-"));
+
+    const r = runCli(root, ["issue", "create", "GXPM-1", "--auto-id"]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("Usage: gxpm issue create");
+  });
 });
 
 describe("gxpm issue list --recent CLI", () => {
@@ -98,5 +117,17 @@ describe("gxpm issue list --recent CLI", () => {
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("GXPM-LAND-A");
     expect(output(r)).toContain("land");
+  });
+
+  test("--recent rejects type and limit filters", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-recent-filter-"));
+
+    const typeFilter = runCli(root, ["issue", "list", "--recent", "5", "--type", "meta"]);
+    const limitFilter = runCli(root, ["issue", "list", "--recent", "5", "--limit", "2"]);
+
+    expect(typeFilter.exitCode).toBe(1);
+    expect(limitFilter.exitCode).toBe(1);
+    expect(output(typeFilter)).toContain("--recent cannot be combined");
+    expect(output(limitFilter)).toContain("--recent cannot be combined");
   });
 });
