@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
@@ -26,6 +26,10 @@ describe("self-review gate", () => {
       risks: [],
       status: "draft",
       summary: "",
+      plan_lint_findings: {
+        hasFindings: false,
+        items: [],
+      },
     });
   });
 
@@ -57,6 +61,26 @@ describe("self-review gate", () => {
       type: "gate.passed",
       payload: { requiredArtifact: "self-review" },
     });
+  });
+
+  test("self-review initializer records plan_lint_findings from codex plan logs", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-self-review-plan-lint-"));
+    enterPhase(root, "GXPM-84", "ac-check");
+    const issueDir = join(root, ".gxpm", "issues", "GXPM-84");
+    writeFileSync(
+      join(issueDir, "codex-plans.jsonl"),
+      JSON.stringify({
+        tool_name: "update_plan",
+        arguments: { steps: [{ description: "推进到 implement phase" }] },
+      }) + "\n",
+    );
+
+    initializeSelfReview({ root, issueId: "GXPM-84" });
+    const payload = readArtifact({ root, issueId: "GXPM-84", type: "self-review" }).payload as any;
+
+    expect(payload.plan_lint_findings.hasFindings).toBe(true);
+    expect(payload.plan_lint_findings.items[0].text).toContain("推进到 implement phase");
+    expect(payload.plan_lint_findings.items[0].matchedKeywords).toContain("implement");
   });
 
   test("CLI supports self review init and artifact-backed self-review transition", () => {

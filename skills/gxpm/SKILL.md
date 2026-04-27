@@ -91,6 +91,28 @@ If no state exists, create it before phase work:
 gxpm issue create <issue-id>
 ```
 
+## Session Ownership
+
+Issue ownership is soft state, not a write lock. gxpm records the latest writing
+session plus prior owners so hooks can warn a returning session when ownership
+has moved.
+
+```bash
+gxpm session-id
+gxpm issue ownership <issue-id>
+gxpm issue ownership <issue-id> --field currentSession
+gxpm issue ownership <issue-id> --history-contains <session-id>
+```
+
+Host session id precedence is:
+
+1. `CODEX_COMPANION_SESSION_ID`
+2. `CMUX_SURFACE_ID`
+3. generated fallback id
+
+Hooks should only mention ownership transfer when the current prompt names the
+issue and the current session appears in that issue's ownership history.
+
 ## Optional Qoder Repo Wiki Preflight
 
 When a repo has `.qoder/repowiki`, treat it as an optional navigation aid
@@ -321,6 +343,14 @@ Skip this gate only when the user explicitly says to proceed (for example,
 is purely read-only/trivial. External tracking ids are not gxpm issue ids; use
 `gxpm issue create --auto-id` for local state.
 
+If you intentionally skip the clarification pause because `issue-intake` is already exhaustive and unambiguous, record that decision:
+
+```bash
+gxpm gate brainstorm-skip <issue-id> --reason "intake already exhaustive"
+```
+
+This is only for the real skip path. Do not add it to normal brainstorming flows.
+
 ## Persist Design Before Phase Advance
 
 Any non-trivial proposal (feature design, scope decision, alternative analysis)
@@ -337,6 +367,16 @@ Do not leave the proposal only in the chat transcript.
 
 This is gxpm's checkpoint discipline: the artifact tree is the source of truth,
 chat history is volatile.
+
+## Artifact command verification
+
+When an artifact payload references concrete CLI commands in fenced code blocks or inline backticks, prefer:
+
+```bash
+gxpm artifact write <issue-id> <artifact-type> --probe-cli --json '...'
+```
+
+Use `--probe-cli` when the payload names concrete `gxpm`, `cmux`, `agent-browser`, `git`, `bun`, or `npm` commands. If probing reports an invalid command reference, fix the payload before writing the artifact.
 
 ## Codex `update_plan` vs gxpm Phase
 
@@ -371,6 +411,8 @@ during triage). The gxpm phase tree is the top-level execution contract.
 
 The bad example duplicates gxpm phase progression. `gxpm issue history <id>`
 is the canonical timeline; `update_plan` is for the work-of-the-moment.
+
+Codex `update_plan` calls are observability data, not top-level gxpm state. The PreToolUse hook records raw `update_plan` payloads for later self-review linting. Keep `update_plan` items intra-phase and never mirror gxpm phases there.
 
 ## Canonical State Location
 

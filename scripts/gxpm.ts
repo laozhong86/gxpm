@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   appendIssueEvent,
   createIssueState,
@@ -42,6 +43,8 @@ import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
+import { probeArtifactPayloadCommands } from "../core/command-probe";
+import { resolveSessionId } from "../core/session";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -57,6 +60,11 @@ function main(argv: string[]) {
 
   if (command === "version" || command === "--version" || command === "-v") {
     console.log(readGxpmVersion());
+    return;
+  }
+
+  if (command === "session-id") {
+    console.log(resolveSessionId());
     return;
   }
 
@@ -210,6 +218,14 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "issue" && subcommand === "ownership") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue ownership <issue-id> [--field <name>] [--history-contains <session-id>]");
+    }
+    runIssueOwnership(argv, issueId);
+    return;
+  }
+
   if (command === "issue" && subcommand === "transition") {
     if (!issueId || !value) {
       throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
@@ -251,7 +267,7 @@ function main(argv: string[]) {
 
   if (command === "artifact" && subcommand === "write") {
     if (!issueId || !value) {
-      throw new Error("Usage: gxpm artifact write <issue-id> <type> --json <json> | --from <file> | --stdin");
+      throw new Error("Usage: gxpm artifact write <issue-id> <type> [--probe-cli] --json <json> | --from <file> | --stdin");
     }
     runArtifactWrite(argv, issueId, value);
     return;
@@ -287,6 +303,11 @@ function main(argv: string[]) {
 
   if (command === "gate" && subcommand === "post-merge-reconcile") {
     runPostMergeReconcileGate(argv, issueId);
+    return;
+  }
+
+  if (command === "gate" && subcommand === "brainstorm-skip") {
+    runBrainstormSkipGate(argv, issueId);
     return;
   }
 
@@ -495,8 +516,41 @@ function formatEventDetail(event: StateEvent): string {
     case "gate.blocked":
       if (p.gate) return `${p.gate}: ${p.reason ?? ""}`;
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} blocked: ${p.missingArtifact ?? ""}`;
+    case "ownership.changed":
+      return `${p.fromSession ?? "?"} → ${p.toSession ?? "?"}`;
     default:
       return JSON.stringify(p);
+  }
+}
+
+function runIssueOwnership(argv: string[], issueId: string) {
+  const state = readIssueState({ issueId });
+  const ownership = state.ownership;
+  const field = optionValue(argv, "--field");
+  const historyContains = optionValue(argv, "--history-contains");
+
+  if (historyContains) {
+    process.exit(ownership?.history.some((entry) => entry.sessionId === historyContains) ? 0 : 1);
+  }
+
+  if (field) {
+    if (field === "currentSession") {
+      console.log(ownership?.currentSession ?? "");
+      return;
+    }
+    if (field === "history") {
+      console.log(JSON.stringify(ownership?.history ?? []));
+      return;
+    }
+    throw new Error(`Unknown ownership field: ${field}`);
+  }
+
+  console.log(`issueId: ${state.issueId}`);
+  console.log(`currentSession: ${ownership?.currentSession ?? ""}`);
+  console.log("history:");
+  console.log("session\tfirstTouch\tlastTouch");
+  for (const entry of ownership?.history ?? []) {
+    console.log(`${entry.sessionId}\t${entry.firstTouch}\t${entry.lastTouch}`);
   }
 }
 
@@ -581,7 +635,10 @@ function runArtifactEdit(issueId: string, type: string) {
     initial = `${JSON.stringify(stored.payload, null, 2)}\n`;
   }
 
-  const tmpFile = `/tmp/gxpm-edit-${issueId}-${type}-${Date.now()}.json`;
+  const tmpFile = join(
+    mkdtempSync(join(tmpdir(), `gxpm-edit-${issueId}-${type}-`)),
+    `${type}.json`,
+  );
   writeFileSync(tmpFile, initial);
 
   const editorResult = Bun.spawnSync({
@@ -618,8 +675,50 @@ function runArtifactEdit(issueId: string, type: string) {
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {
   const payload = readJsonPayloadFromArgs(argv, "gxpm artifact write");
+  if (argv.includes("--probe-cli")) {
+    const findings = probeArtifactPayloadCommands(payload);
+    if (findings.length > 0) {
+      const detail = findings.map((finding) => `${finding.command} (${finding.reason})`).join("\n");
+      throw new Error(`gxpm artifact write: invalid command references\n${detail}`);
+    }
+  }
   const record = writeArtifact({ issueId, type, payload });
   console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
+}
+
+function runBrainstormSkipGate(argv: string[], issueId: string | undefined) {
+  if (!issueId) {
+    throw new Error("Usage: gxpm gate brainstorm-skip <issue-id> --reason <text>");
+  }
+  const reason = optionValue(argv, "--reason");
+  if (!reason) {
+    throw new Error("Usage: gxpm gate brainstorm-skip <issue-id> --reason <text>");
+  }
+
+  const stateRoot = process.cwd();
+  const paths = getIssuePaths(stateRoot, issueId);
+  const intake = readArtifact({ root: stateRoot, issueId, type: "issue-intake" });
+  const payload = asRecord(intake.payload);
+  const acceptance = Array.isArray(payload.acceptance) ? payload.acceptance : [];
+  const antiPatterns = Array.isArray(payload.verified_pitfalls_to_avoid)
+    ? payload.verified_pitfalls_to_avoid
+    : [];
+
+  const event: StateEvent = {
+    schemaVersion: 1,
+    type: "gate.brainstorm.skipped",
+    issueId,
+    timestamp: new Date().toISOString(),
+    payload: {
+      reason,
+      intake_completeness_score: acceptance.length > 0 ? 1 : 0,
+      ac_count: acceptance.length,
+      anti_pattern_count: antiPatterns.length,
+    },
+  };
+
+  appendIssueEvent({ issueDir: paths.issueDir, event });
+  console.log(`[gxpm gate brainstorm-skip] gate.brainstorm.skipped: ${reason}`);
 }
 
 function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
@@ -743,6 +842,12 @@ function payloadTitle(payload: unknown) {
   if (!payload || typeof payload !== "object") return null;
   const title = (payload as Record<string, unknown>).title;
   return typeof title === "string" && title.trim() ? title : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function currentGitBranch() {

@@ -25,7 +25,7 @@ interface InstallResult {
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
 
-const HOOK_SCRIPTS = ["session-start.sh", "user-prompt-submit.sh"];
+const HOOK_SCRIPTS = ["session-start.sh", "user-prompt-submit.sh", "pre-tool-use.sh"];
 
 export function installCodexHooks(options: InstallCodexHooksOptions = {}): InstallResult {
   const scope = options.scope ?? "repo";
@@ -57,6 +57,7 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
   // Per Codex official spec: "If timeout is omitted, Codex uses 600 seconds."
   // We omit timeout to inherit the official default rather than override it.
   // statusMessage and type are kept because they are official supported fields.
+  const preToolUseCmd = join(hooksDir, "gxpm-pre-tool-use.sh");
   const newConfig = {
     hooks: {
       SessionStart: [
@@ -77,6 +78,17 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
               type: "command",
               command: promptSubmitCmd,
               statusMessage: "gxpm: resolving referenced issue",
+            },
+          ],
+        },
+      ],
+      PreToolUse: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: preToolUseCmd,
+              statusMessage: "gxpm: recording update_plan payload",
             },
           ],
         },

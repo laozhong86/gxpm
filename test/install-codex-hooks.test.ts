@@ -48,10 +48,11 @@ describe("installCodexHooks", () => {
 
     const result = installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
 
-    expect(result.installedScripts.length).toBe(2);
+    expect(result.installedScripts.length).toBe(3);
     expect(result.installedScripts.every((p) => p.includes(".codex/hooks/gxpm-"))).toBe(true);
     expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh"))).toBe(true);
     expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-user-prompt-submit.sh"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-pre-tool-use.sh"))).toBe(true);
     expect(existsSync(result.hooksJsonPath)).toBe(true);
 
     const cfg = JSON.parse(readFileSync(result.hooksJsonPath, "utf8"));
@@ -68,6 +69,15 @@ describe("installCodexHooks", () => {
     expect(result.rootDir).toBe(join(fakeRepo, ".codex"));
     expect(existsSync(join(fakeRepo, ".codex", "hooks", "gxpm-session-start.sh"))).toBe(true);
     expect(existsSync(join(fakeRepo, ".codex", "hooks.json"))).toBe(true);
+  });
+
+  test("registers PreToolUse hook for update_plan recording", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-config-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+
+    const cfg = JSON.parse(readFileSync(join(fakeHome, ".codex", "hooks.json"), "utf8"));
+    expect(cfg.hooks.PreToolUse).toBeDefined();
+    expect(cfg.hooks.PreToolUse[0].hooks[0].command).toContain("gxpm-pre-tool-use.sh");
   });
 
   test("scripts are executable", () => {
@@ -302,6 +312,47 @@ describe("hook script behavior", () => {
     expect(context).toContain(".qoder/repowiki/en/content/Overview.md");
   });
 
+  test("pre-tool-use.sh records update_plan arguments to the active issue", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-run-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-pre-tool-use.sh");
+
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-repo-"));
+    createGxpmRepo(repoCwd);
+    mkdirSync(join(repoCwd, ".gxpm", "issues", "GXPM-17"), { recursive: true });
+    writeFileSync(
+      join(repoCwd, ".gxpm", "issues", "GXPM-17", "state.json"),
+      JSON.stringify({ schemaVersion: 1, issueId: "GXPM-17", currentPhase: "dispatch", updatedAt: new Date().toISOString() }),
+    );
+
+    const gxpmStub = join(fakeHome, "gxpm");
+    writeFileSync(
+      gxpmStub,
+      `#!/bin/bash\nif [ "$1" = "issue" ] && [ "$2" = "list" ]; then\n  echo '[{"issueId":"GXPM-17","currentPhase":"dispatch","updatedAt":"2026-04-27T00:00:00Z"}]'\nelse\n  exit 1\nfi\n`,
+    );
+    chmodSync(gxpmStub, 0o755);
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      cwd: repoCwd,
+      stdin: new TextEncoder().encode(JSON.stringify({
+        cwd: repoCwd,
+        hook_event_name: "PreToolUse",
+        tool_name: "update_plan",
+        arguments: { steps: [{ description: "read file" }] },
+      })),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, PATH: `${fakeHome}:${process.env.PATH ?? ""}` },
+    });
+
+    expect(result.exitCode).toBe(0);
+    const logPath = join(repoCwd, ".gxpm", "issues", "GXPM-17", "codex-plans.jsonl");
+    const lines = readFileSync(logPath, "utf8").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).arguments.steps[0].description).toBe("read file");
+  });
+
   test("user-prompt-submit.sh ignores prompts without issue refs", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-noref-"));
     installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
@@ -344,5 +395,74 @@ describe("hook script behavior", () => {
     expect(out).toContain("gxpm context for GXPM-1");
     expect(out).toContain("currentPhase: triage");
     expect(out).toContain("Next: gxpm triage init GXPM-1");
+  });
+
+  test("user-prompt-submit.sh warns a prior owner after ownership transfer", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-transfer-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-user-prompt-submit.sh");
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-transfer-cwd-"));
+    const gxpmBin = join(repoRoot, "bin", "gxpm");
+    const envPath = { ...process.env, PATH: `${join(repoRoot, "bin")}:${process.env.PATH ?? ""}` };
+
+    expect(Bun.spawnSync({
+      cmd: [gxpmBin, "issue", "create", "GXPM-2"],
+      cwd: repoCwd,
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-a" },
+    }).exitCode).toBe(0);
+    expect(Bun.spawnSync({
+      cmd: [gxpmBin, "artifact", "write", "GXPM-2", "triage-report", "--json", "{}"],
+      cwd: repoCwd,
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-b" },
+    }).exitCode).toBe(0);
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ cwd: repoCwd, prompt: "继续 GXPM-2" }),
+      ),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-a" },
+    });
+    const out = result.stdout.toString();
+
+    expect(result.exitCode).toBe(0);
+    expect(out).toContain("ownership transferred");
+    expect(out).toContain("codex:owner-b");
+  });
+
+  test("user-prompt-submit.sh stays silent about ownership for untouched sessions", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-untouched-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-user-prompt-submit.sh");
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ups-untouched-cwd-"));
+    const gxpmBin = join(repoRoot, "bin", "gxpm");
+    const envPath = { ...process.env, PATH: `${join(repoRoot, "bin")}:${process.env.PATH ?? ""}` };
+
+    expect(Bun.spawnSync({
+      cmd: [gxpmBin, "issue", "create", "GXPM-3"],
+      cwd: repoCwd,
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-a" },
+    }).exitCode).toBe(0);
+    expect(Bun.spawnSync({
+      cmd: [gxpmBin, "artifact", "write", "GXPM-3", "triage-report", "--json", "{}"],
+      cwd: repoCwd,
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-b" },
+    }).exitCode).toBe(0);
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ cwd: repoCwd, prompt: "继续 GXPM-3" }),
+      ),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...envPath, CODEX_COMPANION_SESSION_ID: "owner-c" },
+    });
+    const out = result.stdout.toString();
+
+    expect(result.exitCode).toBe(0);
+    expect(out).not.toContain("ownership transferred");
   });
 });

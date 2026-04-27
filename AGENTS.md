@@ -42,6 +42,7 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 本仓库使用 gxpm 自托管 issue delivery。任何涉及 issue / phase / artifact 的工作，都必须遵循以下流程，不得绕过：
 
 - 纯启动时 SessionStart hook 只注入 gxpm 能力提醒，不会列出 issue；用户在 prompt 里提及 `GXPM-N` / `GXG-N` 时，UserPromptSubmit hook 才注入该 issue 的 status + next。继续某个 issue 时先明确 id，再 `gxpm issue status <id>` + `gxpm issue next <id>` 拉取上下文，**不要从聊天记忆推断 phase**。
+- session ownership 是软状态，不是锁。任何 artifact / phase 写入都会 touch 当前 session；只有当 prompt 命中该 issue 且当前 session 曾经拥有过它时，hook 才提示 ownership 已转移。
 - 任何代码改动开始前，确认有对应 GXPM-N issue 处于 `dispatch` / `implement` 之间的阶段；否则先 `gxpm issue create --auto-id` 并走 triage → plan → dispatch 三阶段。**永远使用 `--auto-id`**，不要硬编码 GXPM-N 数字（避免与已有跟踪 issue 冲突）。
 - meta tracker、retro、长期观察日志必须用 `gxpm issue create --auto-id --type meta` 创建；否则会污染默认 `gxpm issue list` 的功能交付视图。spike 仅用于限时调查，不改变 phase gate。
 - 新的非平凡任务先走 brainstorming/需求确认：只做 read-only 真值检查，向用户确认目标、范围、非目标、成功标准和预计改动；用户点头后再写 artifact、改文件或执行有副作用命令。用户明确说“直接做 / 继续推进 / 按已有计划执行”时可跳过。
