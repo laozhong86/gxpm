@@ -48,10 +48,11 @@ describe("installCodexHooks", () => {
 
     const result = installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
 
-    expect(result.installedScripts.length).toBe(2);
+    expect(result.installedScripts.length).toBe(3);
     expect(result.installedScripts.every((p) => p.includes(".codex/hooks/gxpm-"))).toBe(true);
     expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh"))).toBe(true);
     expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-user-prompt-submit.sh"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".codex", "hooks", "gxpm-pre-tool-use.sh"))).toBe(true);
     expect(existsSync(result.hooksJsonPath)).toBe(true);
 
     const cfg = JSON.parse(readFileSync(result.hooksJsonPath, "utf8"));
@@ -68,6 +69,15 @@ describe("installCodexHooks", () => {
     expect(result.rootDir).toBe(join(fakeRepo, ".codex"));
     expect(existsSync(join(fakeRepo, ".codex", "hooks", "gxpm-session-start.sh"))).toBe(true);
     expect(existsSync(join(fakeRepo, ".codex", "hooks.json"))).toBe(true);
+  });
+
+  test("registers PreToolUse hook for update_plan recording", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-config-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+
+    const cfg = JSON.parse(readFileSync(join(fakeHome, ".codex", "hooks.json"), "utf8"));
+    expect(cfg.hooks.PreToolUse).toBeDefined();
+    expect(cfg.hooks.PreToolUse[0].hooks[0].command).toContain("gxpm-pre-tool-use.sh");
   });
 
   test("scripts are executable", () => {
@@ -300,6 +310,47 @@ describe("hook script behavior", () => {
     expect(context).toContain("Qoder repo wiki detected");
     expect(context).toContain("gxpm wiki status");
     expect(context).toContain(".qoder/repowiki/en/content/Overview.md");
+  });
+
+  test("pre-tool-use.sh records update_plan arguments to the active issue", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-run-"));
+    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
+    const script = join(fakeHome, ".codex", "hooks", "gxpm-pre-tool-use.sh");
+
+    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-pretool-repo-"));
+    createGxpmRepo(repoCwd);
+    mkdirSync(join(repoCwd, ".gxpm", "issues", "GXPM-17"), { recursive: true });
+    writeFileSync(
+      join(repoCwd, ".gxpm", "issues", "GXPM-17", "state.json"),
+      JSON.stringify({ schemaVersion: 1, issueId: "GXPM-17", currentPhase: "dispatch", updatedAt: new Date().toISOString() }),
+    );
+
+    const gxpmStub = join(fakeHome, "gxpm");
+    writeFileSync(
+      gxpmStub,
+      `#!/bin/bash\nif [ "$1" = "issue" ] && [ "$2" = "list" ]; then\n  echo '[{"issueId":"GXPM-17","currentPhase":"dispatch","updatedAt":"2026-04-27T00:00:00Z"}]'\nelse\n  exit 1\nfi\n`,
+    );
+    chmodSync(gxpmStub, 0o755);
+
+    const result = Bun.spawnSync({
+      cmd: ["bash", script],
+      cwd: repoCwd,
+      stdin: new TextEncoder().encode(JSON.stringify({
+        cwd: repoCwd,
+        hook_event_name: "PreToolUse",
+        tool_name: "update_plan",
+        arguments: { steps: [{ description: "read file" }] },
+      })),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, PATH: `${fakeHome}:${process.env.PATH ?? ""}` },
+    });
+
+    expect(result.exitCode).toBe(0);
+    const logPath = join(repoCwd, ".gxpm", "issues", "GXPM-17", "codex-plans.jsonl");
+    const lines = readFileSync(logPath, "utf8").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).arguments.steps[0].description).toBe("read file");
   });
 
   test("user-prompt-submit.sh ignores prompts without issue refs", () => {

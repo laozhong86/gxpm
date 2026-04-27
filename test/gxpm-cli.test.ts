@@ -148,6 +148,68 @@ describe("gxpm issue next CLI", () => {
 });
 
 describe("gxpm artifact write CLI", () => {
+  test("writes artifact when --probe-cli validates referenced commands", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-write-probe-ok-"));
+    expect(runCli(root, ["issue", "create", "GXPM-25"]).exitCode).toBe(0);
+
+    const payload = JSON.stringify({
+      summary: "verified commands",
+      commands: "Use `gxpm issue status GXPM-25` before writing.",
+    });
+
+    const r = runCli(root, [
+      "artifact", "write", "GXPM-25", "triage-report",
+      "--json", payload,
+      "--probe-cli",
+    ]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("wrote triage-report");
+  });
+
+  test("fails before write when --probe-cli finds an invalid gxpm command", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-write-probe-bad-"));
+    expect(runCli(root, ["issue", "create", "GXPM-26"]).exitCode).toBe(0);
+
+    const payload = JSON.stringify({
+      summary: "bad command",
+      commands: "Run `gxpm definitely-not-a-command GXPM-26` first.",
+    });
+
+    const r = runCli(root, [
+      "artifact", "write", "GXPM-26", "triage-report",
+      "--json", payload,
+      "--probe-cli",
+    ]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("invalid command references");
+    expect(output(r)).toContain("gxpm definitely-not-a-command GXPM-26");
+
+    const read = runCli(root, ["artifact", "read", "GXPM-26", "triage-report"]);
+    expect(read.exitCode).toBe(1);
+    expect(output(read)).toContain("Artifact not found");
+  });
+
+  test("ignores inline prose when --probe-cli finds no supported command prefixes", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-art-write-probe-ignore-"));
+    expect(runCli(root, ["issue", "create", "GXPM-27"]).exitCode).toBe(0);
+
+    const payload = JSON.stringify({
+      summary: "plain text",
+      note: "Say hello to the workflow without naming a command.",
+    });
+
+    const r = runCli(root, [
+      "artifact", "write", "GXPM-27", "triage-report",
+      "--json", payload,
+      "--probe-cli",
+    ]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("wrote triage-report");
+  });
+
   test("writes artifact from --json flag", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-art-write-json-"));
     expect(runCli(root, ["issue", "create", "GXPM-20"]).exitCode).toBe(0);

@@ -64,6 +64,54 @@ describe("gxpm gate commit-msg CLI", () => {
   });
 });
 
+describe("gxpm gate brainstorm-skip CLI", () => {
+  test("writes gate.brainstorm.skipped event with intake counts", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-gate-brainstorm-skip-"));
+    expect(runCli(root, ["issue", "create", "GXPM-601"]).exitCode).toBe(0);
+    expect(runCli(root, [
+      "artifact", "write", "GXPM-601", "issue-intake",
+      "--json", JSON.stringify({
+        acceptance: ["AC-1", "AC-2"],
+        verified_pitfalls_to_avoid: ["avoid-1"],
+      }),
+    ]).exitCode).toBe(0);
+
+    const r = runCli(root, [
+      "gate", "brainstorm-skip", "GXPM-601",
+      "--reason", "intake already exhaustive",
+    ]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("gate.brainstorm.skipped");
+
+    const events = readFileSync(join(root, ".gxpm", "issues", "GXPM-601", "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events.at(-1)).toMatchObject({
+      type: "gate.brainstorm.skipped",
+      payload: {
+        reason: "intake already exhaustive",
+        ac_count: 2,
+        anti_pattern_count: 1,
+      },
+    });
+  });
+
+  test("fails when brainstorm-skip is requested without issue-intake", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-gate-brainstorm-no-intake-"));
+    expect(runCli(root, ["issue", "create", "GXPM-602"]).exitCode).toBe(0);
+
+    const r = runCli(root, [
+      "gate", "brainstorm-skip", "GXPM-602",
+      "--reason", "nothing to clarify",
+    ]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("issue-intake");
+  });
+});
+
 describe("gxpm gate pre-push CLI", () => {
   test("blocks when required artifact missing", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-gate-push-block-"));
