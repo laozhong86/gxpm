@@ -37,6 +37,7 @@ import {
   markQoderWikiSync,
   type QoderWikiStatus,
 } from "../core/wiki";
+import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
@@ -307,6 +308,14 @@ function main(argv: string[]) {
 
   if (command === "gate" && subcommand === "brainstorm-skip") {
     runBrainstormSkipGate(argv, issueId);
+    return;
+  }
+
+  if (command === "cleanup" && subcommand === "land") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm cleanup land <issue-id> [--execute] [--force]");
+    }
+    runCleanupLandCommand(argv, issueId);
     return;
   }
 
@@ -984,6 +993,7 @@ function runPostMergeGate(issueId: string | undefined) {
   const updated = transitionIssuePhase({ root: stateRoot, issueId, nextPhase: outcome.transitionTo });
   console.log(`transitioned ${issueId}: ${state.currentPhase} -> ${updated.currentPhase}`);
   if (updated.currentPhase === "land") {
+    console.log(`Hint: gxpm cleanup land ${issueId} --execute  # 清理 worktree + local branch`);
     const sync = runPostLandSkillSync({ env: process.env });
     if (!sync.ok) {
       console.error(`[gxpm land sync] ${sync.message}`);

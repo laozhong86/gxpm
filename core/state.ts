@@ -73,6 +73,7 @@ export interface StateEvent {
     | "checkpoint.written"
     | "gate.blocked"
     | "gate.passed"
+    | "cleanup.executed"
     | "gate.brainstorm.skipped"
     | "ownership.changed";
   issueId: string;

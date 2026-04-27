@@ -504,6 +504,15 @@ GXPM_GATE_DISABLE=1 git commit ...
 
 All four gate commands respect this env var. Use sparingly and document why.
 
+## Cleanup After Land
+
+After an issue reaches `land`, clean up local execution resources unless there is an explicit reason to keep them.
+
+- Default path: `gxpm cleanup land <issue-id> --execute`
+- Cleanup stays explicit because removing a worktree or local branch is destructive
+- If you keep the worktree for follow-up work, write `retainWorktreeReason` into `land-findings`
+- Do not delete remote branches through gxpm cleanup
+
 ## Read Next
 
 - `docs/architecture/gxpm-replacement-architecture.md`

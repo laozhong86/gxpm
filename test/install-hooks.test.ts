@@ -28,6 +28,7 @@ describe("install-hooks", () => {
     expect(existsSync(join(repo, ".githooks", "gxpm-pre-push"))).toBe(true);
     expect(existsSync(join(repo, ".githooks", "gxpm-post-merge"))).toBe(true);
     const postMerge = readFileSync(join(repo, ".githooks", "gxpm-post-merge"), "utf8");
+    expect(postMerge).toContain('gxpm gate post-merge "$issue_id" || true');
     expect(postMerge).toContain("post-merge-reconcile");
     expect(postMerge).toContain("post-merge-error.log");
   });
