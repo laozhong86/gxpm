@@ -7,6 +7,7 @@
   "bin": {
     "gxpm": "./bin/gxpm",
     "gxpm-config": "./bin/gxpm-config",
+    "gxpm-investigate": "./bin/gxpm-investigate",
     "gxpm-init": "./bin/gxpm-init",
     "gxpm-uninstall": "./bin/gxpm-uninstall",
     "gxpm-update-check": "./bin/gxpm-update-check"

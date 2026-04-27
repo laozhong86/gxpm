@@ -1,0 +1,180 @@
+#!/usr/bin/env bun
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { getIssuePaths, readIssueState } from "../core/state";
+
+interface InvestigationArtifact {
+  schemaVersion: 1;
+  ts: string;
+  surface_id: string;
+  status: "running" | "complete" | "failed";
+  url: string | null;
+  viewport: { width: number; height: number } | null;
+  isMobile: boolean | null;
+  snapshot_text: string;
+  console_lines: string[];
+  errors: string[];
+  screenshot_path: string | null;
+  label?: string;
+  actions: Array<{
+    name: string;
+    command: string[];
+    exitCode: number;
+    ok: boolean;
+    stdout?: string;
+    stderr?: string;
+  }>;
+  failure?: { message: string };
+}
+
+const args = Bun.argv.slice(2);
+const issueId = args[0];
+const usage = "Usage: gxpm-investigate <issue-id> [--label <text>]";
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(usage);
+  process.exit(0);
+}
+
+if (!issueId) {
+  fail(usage);
+}
+
+const labelIndex = args.indexOf("--label");
+const label = labelIndex >= 0 ? args[labelIndex + 1] : undefined;
+if (labelIndex >= 0 && !label) {
+  fail("Missing value for --label");
+}
+
+const surfaceId = process.env.CMUX_SURFACE_ID;
+if (!surfaceId) {
+  fail("CMUX_SURFACE_ID is required; run this from a cmux surface-aware session.");
+}
+
+if (!Bun.which("cmux")) {
+  fail("cmux CLI was not found in PATH.");
+}
+
+const root = process.env.GXPM_ROOT ?? process.cwd();
+let issueDir: string;
+try {
+  const paths = getIssuePaths(root, issueId);
+  readIssueState({ root, issueId });
+  issueDir = paths.issueDir;
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
+}
+
+const ts = new Date().toISOString();
+const stamp = ts.replace(/[:.]/g, "-");
+const artifactRelPath = `evidence/investigations/investigation-${stamp}.json`;
+const screenshotRelPath = `evidence/screenshots/investigation-${stamp}.png`;
+const artifactPath = join(issueDir, artifactRelPath);
+const screenshotPath = join(issueDir, screenshotRelPath);
+
+mkdirSync(join(issueDir, "evidence", "investigations"), { recursive: true });
+mkdirSync(join(issueDir, "evidence", "screenshots"), { recursive: true });
+
+const artifact: InvestigationArtifact = {
+  schemaVersion: 1,
+  ts,
+  surface_id: surfaceId,
+  status: "running",
+  url: null,
+  viewport: null,
+  isMobile: null,
+  snapshot_text: "",
+  console_lines: [],
+  errors: [],
+  screenshot_path: null,
+  label,
+  actions: [],
+};
+
+function persist() {
+  writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
+}
+
+function runCmux(name: string, commandArgs: string[]) {
+  const command = ["cmux", "browser", surfaceId!, ...commandArgs];
+  const result = Bun.spawnSync({
+    cmd: command,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = result.stdout.toString().trimEnd();
+  const stderr = result.stderr.toString().trimEnd();
+  const action = {
+    name,
+    command,
+    exitCode: result.exitCode,
+    ok: result.exitCode === 0,
+    stdout: stdout || undefined,
+    stderr: stderr || undefined,
+  };
+  artifact.actions.push(action);
+  if (result.exitCode !== 0) {
+    throw new Error(`${name} failed: ${command.slice(1).join(" ")}\n${stderr || stdout}`);
+  }
+  return stdout;
+}
+
+function lines(text: string) {
+  return text.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean);
+}
+
+function applyContext(text: string) {
+  try {
+    const context = JSON.parse(text) as {
+      url?: string;
+      viewport?: { width?: number; height?: number };
+      isMobile?: boolean;
+    };
+    if (context.url) artifact.url = context.url;
+    if (typeof context.viewport?.width === "number" && typeof context.viewport?.height === "number") {
+      artifact.viewport = { width: context.viewport.width, height: context.viewport.height };
+    }
+    if (typeof context.isMobile === "boolean") {
+      artifact.isMobile = context.isMobile;
+    }
+  } catch {
+    // Keep get-url as the source of truth when eval output is not JSON.
+  }
+}
+
+try {
+  persist();
+  artifact.url = runCmux("get-url", ["get-url"]).trim() || null;
+  persist();
+
+  const contextScript =
+    "JSON.stringify({url: location.href, viewport: {width: window.innerWidth, height: window.innerHeight}, isMobile: window.matchMedia('(max-width: 767px)').matches})";
+  applyContext(runCmux("viewport-context", ["eval", "--script", contextScript]));
+  persist();
+
+  artifact.snapshot_text = runCmux("snapshot", ["snapshot", "--compact"]);
+  persist();
+
+  runCmux("screenshot", ["screenshot", "--out", screenshotPath]);
+  artifact.screenshot_path = screenshotRelPath;
+  persist();
+
+  artifact.console_lines = lines(runCmux("console", ["console", "list"]));
+  persist();
+
+  artifact.errors = lines(runCmux("errors", ["errors", "list"]));
+  artifact.status = "complete";
+  persist();
+  console.log(`wrote ${artifactPath}`);
+} catch (error) {
+  artifact.status = "failed";
+  artifact.failure = { message: error instanceof Error ? error.message : String(error) };
+  persist();
+  console.error(artifact.failure.message);
+  process.exit(1);
+}
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
