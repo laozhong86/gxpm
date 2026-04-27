@@ -59,6 +59,27 @@ describe("runGlobalDiscover", () => {
     expect(result[0].repos).toContain(repoNoRemote);
   });
 
+  test("reads cwd from payload.cwd in Codex JSONL entries", () => {
+    const home = mkdtempSync(join(tmpdir(), "gxpm-discover-home-"));
+    const repo = makeRepo("https://example.com/codex.git");
+
+    const codexRoot = join(home, ".codex", "sessions", "2026", "04", "27");
+    mkdirSync(codexRoot, { recursive: true });
+    writeFileSync(
+      join(codexRoot, "session.jsonl"),
+      [
+        JSON.stringify({ payload: { cwd: repo } }),
+        JSON.stringify({ payload: { cwd: repo } }),
+      ].join("\n") + "\n",
+    );
+
+    const result = runGlobalDiscover({ home });
+
+    expect(result.length).toBe(1);
+    expect(result[0].key).toBe("remote:https://example.com/codex.git");
+    expect(result[0].repos).toEqual([repo]);
+  });
+
   test("tolerates a missing codex root when claude root exists", () => {
     const home = mkdtempSync(join(tmpdir(), "gxpm-discover-home-"));
 
