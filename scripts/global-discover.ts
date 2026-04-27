@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -31,36 +31,125 @@ function resolveRemote(cwd: string): string | null {
 }
 
 /**
- * Read all { cwd } entries from JSON files in a directory root.
- * Skips missing roots and malformed JSON silently.
+ * Read cwd values from a single file.
+ * Supports whole-file JSON and line-delimited JSON content.
  */
-function readCwdEntries(root: string): string[] {
-  if (!existsSync(root)) {
-    return [];
-  }
-
-  const cwds: string[] = [];
-  let entries: string[];
+function readCwdsFromFile(filePath: string): string[] {
+  let raw: string;
   try {
-    entries = readdirSync(root);
+    raw = readFileSync(filePath, "utf8");
   } catch {
     return [];
   }
 
-  for (const name of entries) {
-    if (!name.endsWith(".json")) continue;
+  const cwds: string[] = [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.cwd === "string") {
+      cwds.push(parsed.cwd);
+    }
+  } catch {
+    // fall through to line-by-line parsing
+  }
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
     try {
-      const raw = readFileSync(join(root, name), "utf8");
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(trimmed);
       if (parsed && typeof parsed.cwd === "string") {
         cwds.push(parsed.cwd);
       }
     } catch {
-      // ignore malformed JSON
+      // ignore malformed lines
     }
   }
 
   return cwds;
+}
+
+function listFiles(root: string, recursive: boolean): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+
+  let names: string[];
+  try {
+    names = readdirSync(root).sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  }
+
+  const files: string[] = [];
+
+  for (const name of names) {
+    const fullPath = join(root, name);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isFile()) {
+      files.push(fullPath);
+      continue;
+    }
+
+    if (recursive && stats.isDirectory()) {
+      files.push(...listFiles(fullPath, true));
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Read cwd entries from ~/.claude/projects.
+ * Supports both flat test fixtures and real one-level slug directories.
+ */
+function readClaudeCwdEntries(root: string): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+
+  const files: string[] = [];
+  let names: string[];
+  try {
+    names = readdirSync(root).sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  }
+
+  for (const name of names) {
+    const fullPath = join(root, name);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isFile()) {
+      files.push(fullPath);
+      continue;
+    }
+
+    if (stats.isDirectory()) {
+      files.push(...listFiles(fullPath, false));
+    }
+  }
+
+  return files.flatMap(readCwdsFromFile);
+}
+
+/**
+ * Read cwd entries from ~/.codex/sessions.
+ * Supports both flat test fixtures and real nested date directories.
+ */
+function readCodexCwdEntries(root: string): string[] {
+  return listFiles(root, true).flatMap(readCwdsFromFile);
 }
 
 /**
@@ -74,8 +163,8 @@ export function runGlobalDiscover(input: RunGlobalDiscoverInput = {}): DiscoverE
   const codexRoot = join(home, ".codex", "sessions");
 
   const allCwds = [
-    ...readCwdEntries(claudeRoot),
-    ...readCwdEntries(codexRoot),
+    ...readClaudeCwdEntries(claudeRoot),
+    ...readCodexCwdEntries(codexRoot),
   ];
 
   // Map from key -> set of cwd paths
@@ -93,8 +182,11 @@ export function runGlobalDiscover(input: RunGlobalDiscoverInput = {}): DiscoverE
 
   const result: DiscoverEntry[] = [];
   for (const [key, repoSet] of keyToRepos) {
-    result.push({ key, repos: Array.from(repoSet) });
+    result.push({
+      key,
+      repos: Array.from(repoSet).sort((a, b) => a.localeCompare(b)),
+    });
   }
 
-  return result;
+  return result.sort((a, b) => a.key.localeCompare(b.key));
 }
