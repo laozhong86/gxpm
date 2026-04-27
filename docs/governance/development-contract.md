@@ -75,6 +75,9 @@
 ## Qoder Wiki 可选集成
 
 - `.qoder/repowiki` 是可选导航层，不是 gxpm 状态真值；缺失时不得阻塞正常 issue workflow。
+- `.qoder/repowiki` 是 Qoder 自动生成内容，应保持在 git 版本管理之外；仓库只保留 `.gitignore` 规则和 gxpm 的检测/链接能力。
+- 本机共享 wiki 默认放在 `.gxpm/local/qoder/repowiki`。新 worktree 需要复用 wiki 时，运行 `gxpm qoder link --target <worktree-path>` 创建 `.qoder/repowiki` 软链。
+- 如果主仓库里已经有真实 `.qoder/repowiki` 目录，首次迁移用 `gxpm qoder link --replace` 把目录移动到共享位置并留下软链。
 - 新会话或代码读取前，如目录存在，先运行 `gxpm wiki status`，优先读 content markdown 和其中引用的 source anchors，不把 `repowiki-metadata.json` 大段塞进上下文。
 - 代码改动后，如 `gxpm wiki status` 报告手动同步证据超过 7 天或尚未记录，提醒用户执行 Qoder wiki 手动更新/重新同步。
 - gxpm 不自动调用 Qoder 外部同步；人工同步后用 `gxpm wiki mark-sync --note <说明>` 记录证据，提醒后可用 `gxpm wiki mark-reminder --note <说明>` 降低重复提醒噪音。

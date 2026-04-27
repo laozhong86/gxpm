@@ -26,6 +26,7 @@ import {
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../core/issues";
 import { initializeLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
+import { ensureQoderWikiLink } from "../core/qoder";
 import {
   getQoderWikiStatus,
   markQoderWikiReminder,
@@ -70,6 +71,11 @@ function main(argv: string[]) {
 
   if (command === "wiki") {
     runWikiCommand(argv, subcommand);
+    return;
+  }
+
+  if (command === "qoder") {
+    runQoderCommand(argv, subcommand);
     return;
   }
 
@@ -367,6 +373,26 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
   }
 
   throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+}
+
+function runQoderCommand(argv: string[], subcommand: string | undefined) {
+  if (subcommand === "link") {
+    const result = ensureQoderWikiLink({
+      target: optionValue(argv, "--target") ?? undefined,
+      sharedRoot: optionValue(argv, "--shared-root") ?? undefined,
+      replace: argv.includes("--replace"),
+    });
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`linked .qoder/repowiki -> ${result.sharedRoot}`);
+    console.log(`target: ${result.targetRoot}`);
+    console.log(`action: ${result.action}`);
+    return;
+  }
+
+  throw new Error("Usage: gxpm qoder link [--target <repo-or-worktree>] [--shared-root <path>] [--replace] [--json]");
 }
 
 function formatQoderWikiStatus(status: QoderWikiStatus) {
