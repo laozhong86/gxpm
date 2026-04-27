@@ -5,6 +5,7 @@ import {
   createIssueState,
   getIssuePaths,
   isIssueType,
+  ISSUE_TYPES,
   readIssueState,
   setIssueArchived,
   transitionIssuePhase,
@@ -39,6 +40,10 @@ import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
+
+const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
+const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
+const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}]`;
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -117,6 +122,9 @@ function main(argv: string[]) {
     const recentN = recentIdx >= 0 ? parseInt(argv[recentIdx + 1] ?? "5", 10) || 5 : 0;
     let entries: ReturnType<typeof listIssues>;
     if (recentN > 0) {
+      if (types || limit !== undefined) {
+        throw new Error("gxpm issue list --recent cannot be combined with --type or --limit");
+      }
       entries = recentLandedIssues({ limit: recentN });
     } else {
       entries = listIssues({ includeAll, archivedOnly, types, limit });
@@ -624,14 +632,14 @@ function resolveIssueCreateId(argv: string[]) {
   }
 
   if (hasAutoId && positional.length > 0) {
-    throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+    throw new Error(ISSUE_CREATE_USAGE);
   }
   if (positional.length > 1) {
-    throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+    throw new Error(ISSUE_CREATE_USAGE);
   }
   if (positional[0]) return positional[0];
   if (hasAutoId) return getNextAvailableIssueId();
-  throw new Error("Usage: gxpm issue create <issue-id>  (or --auto-id) [--type feature|meta|spike]");
+  throw new Error(ISSUE_CREATE_USAGE);
 }
 
 function parseIssueTypeOption(argv: string[], fallback: IssueType): IssueType {
@@ -647,16 +655,21 @@ function parseIssueTypesOption(argv: string[]): IssueType[] | undefined {
     .map((item) => item.trim())
     .filter(Boolean);
   if (values.length === 0) {
-    throw new Error("--type requires one or more of: feature, meta, spike");
+    throw new Error(`--type requires one or more of: ${ISSUE_TYPE_LIST}`);
   }
   return values.map(parseIssueType);
 }
 
 function parseIssueType(value: string): IssueType {
   if (!isIssueType(value)) {
-    throw new Error(`Invalid issue type: ${value}; expected feature, meta, or spike`);
+    throw new Error(`Invalid issue type: ${value}; expected ${ISSUE_TYPE_LIST}`);
   }
   return value;
+}
+
+function formatList(values: readonly string[]) {
+  if (values.length <= 1) return values.join("");
+  return `${values.slice(0, -1).join(", ")}, or ${values.at(-1)}`;
 }
 
 function parsePositiveIntegerOption(argv: string[], option: string) {

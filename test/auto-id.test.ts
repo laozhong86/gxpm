@@ -118,4 +118,16 @@ describe("gxpm issue list --recent CLI", () => {
     expect(output(r)).toContain("GXPM-LAND-A");
     expect(output(r)).toContain("land");
   });
+
+  test("--recent rejects type and limit filters", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-recent-filter-"));
+
+    const typeFilter = runCli(root, ["issue", "list", "--recent", "5", "--type", "meta"]);
+    const limitFilter = runCli(root, ["issue", "list", "--recent", "5", "--limit", "2"]);
+
+    expect(typeFilter.exitCode).toBe(1);
+    expect(limitFilter.exitCode).toBe(1);
+    expect(output(typeFilter)).toContain("--recent cannot be combined");
+    expect(output(limitFilter)).toContain("--recent cannot be combined");
+  });
 });
