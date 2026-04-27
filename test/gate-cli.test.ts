@@ -94,6 +94,7 @@ describe("gxpm gate post-merge CLI", () => {
     const r = runCli(root, ["gate", "post-merge", "GXPM-500"]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("transitioned GXPM-500: qa -> land");
+    expect(output(r)).toContain("Hint: gxpm cleanup land GXPM-500 --execute  # 清理 worktree + local branch");
   });
 
   test("post-merge land transition runs post-land skill sync with install-skill all", () => {
@@ -114,6 +115,7 @@ describe("gxpm gate post-merge CLI", () => {
 
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("transitioned GXPM-502: qa -> land");
+    expect(output(r)).toContain("Hint: gxpm cleanup land GXPM-502 --execute  # 清理 worktree + local branch");
     expect(readFileSync(calls, "utf8").trim()).toBe("--install-skill --host all");
   });
 

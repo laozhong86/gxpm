@@ -1,5 +1,4 @@
-import { appendFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { appendIssueEvent, getIssuePaths, readIssueState } from "../core/state";
 
