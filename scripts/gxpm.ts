@@ -44,6 +44,7 @@ import {
 } from "../core/wiki";
 import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
+import { runGlobalDiscover } from "./global-discover";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
@@ -136,6 +137,18 @@ function main(argv: string[]) {
 
   if (command === "orchestrator") {
     runOrchestratorCommand(argv, subcommand);
+    return;
+  }
+
+  if (command === "global-discover") {
+    const entries = runGlobalDiscover();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(entries, null, 2));
+    } else {
+      for (const entry of entries) {
+        console.log(`${entry.key}\t${entry.repos.join(",")}`);
+      }
+    }
     return;
   }
 

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runGlobalDiscover } from "../scripts/global-discover";
+import { runScript } from "./helpers/workflow";
 
 function makeRepo(remote: string): string {
   const dir = mkdtempSync(join(tmpdir(), "gxpm-discover-repo-"));
@@ -97,5 +98,26 @@ describe("runGlobalDiscover", () => {
     expect(result.length).toBe(1);
     expect(result[0].key).toBe("remote:https://example.com/test.git");
     expect(result[0].repos).toContain(repo);
+  });
+
+  test("CLI prints discovered entries as JSON", () => {
+    const home = mkdtempSync(join(tmpdir(), "gxpm-discover-home-"));
+    const repo = makeRepo("https://example.com/cli.git");
+
+    const claudeRoot = join(home, ".claude", "projects");
+    mkdirSync(claudeRoot, { recursive: true });
+    writeFileSync(join(claudeRoot, "cli.json"), JSON.stringify({ cwd: repo }));
+
+    const result = runScript(["scripts/gxpm.ts", "global-discover", "--json"], process.cwd(), {
+      HOME: home,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout.toString())).toEqual([
+      expect.objectContaining({
+        key: "remote:https://example.com/cli.git",
+        repos: [repo],
+      }),
+    ]);
   });
 });
