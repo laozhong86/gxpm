@@ -902,12 +902,35 @@ function runPostMergeReconcileGate(argv: string[], issueId: string | undefined) 
     return;
   }
 
+  const state = readIssueState({ root: stateRoot, issueId });
+  if (state.currentPhase !== "land") {
+    console.log(`[gxpm gate post-merge-reconcile] phase=${state.currentPhase} is not land`);
+    return;
+  }
+  if (!hasArtifact({ root: stateRoot, issueId, type: "land-findings" })) {
+    console.log("[gxpm gate post-merge-reconcile] land-findings artifact missing");
+    return;
+  }
+  if (!gitCommitExists(stateRoot, sha)) {
+    throw new Error(`Git commit not found for post-merge reconcile: ${sha}`);
+  }
+
   const result = reconcileLandFindings({ root: stateRoot, issueId, sha });
   if (result.reconciled) {
     console.log(`[gxpm gate post-merge-reconcile] reconciled land-findings for ${issueId}`);
     return;
   }
   console.log(`[gxpm gate post-merge-reconcile] ${result.reason}`);
+}
+
+function gitCommitExists(cwd: string, sha: string) {
+  const result = Bun.spawnSync({
+    cmd: ["git", "cat-file", "-e", `${sha}^{commit}`],
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return result.exitCode === 0;
 }
 
 try {
