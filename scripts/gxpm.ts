@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   appendIssueEvent,
   createIssueState,
@@ -42,6 +43,7 @@ import { runPostLandSkillSync } from "./post-land-sync";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
 import { probeArtifactPayloadCommands } from "../core/command-probe";
+import { resolveSessionId } from "../core/session";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -57,6 +59,11 @@ function main(argv: string[]) {
 
   if (command === "version" || command === "--version" || command === "-v") {
     console.log(readGxpmVersion());
+    return;
+  }
+
+  if (command === "session-id") {
+    console.log(resolveSessionId());
     return;
   }
 
@@ -207,6 +214,14 @@ function main(argv: string[]) {
       throw new Error("Usage: gxpm issue history <issue-id> [--json]");
     }
     runIssueHistory(issueId, argv.includes("--json"));
+    return;
+  }
+
+  if (command === "issue" && subcommand === "ownership") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue ownership <issue-id> [--field <name>] [--history-contains <session-id>]");
+    }
+    runIssueOwnership(argv, issueId);
     return;
   }
 
@@ -492,8 +507,41 @@ function formatEventDetail(event: StateEvent): string {
     case "gate.blocked":
       if (p.gate) return `${p.gate}: ${p.reason ?? ""}`;
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} blocked: ${p.missingArtifact ?? ""}`;
+    case "ownership.changed":
+      return `${p.fromSession ?? "?"} → ${p.toSession ?? "?"}`;
     default:
       return JSON.stringify(p);
+  }
+}
+
+function runIssueOwnership(argv: string[], issueId: string) {
+  const state = readIssueState({ issueId });
+  const ownership = state.ownership;
+  const field = optionValue(argv, "--field");
+  const historyContains = optionValue(argv, "--history-contains");
+
+  if (historyContains) {
+    process.exit(ownership?.history.some((entry) => entry.sessionId === historyContains) ? 0 : 1);
+  }
+
+  if (field) {
+    if (field === "currentSession") {
+      console.log(ownership?.currentSession ?? "");
+      return;
+    }
+    if (field === "history") {
+      console.log(JSON.stringify(ownership?.history ?? []));
+      return;
+    }
+    throw new Error(`Unknown ownership field: ${field}`);
+  }
+
+  console.log(`issueId: ${state.issueId}`);
+  console.log(`currentSession: ${ownership?.currentSession ?? ""}`);
+  console.log("history:");
+  console.log("session\tfirstTouch\tlastTouch");
+  for (const entry of ownership?.history ?? []) {
+    console.log(`${entry.sessionId}\t${entry.firstTouch}\t${entry.lastTouch}`);
   }
 }
 
@@ -578,7 +626,10 @@ function runArtifactEdit(issueId: string, type: string) {
     initial = `${JSON.stringify(stored.payload, null, 2)}\n`;
   }
 
-  const tmpFile = `/tmp/gxpm-edit-${issueId}-${type}-${Date.now()}.json`;
+  const tmpFile = join(
+    mkdtempSync(join(tmpdir(), `gxpm-edit-${issueId}-${type}-`)),
+    `${type}.json`,
+  );
   writeFileSync(tmpFile, initial);
 
   const editorResult = Bun.spawnSync({

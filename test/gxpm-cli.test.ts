@@ -1,10 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { output, runCli, runCliWithInput } from "./helpers/workflow";
 
+const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
+
 describe("gxpm CLI", () => {
+  test("prints the resolved session id", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-session-cli-"));
+
+    const result = runCli(root, ["session-id"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(output(result)).toMatch(/^(codex|cmux|gen):/m);
+  });
+
   test("creates, reads, and transitions local issue state", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cli-"));
 
@@ -38,6 +50,31 @@ describe("gxpm CLI", () => {
     expect(invalid.exitCode).toBe(1);
     expect(output(invalid)).toContain("Invalid phase transition");
     expect(output(invalid)).toContain("allowed next phase: plan");
+  });
+});
+
+describe("gxpm issue ownership CLI", () => {
+  test("shows current owner and ownership history", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ownership-cli-"));
+    expect(runCli(root, ["issue", "create", "GXPM-80"]).exitCode).toBe(0);
+
+    const read = runCli(root, ["issue", "ownership", "GXPM-80"]);
+    expect(read.exitCode).toBe(0);
+    expect(output(read)).toContain("currentSession:");
+    expect(output(read)).toContain("history:");
+    expect(output(read)).toContain("session\tfirstTouch\tlastTouch");
+  });
+
+  test("supports hook-oriented ownership flags", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ownership-cli-flags-"));
+    expect(runCli(root, ["issue", "create", "GXPM-81"]).exitCode).toBe(0);
+
+    const field = runCli(root, ["issue", "ownership", "GXPM-81", "--field", "currentSession"]);
+    expect(field.exitCode).toBe(0);
+    expect(output(field)).toMatch(/^(codex|cmux|gen):/m);
+
+    const contains = runCli(root, ["issue", "ownership", "GXPM-81", "--history-contains", output(field).trim()]);
+    expect(contains.exitCode).toBe(0);
   });
 });
 
@@ -283,7 +320,7 @@ describe("gxpm artifact edit CLI", () => {
 
     // EDITOR=true exits 0 without modifying the file
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-40", "acceptance-contract"],
+      cmd: ["bun", "run", cliPath, "artifact", "edit", "GXPM-40", "acceptance-contract"],
       cwd: root,
       env: { ...process.env, EDITOR: "true" },
       stdout: "pipe",
@@ -307,7 +344,7 @@ describe("gxpm artifact edit CLI", () => {
     Bun.spawnSync({ cmd: ["chmod", "+x", fakeEditor] });
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-41", "issue-intake"],
+      cmd: ["bun", "run", cliPath, "artifact", "edit", "GXPM-41", "issue-intake"],
       cwd: root,
       env: { ...process.env, EDITOR: fakeEditor },
       stdout: "pipe",
@@ -328,7 +365,7 @@ describe("gxpm artifact edit CLI", () => {
     Bun.spawnSync({ cmd: ["chmod", "+x", fakeEditor] });
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", "/Users/x/Desktop/Project/gxpm/scripts/gxpm.ts", "artifact", "edit", "GXPM-42", "issue-intake"],
+      cmd: ["bun", "run", cliPath, "artifact", "edit", "GXPM-42", "issue-intake"],
       cwd: root,
       env: { ...process.env, EDITOR: fakeEditor },
       stdout: "pipe",

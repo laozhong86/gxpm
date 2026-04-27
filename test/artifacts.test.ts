@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createIssueState } from "../core/state";
+import { createIssueState, readIssueState } from "../core/state";
 import {
   listArtifacts,
   readArtifact,
@@ -60,5 +60,61 @@ describe("artifact store", () => {
         payload: {},
       }),
     ).toThrow("Invalid artifact type");
+  });
+
+  test("updates ownership and event session id when artifacts are written", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-artifact-owner-"));
+    process.env.CODEX_COMPANION_SESSION_ID = "artifact-owner";
+    createIssueState({ root, issueId: "GXPM-22" });
+
+    writeArtifact({ root, issueId: "GXPM-22", type: "acceptance-contract", payload: {} });
+
+    const state = readIssueState({ root, issueId: "GXPM-22" }) as any;
+    expect(state.ownership).toMatchObject({
+      currentSession: "codex:artifact-owner",
+      lastTouchedAt: expect.any(String),
+    });
+    expect(state.ownership.history).toEqual([
+      expect.objectContaining({
+        sessionId: "codex:artifact-owner",
+        firstTouch: expect.any(String),
+        lastTouch: expect.any(String),
+      }),
+    ]);
+
+    const events = readFileSync(join(root, ".gxpm", "issues", "GXPM-22", "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events.at(-1)).toMatchObject({
+      type: "artifact.written",
+      sessionId: "codex:artifact-owner",
+    });
+    delete process.env.CODEX_COMPANION_SESSION_ID;
+  });
+
+  test("emits ownership.changed only when a different session writes", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-artifact-transfer-"));
+    process.env.CODEX_COMPANION_SESSION_ID = "owner-a";
+    createIssueState({ root, issueId: "GXPM-23" });
+    writeArtifact({ root, issueId: "GXPM-23", type: "acceptance-contract", payload: { step: 1 } });
+    writeArtifact({ root, issueId: "GXPM-23", type: "acceptance-contract", payload: { step: 2 } });
+
+    process.env.CODEX_COMPANION_SESSION_ID = "owner-b";
+    writeArtifact({ root, issueId: "GXPM-23", type: "acceptance-contract", payload: { step: 3 } });
+
+    const events = readFileSync(join(root, ".gxpm", "issues", "GXPM-23", "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events.filter((event) => event.type === "ownership.changed")).toHaveLength(1);
+    expect(events.find((event) => event.type === "ownership.changed")).toMatchObject({
+      payload: {
+        fromSession: "codex:owner-a",
+        toSession: "codex:owner-b",
+        changedAt: expect.any(String),
+      },
+    });
+    delete process.env.CODEX_COMPANION_SESSION_ID;
   });
 });

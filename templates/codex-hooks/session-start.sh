@@ -24,16 +24,7 @@ if [ -n "$CWD" ] && [ -d "$CWD/.gxpm/issues" ]; then
   SCHEMA="1"
   STATE_FILE="$CWD/core/state.ts"
   if [ -f "$STATE_FILE" ]; then
-    SCHEMA_CANDIDATE=$(python3 - "$STATE_FILE" <<'PY' 2>/dev/null || true
-import re
-import sys
-
-text = open(sys.argv[1], encoding="utf-8").read()
-match = re.search(r"\bCURRENT_SCHEMA_VERSION\s*=\s*([0-9]+)\b", text)
-if match:
-    print(match.group(1))
-PY
-)
+    SCHEMA_CANDIDATE=$(python3 -c 'import re, sys; text=open(sys.argv[1], encoding="utf-8").read(); match=re.search(r"\bCURRENT_SCHEMA_VERSION\s*=\s*([0-9]+)\b", text); print(match.group(1) if match else "")' "$STATE_FILE" 2>/dev/null || true)
     if [ -n "$SCHEMA_CANDIDATE" ]; then
       SCHEMA="$SCHEMA_CANDIDATE"
     fi
@@ -76,41 +67,22 @@ if [ -n "$CWD" ] && [ -d "$CWD" ] && command -v gxpm >/dev/null 2>&1; then
 fi
 
 export STATIC_CONTEXT UPDATE_CONTEXT WIKI_JSON
-python3 - <<'PY'
-import json
-import os
-import sys
-
+python3 -c 'import json, os, sys
 parts = [p for p in [os.environ.get("STATIC_CONTEXT", ""), os.environ.get("UPDATE_CONTEXT", "")] if p]
 try:
     wiki = json.loads(os.environ.get("WIKI_JSON", "{}"))
 except Exception:
     wiki = {}
-
 if wiki.get("detected"):
-    wiki_parts = [
-        "Qoder repo wiki detected (.qoder/repowiki). Run `gxpm wiki status` before direct source reads."
-    ]
+    wiki_parts = ["Qoder repo wiki detected (.qoder/repowiki). Run `gxpm wiki status` before direct source reads."]
     top_pages = wiki.get("topPages") or []
     page_paths = [page.get("path") for page in top_pages[:3] if page.get("path")]
     if page_paths:
         wiki_parts.append("Start with: {}".format(", ".join(page_paths)))
     reminder = wiki.get("reminder") or {}
     if reminder.get("reminderDue"):
-        wiki_parts.append(
-            "Weekly Qoder wiki sync reminder: {}".format(
-                reminder.get("reason", "manual sync evidence is stale")
-            )
-        )
+        wiki_parts.append("Weekly Qoder wiki sync reminder: {}".format(reminder.get("reason", "manual sync evidence is stale")))
     parts.append("\n".join(wiki_parts))
-
 if not parts:
     sys.exit(0)
-
-print(json.dumps({
-    "hookSpecificOutput": {
-        "hookEventName": "SessionStart",
-        "additionalContext": "\n\n".join(parts),
-    },
-}))
-PY
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n\n".join(parts)}}))'

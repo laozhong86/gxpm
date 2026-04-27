@@ -82,6 +82,28 @@ If no state exists, create it before phase work:
 gxpm issue create <issue-id>
 ```
 
+## Session Ownership
+
+Issue ownership is soft state, not a write lock. gxpm records the latest writing
+session plus prior owners so hooks can warn a returning session when ownership
+has moved.
+
+```bash
+gxpm session-id
+gxpm issue ownership <issue-id>
+gxpm issue ownership <issue-id> --field currentSession
+gxpm issue ownership <issue-id> --history-contains <session-id>
+```
+
+Host session id precedence is:
+
+1. `CODEX_COMPANION_SESSION_ID`
+2. `CMUX_SURFACE_ID`
+3. generated fallback id
+
+Hooks should only mention ownership transfer when the current prompt names the
+issue and the current session appears in that issue's ownership history.
+
 ## Optional Qoder Repo Wiki Preflight
 
 When a repo has `.qoder/repowiki`, treat it as an optional navigation aid

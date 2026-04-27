@@ -2,10 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   appendIssueEvent,
+  buildOwnershipChangedEvent,
   getIssuePaths,
   readIssueState,
+  touchIssueOwnership,
   type StateEvent,
 } from "./state";
+import { resolveSessionId } from "./session";
 
 export const ARTIFACT_TYPES = [
   "issue-intake",
@@ -63,9 +66,10 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
   const root = input.root ?? process.cwd();
   const type = assertValidArtifactType(input.type);
   const paths = getIssuePaths(root, input.issueId);
-  readIssueState({ root, issueId: input.issueId });
+  const state = readIssueState({ root, issueId: input.issueId });
 
   const now = new Date().toISOString();
+  const sessionId = resolveSessionId();
   const relativePath = `artifacts/${type}.json`;
   const artifact: StoredArtifact = {
     schemaVersion: 1,
@@ -87,9 +91,26 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
     input.issueId,
     upsertRecord(listArtifacts({ root, issueId: input.issueId }), record),
   );
+  const nextState = touchIssueOwnership({
+    state: { ...state, updatedAt: now },
+    sessionId,
+  });
+  if (JSON.stringify(nextState) !== JSON.stringify(state)) {
+    writeFileSync(paths.statePath, `${JSON.stringify(nextState, null, 2)}\n`);
+  }
+  const ownershipEvent = buildOwnershipChangedEvent({
+    issueId: input.issueId,
+    timestamp: now,
+    previousState: state,
+    nextState,
+    sessionId,
+  });
+  if (ownershipEvent) {
+    appendIssueEvent({ issueDir: paths.issueDir, event: ownershipEvent });
+  }
   appendIssueEvent({
     issueDir: paths.issueDir,
-    event: artifactWrittenEvent(input.issueId, type, now, relativePath),
+    event: artifactWrittenEvent(input.issueId, type, now, relativePath, sessionId),
   });
 
   return record;
@@ -195,12 +216,14 @@ function artifactWrittenEvent(
   artifactType: ArtifactType,
   timestamp: string,
   path: string,
+  sessionId: string,
 ): StateEvent {
   return {
     schemaVersion: 1,
     type: "artifact.written",
     issueId,
     timestamp,
+    sessionId,
     payload: { artifactType, path },
   };
 }
