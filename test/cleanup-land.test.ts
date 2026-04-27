@@ -21,8 +21,7 @@ describe("cleanup land command", () => {
 
   test("refusal-path: phase is not land", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-wrong-phase-"));
-    // Directly use createIssueState and transitionIssuePhase to set up the issue at qa phase
-    createIssueState({ root, issueId: "GXPM-701" });
+    // Set up issue in qa phase (not land) to test phase validation
     enterPhaseManually(root, "GXPM-701", "qa");
     writeArtifact({
       root,
@@ -49,13 +48,10 @@ describe("cleanup land command", () => {
 
   test("refusal-path: dispatch-handoff missing", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-missing-handoff-"));
-    enterLandedIssue(root, "GXPM-702");
-    // Note: enterLandedIssue writes the artifact, but we test the case where it's missing
-    // by not writing it in a separate scenario
-    const rootNoArtifact = mkdtempSync(join(tmpdir(), "gxpm-cleanup-no-artifact-"));
-    enterPhase(rootNoArtifact, "GXPM-702b", "land");
+    // Set up issue in land phase without dispatch-handoff artifact
+    enterPhase(root, "GXPM-702", "land");
 
-    const result = runCli(rootNoArtifact, ["cleanup", "land", "GXPM-702b"]);
+    const result = runCli(root, ["cleanup", "land", "GXPM-702"]);
 
     expect(result.exitCode).toBe(1);
     expect(output(result)).toContain("Unknown command: cleanup land");
@@ -65,19 +61,7 @@ describe("cleanup land command", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-execute-"));
     enterLandedIssue(root, "GXPM-703");
 
-    // Seed a baseline event before invoking the missing command
     const paths = getIssuePaths(root, "GXPM-703");
-    appendIssueEvent({
-      issueDir: paths.issueDir,
-      event: {
-        schemaVersion: 1,
-        type: "phase.transitioned",
-        issueId: "GXPM-703",
-        timestamp: new Date().toISOString(),
-        payload: { fromPhase: "qa", toPhase: "land" },
-      },
-    });
-
     const result = runCli(root, ["cleanup", "land", "GXPM-703", "--execute"]);
 
     expect(result.exitCode).toBe(1);
@@ -119,8 +103,10 @@ function enterLandedIssue(
 }
 
 function enterPhaseManually(root: string, issueId: string, targetPhase: GxpmPhase) {
-  // Manually transition through phases using createIssueState and transitionIssuePhase
-  // This directly uses those required imports so they are meaningfully tested
+  // Transition issue through workflow phases to reach the target phase.
+  // Uses createIssueState, transitionIssuePhase to test phase management helpers.
+  createIssueState({ root, issueId });
+
   if (targetPhase === "triage") {
     return;
   }
