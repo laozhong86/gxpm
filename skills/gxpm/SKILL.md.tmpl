@@ -122,6 +122,30 @@ Host session id precedence is:
 Hooks should only mention ownership transfer when the current prompt names the
 issue and the current session appears in that issue's ownership history.
 
+## Native gxpm Wiki Engine
+
+Use gxpm's first-party wiki engine for local, CLI-driven codebase knowledge.
+It does not require Qoder, an IDE trigger, vector storage, or a paid external
+sync path.
+
+```bash
+gxpm wiki init                         # generate .gxpm/wiki index, graph, docs, and state
+gxpm wiki index                        # alias for local index/doc generation
+gxpm wiki update                       # refresh local wiki after repo changes
+gxpm wiki query <text> [--json]        # return context files and suggested docs
+```
+
+Native wiki state is ignored by git and lives under:
+
+- `.gxpm/wiki/index/files.json`
+- `.gxpm/wiki/index/graph.json`
+- `.gxpm/wiki/content/`
+- `.gxpm/wiki/state.json`
+
+Use this native wiki as the preferred gxpm-owned knowledge source when present.
+Qoder RepoWiki remains an optional read-only navigation aid, not a gxpm runtime
+dependency or state truth.
+
 ## Optional Qoder Repo Wiki Preflight
 
 When a repo has `.qoder/repowiki`, treat it as an optional navigation aid
