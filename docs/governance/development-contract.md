@@ -86,6 +86,8 @@
 
 - `gxpm wiki init` 生成 gxpm 自有的 `.gxpm/wiki/index/files.json`、`.gxpm/wiki/index/graph.json`、`.gxpm/wiki/content/` 和 `.gxpm/wiki/state.json`。
 - `gxpm wiki update` 在代码变更后刷新本地 wiki；V1 是确定性本地索引、导入图谱和 Markdown 概览，不调用 Qoder、IDE 或外部付费服务。
+- `gxpm wiki status` 同时报告原生 wiki 的 absent/current/stale 状态和 Qoder 可选导航状态。原生 wiki stale 的标准包括 state/index 缺失、`baseCommit` 落后当前 `HEAD`、或已索引的 git-tracked 文件发生变更。
+- 原生 wiki 优先使用 `git ls-files` 索引 git-tracked 文本文件；git 不可用时退回同样 skip-list 的本地扫描。`.codex/`、`.claude/`、`.gxpm/`、`.qoder/` 等 ignored/local/generated 内容以及未跟踪 scratch 文件不得进入仓库知识索引。
 - `gxpm wiki query <text>` 基于结构化索引返回 context files 和 suggested docs，适合作为 triage、plan、dispatch、implement 的第一层本地知识入口。
 - `gxpm wiki context <issue-id>` 基于 issue state/artifacts 生成查询并返回相关 context files 与 suggested docs；需要把结果落盘时使用 `--write-artifact` 写入 `wiki-context` artifact。
 - `.gxpm/wiki/` 保持 git 外状态；需要提交的是生成逻辑、契约和测试，不提交具体仓库 wiki 内容。

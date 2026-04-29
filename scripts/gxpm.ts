@@ -34,6 +34,7 @@ import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { ensureQoderWikiLink } from "../core/qoder";
 import {
   getNativeWikiContextForIssue,
+  getNativeWikiStatus,
   initializeNativeWiki,
   getQoderWikiStatus,
   markQoderWikiReminder,
@@ -43,6 +44,7 @@ import {
   type NativeWikiBuildResult,
   type NativeWikiIssueContext,
   type NativeWikiQueryResult,
+  type NativeWikiStatus,
   type QoderWikiStatus,
 } from "../core/wiki";
 import { runCleanupLandCommand } from "./cleanup";
@@ -586,11 +588,12 @@ function parseConfigValueLiteral(raw: string): unknown {
 
 function runWikiCommand(argv: string[], subcommand: string | undefined) {
   if (!subcommand || subcommand === "status") {
-    const status = getQoderWikiStatus();
+    const native = getNativeWikiStatus();
+    const qoder = getQoderWikiStatus();
     if (argv.includes("--json")) {
-      console.log(JSON.stringify(status, null, 2));
+      console.log(JSON.stringify({ ...qoder, native, qoder }, null, 2));
     } else {
-      console.log(formatQoderWikiStatus(status));
+      console.log(`${formatNativeWikiStatus(native)}\n\n${formatQoderWikiStatus(qoder)}`);
     }
     return;
   }
@@ -725,6 +728,30 @@ function formatQoderWikiStatus(status: QoderWikiStatus) {
     lines.push(`After reminding, run: ${status.commands.markReminder}`);
   }
   lines.push(`After manual Qoder resync, run: ${status.commands.markSync}`);
+  return lines.join("\n");
+}
+
+function formatNativeWikiStatus(status: NativeWikiStatus) {
+  const lines = [`Native gxpm wiki: ${status.state}`];
+  if (!status.detected) {
+    lines.push(`state: ${status.paths.state} not initialized`);
+    lines.push(`Reason: ${status.reason}`);
+    lines.push(`Run: ${status.commands.init}`);
+    return lines.join("\n");
+  }
+  lines.push(`generatedAt: ${status.generatedAt ?? "unknown"}`);
+  lines.push(`baseCommit: ${status.baseCommit ?? "unknown"}`);
+  lines.push(`currentCommit: ${status.currentCommit ?? "unknown"}`);
+  lines.push(`files: ${status.indexedFiles}`);
+  lines.push(`edges: ${status.graphEdges}`);
+  lines.push(`docs: ${status.docs.join(", ") || "none"}`);
+  lines.push(`stale: ${status.stale ? "yes" : "no"}`);
+  lines.push(`Reason: ${status.reason}`);
+  if (status.changedFiles.length > 0) {
+    lines.push("Changed files:");
+    for (const file of status.changedFiles.slice(0, 10)) lines.push(`- ${file}`);
+  }
+  if (status.stale) lines.push(`Run: ${status.commands.update}`);
   return lines.join("\n");
 }
 

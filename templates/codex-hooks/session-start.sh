@@ -73,13 +73,17 @@ try:
     wiki = json.loads(os.environ.get("WIKI_JSON", "{}"))
 except Exception:
     wiki = {}
-if wiki.get("detected"):
+if not isinstance(wiki, dict):
+    wiki = {}
+nested_qoder = wiki.get("qoder")
+qoder = {**wiki, **nested_qoder} if isinstance(nested_qoder, dict) else wiki
+if qoder.get("detected"):
     wiki_parts = ["Qoder repo wiki detected (.qoder/repowiki). Run `gxpm wiki status` before direct source reads."]
-    top_pages = wiki.get("topPages") or []
+    top_pages = qoder.get("topPages") or []
     page_paths = [page.get("path") for page in top_pages[:3] if page.get("path")]
     if page_paths:
         wiki_parts.append("Start with: {}".format(", ".join(page_paths)))
-    reminder = wiki.get("reminder") or {}
+    reminder = qoder.get("reminder") or {}
     if reminder.get("reminderDue"):
         wiki_parts.append("Weekly Qoder wiki sync reminder: {}".format(reminder.get("reason", "manual sync evidence is stale")))
     parts.append("\n".join(wiki_parts))

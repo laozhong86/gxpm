@@ -141,6 +141,7 @@ sync path.
 gxpm wiki init                         # generate .gxpm/wiki index, graph, docs, and state
 gxpm wiki index                        # alias for local index/doc generation
 gxpm wiki update                       # refresh local wiki after repo changes
+gxpm wiki status                       # report native wiki current/stale plus optional Qoder status
 gxpm wiki query <text> [--json]        # return context files and suggested docs
 gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]
 # derive query from issue state/artifacts
@@ -154,6 +155,10 @@ Native wiki state is ignored by git and lives under:
 - `.gxpm/wiki/state.json`
 
 Use this native wiki as the preferred gxpm-owned knowledge source when present.
+`gxpm wiki status` should be the first check: if native status is `absent`, run
+`gxpm wiki init`; if it is `stale`, run `gxpm wiki update`. Native indexing is
+git-aware and should only include tracked text files, excluding ignored local
+state such as `.codex/`, `.claude/`, `.gxpm/`, and `.qoder/`.
 For issue work, prefer `gxpm wiki context <issue-id>` after `gxpm wiki init` or
 `gxpm wiki update`; add `--write-artifact` when the selected context must be
 persisted as the issue's `wiki-context` artifact.
