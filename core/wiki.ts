@@ -7,6 +7,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
+import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
+import { isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
 const QODER_REPOWIKI_ROOT = ".qoder/repowiki";
 const QODER_STATE_PATH = ".gxpm/wiki/qoder.json";
@@ -152,6 +154,22 @@ export interface NativeWikiQueryResult {
   suggestedDocs: string[];
 }
 
+export interface NativeWikiIssueContext {
+  schemaVersion: 1;
+  provider: "gxpm";
+  issueId: string;
+  currentPhase: GxpmPhase;
+  phase: GxpmPhase;
+  query: string;
+  artifactsUsed: Array<{
+    type: ArtifactType;
+    writtenAt: string;
+  }>;
+  results: NativeWikiQueryResult["results"];
+  contextFiles: string[];
+  suggestedDocs: string[];
+}
+
 export function getQoderWikiStatus(input: { root?: string; now?: Date } = {}): QoderWikiStatus {
   const root = input.root ?? process.cwd();
   const now = input.now ?? new Date();
@@ -246,6 +264,125 @@ export function queryNativeWiki(input: {
     contextFiles,
     suggestedDocs: suggestedNativeDocs(root, contextFiles),
   };
+}
+
+export function getNativeWikiContextForIssue(input: {
+  root?: string;
+  issueId: string;
+  phase?: GxpmPhase | string;
+  limit?: number;
+}): NativeWikiIssueContext {
+  const root = input.root ?? process.cwd();
+  const state = readIssueState({ root, issueId: input.issueId });
+  const phase = resolveIssueContextPhase(input.phase ?? state.currentPhase);
+  const artifacts = readIssueContextArtifacts(root, input.issueId);
+  const query = buildIssueContextQuery({
+    issueId: input.issueId,
+    issueType: state.issueType ?? "feature",
+    currentPhase: state.currentPhase,
+    phase,
+    artifacts,
+  });
+  const result = queryNativeWiki({ root, query, limit: input.limit });
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    issueId: input.issueId,
+    currentPhase: state.currentPhase,
+    phase,
+    query,
+    artifactsUsed: artifacts.map((artifact) => ({
+      type: artifact.type,
+      writtenAt: artifact.writtenAt,
+    })),
+    results: result.results,
+    contextFiles: result.contextFiles,
+    suggestedDocs: result.suggestedDocs,
+  };
+}
+
+const ISSUE_CONTEXT_ARTIFACT_PRIORITY: ArtifactType[] = [
+  "issue-intake",
+  "acceptance-contract",
+  "triage-report",
+  "implementation-plan",
+  "dispatch-handoff",
+  "local-verify",
+  "acceptance-check",
+  "self-review",
+  "ship-readiness",
+  "pr-check",
+  "verify-findings",
+  "qa-findings",
+  "land-findings",
+];
+
+function resolveIssueContextPhase(value: GxpmPhase | string): GxpmPhase {
+  if (!isGxpmPhase(value)) {
+    throw new Error(`Invalid phase: ${value}`);
+  }
+  return value;
+}
+
+function readIssueContextArtifacts(root: string, issueId: string) {
+  const records = listArtifacts({ root, issueId });
+  const available = new Map(records.map((record) => [record.type, record]));
+  return ISSUE_CONTEXT_ARTIFACT_PRIORITY.filter((type) => available.has(type)).map((type) => {
+    const stored = readArtifact({ root, issueId, type });
+    return {
+      type,
+      writtenAt: stored.writtenAt,
+      payload: stored.payload,
+    };
+  });
+}
+
+function buildIssueContextQuery(input: {
+  issueId: string;
+  issueType: string;
+  currentPhase: GxpmPhase;
+  phase: GxpmPhase;
+  artifacts: Array<{ type: ArtifactType; payload: unknown }>;
+}) {
+  const values = [
+    input.issueId,
+    input.issueType,
+    input.currentPhase,
+    input.phase,
+    ...input.artifacts.flatMap((artifact) => [
+      artifact.type,
+      ...payloadSearchText(artifact.payload),
+    ]),
+  ];
+  return values.join(" ").replace(/\s+/g, " ").trim().slice(0, 4000);
+}
+
+function payloadSearchText(payload: unknown) {
+  const values: string[] = [];
+  collectPayloadSearchText(payload, values, 0);
+  return values;
+}
+
+function collectPayloadSearchText(value: unknown, values: string[], depth: number) {
+  if (depth > 5 || values.join(" ").length > 4000) return;
+  if (typeof value === "string") {
+    values.push(value);
+    return;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    values.push(String(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectPayloadSearchText(item, values, depth + 1));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      values.push(key);
+      collectPayloadSearchText(nested, values, depth + 1);
+    }
+  }
 }
 
 function buildStatus(input: {

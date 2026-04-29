@@ -418,6 +418,34 @@ describe("gxpm wiki CLI", () => {
     expect(stored.lastReminderAt).toBeTruthy();
     expect(stored.note).toBe("session reminder");
   });
+
+  test("prints native wiki context for an issue and can persist it as an artifact", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-"));
+    const source = join(root, "core", "phase-gates.ts");
+    mkdirSync(dirname(source), { recursive: true });
+    writeFileSync(source, "export const PHASE_GATE_RULES = [];\n");
+    expect(runCli(root, ["issue", "create", "GXPM-91"]).exitCode).toBe(0);
+    expect(
+      runCli(root, [
+        "artifact",
+        "write",
+        "GXPM-91",
+        "issue-intake",
+        "--json",
+        JSON.stringify({ summary: "Need phase gate context for implementation." }),
+      ]).exitCode,
+    ).toBe(0);
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    const context = runCli(root, ["wiki", "context", "GXPM-91", "--limit", "2", "--write-artifact", "--json"]);
+
+    expect(context.exitCode).toBe(0);
+    const parsed = JSON.parse(output(context));
+    expect(parsed.contextFiles).toContain("core/phase-gates.ts");
+    expect(parsed.artifactWritten).toBe("wiki-context");
+    const stored = JSON.parse(readFileSync(join(root, ".gxpm", "issues", "GXPM-91", "artifacts", "wiki-context.json"), "utf8"));
+    expect(stored.payload.contextFiles).toContain("core/phase-gates.ts");
+  });
 });
 
 describe("gxpm issue checkpoint/resume CLI", () => {

@@ -32,6 +32,7 @@ import { initializeLandFindings, reconcileLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { ensureQoderWikiLink } from "../core/qoder";
 import {
+  getNativeWikiContextForIssue,
   initializeNativeWiki,
   getQoderWikiStatus,
   markQoderWikiReminder,
@@ -39,6 +40,7 @@ import {
   queryNativeWiki,
   updateNativeWiki,
   type NativeWikiBuildResult,
+  type NativeWikiIssueContext,
   type NativeWikiQueryResult,
   type QoderWikiStatus,
 } from "../core/wiki";
@@ -623,6 +625,28 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
+  if (subcommand === "context") {
+    const contextIssueId = argv[2];
+    if (!contextIssueId || contextIssueId.startsWith("--")) {
+      throw new Error("Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]");
+    }
+    const result = getNativeWikiContextForIssue({
+      issueId: contextIssueId,
+      phase: optionValue(argv, "--phase") ?? undefined,
+      limit: parsePositiveIntegerOption(argv, "--limit"),
+    });
+    const artifactWritten = argv.includes("--write-artifact");
+    if (artifactWritten) {
+      writeArtifact({ issueId: contextIssueId, type: "wiki-context", payload: result });
+    }
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(artifactWritten ? { ...result, artifactWritten: "wiki-context" } : result, null, 2));
+    } else {
+      console.log(formatNativeWikiIssueContext(result, artifactWritten));
+    }
+    return;
+  }
+
   if (subcommand === "mark-sync") {
     const record = markQoderWikiSync({ note: optionValue(argv, "--note") ?? undefined });
     console.log(`recorded Qoder wiki manual sync at ${record.lastSyncAt}`);
@@ -637,7 +661,7 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
-  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
 }
 
 function runQoderCommand(argv: string[], subcommand: string | undefined) {
@@ -719,6 +743,30 @@ function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
     lines.push("Suggested docs:");
     for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
   }
+  return lines.join("\n");
+}
+
+function formatNativeWikiIssueContext(result: NativeWikiIssueContext, artifactWritten: boolean) {
+  const lines = [
+    `Native gxpm wiki context: ${result.issueId}`,
+    `phase: ${result.phase} (current: ${result.currentPhase})`,
+    `query: ${result.query}`,
+  ];
+  if (result.artifactsUsed.length > 0) {
+    lines.push("Artifacts used:");
+    for (const artifact of result.artifactsUsed) lines.push(`- ${artifact.type}`);
+  }
+  if (result.contextFiles.length === 0) {
+    lines.push("No context files matched. Try `gxpm wiki update` if the index is stale.");
+  } else {
+    lines.push("Context files:");
+    for (const file of result.contextFiles) lines.push(`- ${file}`);
+  }
+  if (result.suggestedDocs.length > 0) {
+    lines.push("Suggested docs:");
+    for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
+  }
+  if (artifactWritten) lines.push("Artifact written: wiki-context");
   return lines.join("\n");
 }
 

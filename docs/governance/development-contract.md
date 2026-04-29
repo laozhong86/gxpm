@@ -86,6 +86,7 @@
 - `gxpm wiki init` 生成 gxpm 自有的 `.gxpm/wiki/index/files.json`、`.gxpm/wiki/index/graph.json`、`.gxpm/wiki/content/` 和 `.gxpm/wiki/state.json`。
 - `gxpm wiki update` 在代码变更后刷新本地 wiki；V1 是确定性本地索引、导入图谱和 Markdown 概览，不调用 Qoder、IDE 或外部付费服务。
 - `gxpm wiki query <text>` 基于结构化索引返回 context files 和 suggested docs，适合作为 triage、plan、dispatch、implement 的第一层本地知识入口。
+- `gxpm wiki context <issue-id>` 基于 issue state/artifacts 生成查询并返回相关 context files 与 suggested docs；需要把结果落盘时使用 `--write-artifact` 写入 `wiki-context` artifact。
 - `.gxpm/wiki/` 保持 git 外状态；需要提交的是生成逻辑、契约和测试，不提交具体仓库 wiki 内容。
 
 ## Qoder Wiki 可选集成

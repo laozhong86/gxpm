@@ -11,7 +11,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { writeArtifact } from "../core/artifacts";
+import { createIssueState } from "../core/state";
 import {
+  getNativeWikiContextForIssue,
   initializeNativeWiki,
   extractCitedFiles,
   getQoderWikiStatus,
@@ -294,6 +297,35 @@ describe("gxpm-native wiki engine", () => {
     expect(result.provider).toBe("gxpm");
     expect(result.results[0].path).toBe("core/phase-gates.ts");
     expect(result.results[0].source).toBe("file-index");
+    expect(result.contextFiles).toContain("core/phase-gates.ts");
+    expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+  });
+
+  test("builds issue context from issue state and artifacts", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/gate.ts", 'import { PHASE_GATE_RULES } from "./phase-gates";\n');
+    createIssueState({ root, issueId: "GXPM-90" });
+    writeArtifact({
+      root,
+      issueId: "GXPM-90",
+      type: "issue-intake",
+      payload: { summary: "Need phase gate context for workflow routing." },
+    });
+    writeArtifact({
+      root,
+      issueId: "GXPM-90",
+      type: "wiki-context",
+      payload: { summary: "Prior context output should not feed the next query." },
+    });
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const result = getNativeWikiContextForIssue({ root, issueId: "GXPM-90", limit: 2 });
+
+    expect(result.issueId).toBe("GXPM-90");
+    expect(result.phase).toBe("triage");
+    expect(result.artifactsUsed.map((artifact) => artifact.type)).toContain("issue-intake");
+    expect(result.artifactsUsed.map((artifact) => artifact.type)).not.toContain("wiki-context");
     expect(result.contextFiles).toContain("core/phase-gates.ts");
     expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
   });

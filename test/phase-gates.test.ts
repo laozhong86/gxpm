@@ -86,9 +86,11 @@ describe("phase gate registry", () => {
     expect(ARTIFACT_TYPES.filter((type) => !isGateArtifact(type))).toEqual([
       "issue-intake",
       "triage-report",
+      "wiki-context",
     ]);
     expect(isGateArtifact("acceptance-contract")).toBe(true);
     expect(isGateArtifact("issue-intake")).toBe(false);
+    expect(isGateArtifact("wiki-context")).toBe(false);
     expect(isGateArtifact("random-note")).toBe(false);
   });
 
