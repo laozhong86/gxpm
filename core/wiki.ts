@@ -20,6 +20,7 @@ const NATIVE_WIKI_ROOT = ".gxpm/wiki";
 const NATIVE_WIKI_STATE_PATH = ".gxpm/wiki/state.json";
 const NATIVE_WIKI_INDEX_PATH = ".gxpm/wiki/index/files.json";
 const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
+const NATIVE_WIKI_DIMENSIONS_PATH = ".gxpm/wiki/index/dimensions.json";
 const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
 const NATIVE_WIKI_DOC_MANIFEST_PATH = ".gxpm/wiki/content/generated-docs.json";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -114,6 +115,11 @@ export interface NativeWikiIndex {
   files: NativeWikiFileEntry[];
 }
 
+interface NativeWikiIndexSnapshot {
+  index: NativeWikiIndex;
+  contents: Map<string, string>;
+}
+
 export interface NativeWikiGraphEdge {
   from: string;
   to: string;
@@ -129,6 +135,28 @@ export interface NativeWikiGraph {
   unresolvedImports: Array<{ from: string; specifier: string }>;
 }
 
+export interface NativeWikiFileDimensions {
+  path: string;
+  language: string;
+  dimensions: {
+    structure: string[];
+    symbols: string[];
+    apis: string[];
+    workflows: string[];
+    config: string[];
+    tests: string[];
+    docs: string[];
+    relations: string[];
+  };
+}
+
+export interface NativeWikiDimensions {
+  schemaVersion: 1;
+  provider: "gxpm";
+  generatedAt: string;
+  files: NativeWikiFileDimensions[];
+}
+
 export interface NativeWikiState {
   schemaVersion: 1;
   provider: "gxpm";
@@ -137,6 +165,7 @@ export interface NativeWikiState {
   generatedAt: string;
   indexPath: string;
   graphPath: string;
+  dimensionsPath: string;
   contentRoot: string;
   queuedCommit: string | null;
 }
@@ -153,12 +182,14 @@ export interface NativeWikiStatus {
   generatedAt?: string;
   indexedFiles: number;
   graphEdges: number;
+  dimensionedFiles: number;
   docs: string[];
   changedFiles: string[];
   paths: {
     state: string;
     index: string;
     graph: string;
+    dimensions: string;
     contentRoot: string;
   };
   commands: {
@@ -175,6 +206,7 @@ export interface NativeWikiBuildResult {
   state: NativeWikiState;
   index: NativeWikiIndex;
   graph: NativeWikiGraph;
+  dimensions: NativeWikiDimensions;
   docs: string[];
 }
 
@@ -269,14 +301,16 @@ export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): 
   const state = readNativeWikiStateIfPresent(root);
   const index = readNativeWikiIndexIfPresent(root);
   const graph = readNativeWikiGraphIfPresent(root);
+  const dimensions = readNativeWikiDimensionsIfPresent(root);
   const docs = listNativeWikiDocs(root);
 
   const missingArtifacts: string[] = [];
   if (!state) missingArtifacts.push("state.json missing or unreadable");
   if (!index) missingArtifacts.push("index/files.json missing or unreadable");
   if (!graph) missingArtifacts.push("index/graph.json missing or unreadable");
+  if (!dimensions) missingArtifacts.push("index/dimensions.json missing or unreadable");
   if (missingArtifacts.length > 0) {
-    const hasAnyArtifacts = !!state || !!index || !!graph || docs.length > 0;
+    const hasAnyArtifacts = !!state || !!index || !!graph || !!dimensions || docs.length > 0;
     return {
       schemaVersion: 1,
       provider: "gxpm",
@@ -289,6 +323,7 @@ export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): 
       generatedAt: state?.generatedAt,
       indexedFiles: index?.files.length ?? 0,
       graphEdges: graph?.edges.length ?? 0,
+      dimensionedFiles: dimensions?.files.length ?? 0,
       docs,
       changedFiles: index ? changedNativeFiles(root, index) : [],
       paths,
@@ -317,6 +352,7 @@ export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): 
     generatedAt: state.generatedAt,
     indexedFiles: index.files.length,
     graphEdges: graph?.edges.length ?? 0,
+    dimensionedFiles: dimensions.files.length,
     docs,
     changedFiles,
     paths,
@@ -325,13 +361,21 @@ export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): 
 }
 
 export function buildNativeWikiIndex(input: { root?: string; now?: Date } = {}): NativeWikiIndex {
+  return buildNativeWikiIndexSnapshot(input).index;
+}
+
+function buildNativeWikiIndexSnapshot(input: { root?: string; now?: Date } = {}): NativeWikiIndexSnapshot {
   const root = input.root ?? process.cwd();
   const generatedAt = (input.now ?? new Date()).toISOString();
+  const contents = new Map<string, string>();
   return {
-    schemaVersion: 1,
-    provider: "gxpm",
-    generatedAt,
-    files: listNativeRepoFiles(root).map((file) => summarizeNativeFile(root, file)),
+    index: {
+      schemaVersion: 1,
+      provider: "gxpm",
+      generatedAt,
+      files: listNativeRepoFiles(root).map((file) => summarizeNativeFile(root, file, contents)),
+    },
+    contents,
   };
 }
 
@@ -708,8 +752,10 @@ function writeNativeWiki(input: {
 }): NativeWikiBuildResult {
   const root = input.root ?? process.cwd();
   const now = input.now ?? new Date();
-  const index = buildNativeWikiIndex({ root, now });
+  const snapshot = buildNativeWikiIndexSnapshot({ root, now });
+  const index = snapshot.index;
   const graph = buildNativeWikiGraph(index);
+  const dimensions = buildNativeWikiDimensions({ index, graph, contents: snapshot.contents });
   const state: NativeWikiState = {
     schemaVersion: 1,
     provider: "gxpm",
@@ -718,6 +764,7 @@ function writeNativeWiki(input: {
     generatedAt: now.toISOString(),
     indexPath: NATIVE_WIKI_INDEX_PATH,
     graphPath: NATIVE_WIKI_GRAPH_PATH,
+    dimensionsPath: NATIVE_WIKI_DIMENSIONS_PATH,
     contentRoot: NATIVE_WIKI_CONTENT_ROOT,
     queuedCommit: null,
   };
@@ -725,9 +772,10 @@ function writeNativeWiki(input: {
   mkdirSync(join(root, NATIVE_WIKI_CONTENT_ROOT), { recursive: true });
   writeJson(join(root, NATIVE_WIKI_INDEX_PATH), index);
   writeJson(join(root, NATIVE_WIKI_GRAPH_PATH), graph);
+  writeJson(join(root, NATIVE_WIKI_DIMENSIONS_PATH), dimensions);
   writeJson(join(root, NATIVE_WIKI_STATE_PATH), state);
   const docs = writeNativeWikiDocs(root, state, index, graph);
-  return { provider: "gxpm", mode: input.mode, state, index, graph, docs };
+  return { provider: "gxpm", mode: input.mode, state, index, graph, dimensions, docs };
 }
 
 function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
@@ -752,6 +800,148 @@ function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
     edges: dedupeBy(edges, (edge) => `${edge.from}\0${edge.to}\0${edge.kind}`),
     unresolvedImports,
   };
+}
+
+function buildNativeWikiDimensions(input: {
+  index: NativeWikiIndex;
+  graph: NativeWikiGraph;
+  contents: Map<string, string>;
+}): NativeWikiDimensions {
+  const outgoing = new Map<string, NativeWikiGraphEdge[]>();
+  const incoming = new Map<string, NativeWikiGraphEdge[]>();
+  for (const edge of input.graph.edges) {
+    pushMapValue(outgoing, edge.from, edge);
+    pushMapValue(incoming, edge.to, edge);
+  }
+  const unresolved = new Map<string, string[]>();
+  for (const entry of input.graph.unresolvedImports) {
+    pushMapValue(unresolved, entry.from, entry.specifier);
+  }
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: input.index.generatedAt,
+    files: input.index.files.map((file) =>
+      buildNativeFileDimensions({
+        file,
+        content: input.contents.get(file.path) ?? "",
+        outgoing: outgoing.get(file.path) ?? [],
+        incoming: incoming.get(file.path) ?? [],
+        unresolvedImports: unresolved.get(file.path) ?? [],
+      }),
+    ),
+  };
+}
+
+function buildNativeFileDimensions(input: {
+  file: NativeWikiFileEntry;
+  content: string;
+  outgoing: NativeWikiGraphEdge[];
+  incoming: NativeWikiGraphEdge[];
+  unresolvedImports: string[];
+}): NativeWikiFileDimensions {
+  return {
+    path: input.file.path,
+    language: input.file.language,
+    dimensions: {
+      structure: nativeStructureSignals(input.file),
+      symbols: nativeSymbolSignals(input.file),
+      apis: nativeApiSignals(input.file, input.content),
+      workflows: nativeWorkflowSignals(input.file, input.content),
+      config: nativeConfigSignals(input.file, input.content),
+      tests: nativeTestSignals(input.file, input.content),
+      docs: nativeDocSignals(input.file),
+      relations: nativeRelationSignals(input.file, input.outgoing, input.incoming, input.unresolvedImports),
+    },
+  };
+}
+
+function nativeStructureSignals(file: NativeWikiFileEntry) {
+  const signals = new Set<string>([`language:${file.language}`]);
+  const parts = file.path.split("/");
+  if (parts.length > 1) signals.add(`root:${parts[0]}`);
+  const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : ".";
+  signals.add(`dir:${dir}`);
+  const ext = extname(file.path).toLowerCase();
+  if (ext) signals.add(`ext:${ext}`);
+  return sortedSignals(signals);
+}
+
+function nativeSymbolSignals(file: NativeWikiFileEntry) {
+  const signals = new Set<string>();
+  for (const name of file.exports) signals.add(`export:${name}`);
+  return sortedSignals(signals);
+}
+
+function nativeApiSignals(file: NativeWikiFileEntry, content: string) {
+  const signals = new Set<string>();
+  if (file.path === "bin/gxpm" || file.path === "scripts/gxpm.ts") signals.add("cli:gxpm");
+  collectRegex(content, /\bgxpm(?:\s+[a-z][\w-]*){1,3}/g, signals, undefined, "cli:");
+  collectRegex(content, /\b(?:GET|POST|PUT|PATCH|DELETE)\s+["'`]([^"'`]+)["'`]/g, signals, undefined, "http:");
+  collectRegex(content, /\.(?:get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g, signals, undefined, "http:");
+  return sortedSignals(signals);
+}
+
+function nativeWorkflowSignals(file: NativeWikiFileEntry, content: string) {
+  const signals = new Set<string>();
+  const path = file.path.toLowerCase();
+  const workflowTokens = ["phase", "gate", "hook", "workflow", "transition", "triage", "dispatch", "verify", "qa", "land"];
+  for (const token of workflowTokens) {
+    if (path.includes(token)) signals.add(`path:${token}`);
+  }
+  if (path.startsWith(".githooks/") || path.includes("/hooks/")) signals.add("path:hook");
+  for (const token of workflowTokens) {
+    if (new RegExp(`\\b${token}\\b`, "i").test(content)) signals.add(`content:${token}`);
+  }
+  return sortedSignals(signals);
+}
+
+function nativeConfigSignals(file: NativeWikiFileEntry, content: string) {
+  const signals = new Set<string>();
+  const path = file.path.toLowerCase();
+  if (path.includes("config")) signals.add("path:config");
+  if (["json", "toml", "yaml"].includes(file.language)) signals.add(`format:${file.language}`);
+  collectRegex(content, /\bprocess\.env\.([A-Z0-9_]+)/g, signals, undefined, "env:");
+  collectRegex(content, /\b([A-Z][A-Z0-9_]{2,})\b/g, signals, undefined, "constant:");
+  return sortedSignals(signals);
+}
+
+function nativeTestSignals(file: NativeWikiFileEntry, content: string) {
+  const signals = new Set<string>();
+  if (file.path.startsWith("test/") || /\.test\.[jt]sx?$/.test(file.path)) signals.add("path:test");
+  if (/\bdescribe\s*\(/.test(content)) signals.add("runner:describe");
+  if (/\btest\s*\(/.test(content)) signals.add("runner:test");
+  return sortedSignals(signals);
+}
+
+function nativeDocSignals(file: NativeWikiFileEntry) {
+  const signals = new Set<string>();
+  const path = file.path.toLowerCase();
+  if (path === "readme.md") signals.add("path:readme");
+  if (path.startsWith("docs/")) signals.add("path:docs");
+  if (file.language === "markdown") signals.add("format:markdown");
+  for (const heading of file.headings) signals.add(`heading:${heading}`);
+  return sortedSignals(signals);
+}
+
+function nativeRelationSignals(
+  file: NativeWikiFileEntry,
+  outgoing: NativeWikiGraphEdge[],
+  incoming: NativeWikiGraphEdge[],
+  unresolvedImports: string[],
+) {
+  const signals = new Set<string>();
+  for (const edge of outgoing) signals.add(`imports:${edge.to}`);
+  for (const edge of incoming) signals.add(`imported-by:${edge.from}`);
+  for (const specifier of unresolvedImports) signals.add(`unresolved:${specifier}`);
+  for (const specifier of file.imports.filter((specifier) => !specifier.startsWith("."))) {
+    signals.add(`external:${specifier}`);
+  }
+  return sortedSignals(signals);
+}
+
+function sortedSignals(values: Set<string>) {
+  return [...values].sort();
 }
 
 function listNativeRepoFiles(root: string) {
@@ -805,10 +995,11 @@ function gitTrackedRepoFiles(root: string) {
     });
 }
 
-function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
+function summarizeNativeFile(root: string, file: string, contents?: Map<string, string>): NativeWikiFileEntry {
   const content = safeRead(file);
   const stat = statSync(file);
   const repoPath = toRepoPath(root, file);
+  contents?.set(repoPath, content);
   return {
     path: repoPath,
     language: languageForPath(repoPath),
@@ -1139,6 +1330,29 @@ function readNativeWikiGraphIfPresent(root: string): NativeWikiGraph | null {
   }
 }
 
+function readNativeWikiDimensionsIfPresent(root: string): NativeWikiDimensions | null {
+  const path = join(root, NATIVE_WIKI_DIMENSIONS_PATH);
+  if (!existsSync(path)) return null;
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    if (!isNativeWikiDimensions(value)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function isNativeWikiDimensions(value: unknown): value is NativeWikiDimensions {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<NativeWikiDimensions>;
+  return (
+    candidate.schemaVersion === 1 &&
+    candidate.provider === "gxpm" &&
+    typeof candidate.generatedAt === "string" &&
+    Array.isArray(candidate.files)
+  );
+}
+
 function normalizeNativeWikiIndex(index: NativeWikiIndex): NativeWikiIndex {
   return {
     ...index,
@@ -1188,6 +1402,7 @@ function nativeWikiStatusPaths() {
     state: NATIVE_WIKI_STATE_PATH,
     index: NATIVE_WIKI_INDEX_PATH,
     graph: NATIVE_WIKI_GRAPH_PATH,
+    dimensions: NATIVE_WIKI_DIMENSIONS_PATH,
     contentRoot: NATIVE_WIKI_CONTENT_ROOT,
   };
 }
@@ -1296,11 +1511,11 @@ function extractMarkdownHeadings(content: string) {
   return [...headings].sort();
 }
 
-function collectRegex(content: string, regex: RegExp, values: Set<string>, fallback?: string) {
+function collectRegex(content: string, regex: RegExp, values: Set<string>, fallback?: string, prefix = "") {
   let match: RegExpExecArray | null;
   while ((match = regex.exec(content)) !== null) {
-    const value = match[1]?.trim() || fallback;
-    if (value) values.add(value);
+    const value = match[1]?.trim() || fallback || match[0]?.trim();
+    if (value) values.add(`${prefix}${value}`);
   }
 }
 
@@ -1399,6 +1614,12 @@ function dedupeBy<T>(values: T[], key: (value: T) => string) {
     result.push(value);
   }
   return result;
+}
+
+function pushMapValue<K, V>(map: Map<K, V[]>, key: K, value: V) {
+  const values = map.get(key) ?? [];
+  values.push(value);
+  map.set(key, values);
 }
 
 function countBy<T>(values: T[], key: (value: T) => string) {

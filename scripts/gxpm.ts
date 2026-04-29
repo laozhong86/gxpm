@@ -744,6 +744,7 @@ function formatNativeWikiStatus(status: NativeWikiStatus) {
   lines.push(`currentCommit: ${status.currentCommit ?? "unknown"}`);
   lines.push(`files: ${status.indexedFiles}`);
   lines.push(`edges: ${status.graphEdges}`);
+  lines.push(`dimensions: ${status.dimensionedFiles}`);
   lines.push(`docs: ${status.docs.join(", ") || "none"}`);
   lines.push(`stale: ${status.stale ? "yes" : "no"}`);
   lines.push(`Reason: ${status.reason}`);
@@ -762,6 +763,7 @@ function formatNativeWikiBuildResult(result: NativeWikiBuildResult) {
     `baseCommit: ${result.state.baseCommit ?? "unknown"}`,
     `files: ${result.index.files.length}`,
     `edges: ${result.graph.edges.length}`,
+    `dimensions: ${result.dimensions.files.length}`,
     `docs: ${result.docs.join(", ")}`,
   ].join("\n");
 }
