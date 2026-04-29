@@ -387,18 +387,28 @@ describe("gxpm wiki CLI", () => {
     expect(output(r)).toContain("Normal gxpm workflow continues");
   });
 
-  test("prints Qoder wiki status as JSON when present", () => {
+  test("prints native and Qoder wiki status as JSON when present", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-present-"));
     const page = join(root, ".qoder", "repowiki", "en", "content", "Overview.md");
     mkdirSync(dirname(page), { recursive: true });
     writeFileSync(page, "# Overview\n\n[state](file://core/state.ts#L1)\n");
+    const source = join(root, "core", "state.ts");
+    mkdirSync(dirname(source), { recursive: true });
+    writeFileSync(source, "export function readIssueState() {}\n");
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
 
     const r = runCli(root, ["wiki", "status", "--json"]);
 
     expect(r.exitCode).toBe(0);
     const parsed = JSON.parse(output(r));
+    expect(parsed.native.detected).toBe(true);
+    expect(parsed.native.state).toBe("current");
+    expect(parsed.native.indexedFiles).toBe(1);
+    expect(parsed.qoder.detected).toBe(true);
+    expect(parsed.qoder.pageCount).toBe(1);
+    expect(parsed.qoder.topPages[0].citedFiles).toContain("core/state.ts");
+    expect(parsed.provider).toBe("qoder");
     expect(parsed.detected).toBe(true);
-    expect(parsed.pageCount).toBe(1);
     expect(parsed.topPages[0].citedFiles).toContain("core/state.ts");
   });
 

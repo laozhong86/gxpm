@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -15,6 +16,7 @@ import { writeArtifact } from "../core/artifacts";
 import { createIssueState } from "../core/state";
 import {
   getNativeWikiContextForIssue,
+  getNativeWikiStatus,
   initializeNativeWiki,
   extractCitedFiles,
   getQoderWikiStatus,
@@ -255,6 +257,21 @@ function writeRepoFile(root: string, relativePath: string, content: string) {
   writeFileSync(path, content);
 }
 
+function git(root: string, args: string) {
+  return execSync(`git ${args}`, { cwd: root, stdio: "pipe" }).toString().trim();
+}
+
+function initGitRepo(root: string) {
+  git(root, "init -b main");
+  git(root, "config user.email test@example.com");
+  git(root, "config user.name 'Test User'");
+}
+
+function commitAll(root: string, message: string) {
+  git(root, "add .");
+  git(root, `commit -m '${message}'`);
+}
+
 describe("gxpm-native wiki engine", () => {
   test("initializes a local wiki index, graph, docs, and state without Qoder", () => {
     const root = tempRoot();
@@ -354,6 +371,96 @@ describe("gxpm-native wiki engine", () => {
     expect(result.state.generatedAt).toBe("2026-04-29T01:00:00.000Z");
     expect(result.index.files.map((file) => file.path)).toContain("core/wiki-query.ts");
     expect(result.state.status).toBe("idle");
+  });
+
+  test("indexes git-tracked files and excludes ignored or untracked local files", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, ".gitignore", ".codex/\n.claude/\n.gxpm/\n.qoder/\n");
+    writeRepoFile(root, "README.md", "# GXPM\n");
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeRepoFile(root, ".codex/config.toml", "model = 'local'\n");
+    writeRepoFile(root, ".claude/settings.local.json", "{}\n");
+    writeRepoFile(root, ".gxpm/local/state.md", "# local gxpm state\n");
+    writeRepoFile(root, ".qoder/repowiki/en/content/Generated.md", "# generated qoder page\n");
+    writeRepoFile(root, "docs/scratch.md", "# local scratch\n");
+    git(root, "add .gitignore README.md core/state.ts");
+    git(root, "add -f .codex/config.toml .claude/settings.local.json .gxpm/local/state.md .qoder/repowiki/en/content/Generated.md");
+    git(root, "commit -m 'initial tracked files'");
+
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    const paths = result.index.files.map((file) => file.path);
+
+    expect(paths).toContain("README.md");
+    expect(paths).toContain("core/state.ts");
+    expect(paths).not.toContain(".codex/config.toml");
+    expect(paths).not.toContain(".claude/settings.local.json");
+    expect(paths).not.toContain(".gxpm/local/state.md");
+    expect(paths).not.toContain(".qoder/repowiki/en/content/Generated.md");
+    expect(paths).not.toContain("docs/scratch.md");
+  });
+
+  test("reports native wiki status as current, then stale when HEAD advances", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const current = getNativeWikiStatus({ root, now: new Date("2026-04-29T00:05:00Z") });
+    expect(current.detected).toBe(true);
+    expect(current.state).toBe("current");
+    expect(current.stale).toBe(false);
+    expect(current.indexedFiles).toBe(1);
+
+    writeRepoFile(root, "core/wiki.ts", "export function updateNativeWiki() {}\n");
+    commitAll(root, "add wiki module");
+    const stale = getNativeWikiStatus({ root, now: new Date("2026-04-29T01:00:00Z") });
+    expect(stale.state).toBe("stale");
+    expect(stale.stale).toBe(true);
+    expect(stale.reason).toContain("baseCommit differs from current HEAD");
+    expect(stale.commands.update).toBe("gxpm wiki update");
+  });
+
+  test("reports native wiki stale when an indexed tracked file changes after generation", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\nexport function writeIssueState() {}\n");
+    utimesSync(join(root, "core", "state.ts"), new Date("2026-04-29T01:00:00Z"), new Date("2026-04-29T01:00:00Z"));
+
+    const stale = getNativeWikiStatus({ root, now: new Date("2026-04-29T01:05:00Z") });
+
+    expect(stale.state).toBe("stale");
+    expect(stale.stale).toBe(true);
+    expect(stale.reason).toContain("tracked files changed after generation");
+    expect(stale.changedFiles).toEqual(["core/state.ts"]);
+  });
+
+  test("reports partial native wiki artifacts as stale", () => {
+    const missingIndexRoot = tempRoot();
+    writeRepoFile(missingIndexRoot, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root: missingIndexRoot, now: new Date("2026-04-29T00:00:00Z") });
+    rmSync(join(missingIndexRoot, ".gxpm", "wiki", "index", "files.json"), { force: true });
+
+    const missingIndex = getNativeWikiStatus({ root: missingIndexRoot });
+    expect(missingIndex.detected).toBe(true);
+    expect(missingIndex.state).toBe("stale");
+    expect(missingIndex.stale).toBe(true);
+    expect(missingIndex.reason).toContain("index/files.json missing or unreadable");
+
+    const missingGraphRoot = tempRoot();
+    writeRepoFile(missingGraphRoot, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root: missingGraphRoot, now: new Date("2026-04-29T00:00:00Z") });
+    rmSync(join(missingGraphRoot, ".gxpm", "wiki", "index", "graph.json"), { force: true });
+
+    const missingGraph = getNativeWikiStatus({ root: missingGraphRoot });
+    expect(missingGraph.detected).toBe(true);
+    expect(missingGraph.state).toBe("stale");
+    expect(missingGraph.stale).toBe(true);
+    expect(missingGraph.reason).toContain("index/graph.json missing or unreadable");
   });
 });
 

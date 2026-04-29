@@ -36,6 +36,8 @@ const NATIVE_TEXT_EXTENSIONS = new Set([
   ".yml",
 ]);
 const NATIVE_SKIP_DIRS = new Set([
+  ".claude",
+  ".codex",
   ".git",
   ".gxpm",
   ".qoder",
@@ -132,6 +134,34 @@ export interface NativeWikiState {
   queuedCommit: string | null;
 }
 
+export interface NativeWikiStatus {
+  schemaVersion: 1;
+  provider: "gxpm";
+  detected: boolean;
+  state: "absent" | "current" | "stale";
+  stale: boolean;
+  reason: string;
+  baseCommit: string | null;
+  currentCommit: string | null;
+  generatedAt?: string;
+  indexedFiles: number;
+  graphEdges: number;
+  docs: string[];
+  changedFiles: string[];
+  paths: {
+    state: string;
+    index: string;
+    graph: string;
+    contentRoot: string;
+  };
+  commands: {
+    init: string;
+    update: string;
+    query: string;
+    context: string;
+  };
+}
+
 export interface NativeWikiBuildResult {
   provider: "gxpm";
   mode: "init" | "update";
@@ -222,6 +252,69 @@ export function initializeNativeWiki(input: { root?: string; now?: Date } = {}):
 
 export function updateNativeWiki(input: { root?: string; now?: Date } = {}): NativeWikiBuildResult {
   return writeNativeWiki({ root: input.root, now: input.now, mode: "update" });
+}
+
+export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): NativeWikiStatus {
+  const root = input.root ?? process.cwd();
+  const currentCommit = currentGitCommit(root);
+  const paths = nativeWikiStatusPaths();
+  const commands = nativeWikiStatusCommands();
+  const state = readNativeWikiStateIfPresent(root);
+  const index = readNativeWikiIndexIfPresent(root);
+  const graph = readNativeWikiGraphIfPresent(root);
+  const docs = listNativeWikiDocs(root);
+
+  const missingArtifacts: string[] = [];
+  if (!state) missingArtifacts.push("state.json missing or unreadable");
+  if (!index) missingArtifacts.push("index/files.json missing or unreadable");
+  if (!graph) missingArtifacts.push("index/graph.json missing or unreadable");
+  if (missingArtifacts.length > 0) {
+    const hasAnyArtifacts = !!state || !!index || !!graph || docs.length > 0;
+    return {
+      schemaVersion: 1,
+      provider: "gxpm",
+      detected: hasAnyArtifacts,
+      state: hasAnyArtifacts ? "stale" : "absent",
+      stale: true,
+      reason: hasAnyArtifacts ? missingArtifacts.join("; ") : "Native gxpm wiki has not been initialized.",
+      baseCommit: state?.baseCommit ?? null,
+      currentCommit,
+      generatedAt: state?.generatedAt,
+      indexedFiles: index?.files.length ?? 0,
+      graphEdges: graph?.edges.length ?? 0,
+      docs,
+      changedFiles: index ? changedNativeFiles(root, index) : [],
+      paths,
+      commands,
+    };
+  }
+
+  const changedFiles = changedNativeFiles(root, index);
+  const reasons: string[] = [];
+  if (state.baseCommit !== currentCommit) {
+    reasons.push("baseCommit differs from current HEAD");
+  }
+  if (changedFiles.length > 0) {
+    reasons.push("tracked files changed after generation");
+  }
+  const stale = reasons.length > 0;
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    detected: true,
+    state: stale ? "stale" : "current",
+    stale,
+    reason: stale ? reasons.join("; ") : "Native gxpm wiki is current for the working tree.",
+    baseCommit: state.baseCommit,
+    currentCommit,
+    generatedAt: state.generatedAt,
+    indexedFiles: index.files.length,
+    graphEdges: graph?.edges.length ?? 0,
+    docs,
+    changedFiles,
+    paths,
+    commands,
+  };
 }
 
 export function buildNativeWikiIndex(input: { root?: string; now?: Date } = {}): NativeWikiIndex {
@@ -655,18 +748,53 @@ function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
 }
 
 function listNativeRepoFiles(root: string) {
+  const files = gitTrackedRepoFiles(root) ?? fallbackNativeRepoFiles(root);
+  return files
+    .filter((file) => {
+      if (isNativeSkippedRepoPath(toRepoPath(root, file))) return false;
+      const ext = extname(file).toLowerCase();
+      if (!NATIVE_TEXT_EXTENSIONS.has(ext)) return false;
+      try {
+        if (statSync(file).size > NATIVE_MAX_FILE_BYTES) return false;
+      } catch {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
+}
+
+function isNativeSkippedRepoPath(repoPath: string) {
+  const firstSegment = normalizeRepoPath(repoPath).split("/")[0];
+  return NATIVE_SKIP_DIRS.has(firstSegment);
+}
+
+function fallbackNativeRepoFiles(root: string) {
   const files: string[] = [];
-  walkNativeRepoFiles(root, (file) => {
-    const ext = extname(file).toLowerCase();
-    if (!NATIVE_TEXT_EXTENSIONS.has(ext)) return;
-    try {
-      if (statSync(file).size > NATIVE_MAX_FILE_BYTES) return;
-    } catch {
-      return;
-    }
-    files.push(file);
+  walkNativeRepoFiles(root, (file) => files.push(file));
+  return files;
+}
+
+function gitTrackedRepoFiles(root: string) {
+  const result = Bun.spawnSync({
+    cmd: ["git", "ls-files", "-z"],
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  return files.sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
+  if (result.exitCode !== 0) return null;
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter(Boolean)
+    .map((path) => join(root, path))
+    .filter((path) => {
+      try {
+        return statSync(path).isFile();
+      } catch {
+        return false;
+      }
+    });
 }
 
 function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
@@ -759,6 +887,88 @@ function readNativeWikiIndex(root: string): NativeWikiIndex {
     throw new Error("Native gxpm wiki index not found. Run `gxpm wiki init` first.");
   }
   return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+}
+
+function readNativeWikiStateIfPresent(root: string): NativeWikiState | null {
+  const path = join(root, NATIVE_WIKI_STATE_PATH);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiState;
+  } catch {
+    return null;
+  }
+}
+
+function readNativeWikiIndexIfPresent(root: string): NativeWikiIndex | null {
+  const path = join(root, NATIVE_WIKI_INDEX_PATH);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+  } catch {
+    return null;
+  }
+}
+
+function readNativeWikiGraphIfPresent(root: string): NativeWikiGraph | null {
+  const path = join(root, NATIVE_WIKI_GRAPH_PATH);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiGraph;
+  } catch {
+    return null;
+  }
+}
+
+function listNativeWikiDocs(root: string) {
+  const docs: string[] = [];
+  walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
+    if (file.endsWith(".md")) docs.push(toRepoPath(root, file));
+  });
+  return docs.sort();
+}
+
+function changedNativeFiles(root: string, index: NativeWikiIndex) {
+  const indexed = new Map(index.files.map((file) => [file.path, file]));
+  const trackedPaths = listNativeRepoFiles(root).map((file) => toRepoPath(root, file));
+  const tracked = new Set(trackedPaths);
+  const changed = new Set<string>();
+  for (const path of trackedPaths) {
+    const indexedFile = indexed.get(path);
+    if (!indexedFile) {
+      changed.add(path);
+      continue;
+    }
+    try {
+      const stat = statSync(join(root, path));
+      if (stat.size !== indexedFile.sizeBytes || Math.abs(stat.mtimeMs - indexedFile.mtimeMs) > 1) {
+        changed.add(path);
+      }
+    } catch {
+      changed.add(path);
+    }
+  }
+  for (const path of indexed.keys()) {
+    if (!tracked.has(path)) changed.add(path);
+  }
+  return [...changed].sort();
+}
+
+function nativeWikiStatusPaths() {
+  return {
+    state: NATIVE_WIKI_STATE_PATH,
+    index: NATIVE_WIKI_INDEX_PATH,
+    graph: NATIVE_WIKI_GRAPH_PATH,
+    contentRoot: NATIVE_WIKI_CONTENT_ROOT,
+  };
+}
+
+function nativeWikiStatusCommands() {
+  return {
+    init: "gxpm wiki init",
+    update: "gxpm wiki update",
+    query: "gxpm wiki query <text>",
+    context: "gxpm wiki context <issue-id>",
+  };
 }
 
 function suggestedNativeDocs(root: string, contextFiles: string[]) {
