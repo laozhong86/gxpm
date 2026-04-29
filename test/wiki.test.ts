@@ -291,8 +291,10 @@ describe("gxpm-native wiki engine", () => {
       to: "core/state.ts",
       kind: "imports",
     });
+    expect(result.dimensions.files.map((file) => file.path)).toContain("core/state.ts");
     expect(existsSync(join(root, ".gxpm", "wiki", "index", "files.json"))).toBe(true);
     expect(existsSync(join(root, ".gxpm", "wiki", "index", "graph.json"))).toBe(true);
+    expect(existsSync(join(root, ".gxpm", "wiki", "index", "dimensions.json"))).toBe(true);
     expect(readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8")).toContain(
       "file://core/state.ts",
     );
@@ -300,7 +302,40 @@ describe("gxpm-native wiki engine", () => {
       provider: "gxpm",
       status: "idle",
       indexPath: ".gxpm/wiki/index/files.json",
+      dimensionsPath: ".gxpm/wiki/index/dimensions.json",
     });
+  });
+
+  test("generates deterministic file dimensions for taxonomy planning", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "README.md", "# GXPM\n\n## Quick Start\n");
+    writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
+    writeRepoFile(root, "core/config.ts", "export const CONFIG_REGISTRY = {};\n");
+    writeRepoFile(
+      root,
+      "scripts/gxpm.ts",
+      'import { transitionIssuePhase } from "../core/state";\nconsole.log("gxpm wiki status");\n',
+    );
+    writeRepoFile(root, ".githooks/pre-commit", "#!/bin/sh\n# gxpm hook\n");
+    writeRepoFile(root, "test/wiki.test.ts", "import { describe, test } from 'bun:test';\ndescribe('wiki', () => test('works', () => {}));\n");
+
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    const dimensions = JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "index", "dimensions.json"), "utf8"));
+    const byPath = new Map(result.dimensions.files.map((file) => [file.path, file.dimensions]));
+
+    expect(dimensions).toMatchObject({
+      schemaVersion: 1,
+      provider: "gxpm",
+      generatedAt: "2026-04-29T00:00:00.000Z",
+    });
+    expect(dimensions.files.map((file: { path: string }) => file.path)).toEqual(result.index.files.map((file) => file.path));
+    expect(byPath.get("README.md")?.docs).toContain("heading:GXPM");
+    expect(byPath.get("core/state.ts")?.symbols).toContain("export:transitionIssuePhase");
+    expect(byPath.get("scripts/gxpm.ts")?.apis).toContain("cli:gxpm wiki status");
+    expect(byPath.get("scripts/gxpm.ts")?.relations).toContain("imports:core/state.ts");
+    expect(byPath.get("core/config.ts")?.config).toContain("path:config");
+    expect(byPath.get(".githooks/pre-commit")?.workflows).toContain("path:hook");
+    expect(byPath.get("test/wiki.test.ts")?.tests).toContain("path:test");
   });
 
   test("generates topic docs with source anchors, markdown source lists, and a phase diagram", () => {
@@ -465,6 +500,7 @@ describe("gxpm-native wiki engine", () => {
 
     expect(result.state.generatedAt).toBe("2026-04-29T01:00:00.000Z");
     expect(result.index.files.map((file) => file.path)).toContain("core/wiki-query.ts");
+    expect(result.dimensions.files.map((file) => file.path)).toContain("core/wiki-query.ts");
     expect(result.state.status).toBe("idle");
   });
 
@@ -578,6 +614,17 @@ describe("gxpm-native wiki engine", () => {
     expect(missingGraph.state).toBe("stale");
     expect(missingGraph.stale).toBe(true);
     expect(missingGraph.reason).toContain("index/graph.json missing or unreadable");
+
+    const missingDimensionsRoot = tempRoot();
+    writeRepoFile(missingDimensionsRoot, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root: missingDimensionsRoot, now: new Date("2026-04-29T00:00:00Z") });
+    rmSync(join(missingDimensionsRoot, ".gxpm", "wiki", "index", "dimensions.json"), { force: true });
+
+    const missingDimensions = getNativeWikiStatus({ root: missingDimensionsRoot });
+    expect(missingDimensions.detected).toBe(true);
+    expect(missingDimensions.state).toBe("stale");
+    expect(missingDimensions.stale).toBe(true);
+    expect(missingDimensions.reason).toContain("index/dimensions.json missing or unreadable");
   });
 });
 
@@ -588,7 +635,13 @@ describe("gxpm native wiki CLI", () => {
 
     const init = runCli(root, ["wiki", "init", "--json"]);
     expect(init.exitCode).toBe(0);
-    expect(JSON.parse(output(init))).toMatchObject({ provider: "gxpm" });
+    expect(JSON.parse(output(init))).toMatchObject({
+      provider: "gxpm",
+      state: { dimensionsPath: ".gxpm/wiki/index/dimensions.json" },
+    });
+    expect(JSON.parse(output(init)).dimensions.files.map((file: { path: string }) => file.path)).toContain(
+      "core/state.ts",
+    );
 
     const query = runCli(root, ["wiki", "query", "transition phase", "--json"]);
     expect(query.exitCode).toBe(0);
