@@ -5,7 +5,7 @@ import {
   rmSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { getResolvedConfigValue } from "./config";
 import { readIssueState } from "./state";
 
@@ -82,6 +82,15 @@ export function sanitizeWorkspaceKey(identifier: string) {
   return safe || "issue";
 }
 
+export function isPathInsideRoot(
+  root: string,
+  candidate: string,
+  pathApi = { isAbsolute, relative, resolve },
+) {
+  const relativePath = pathApi.relative(pathApi.resolve(root), pathApi.resolve(candidate));
+  return relativePath === "" || (!relativePath.startsWith("..") && !pathApi.isAbsolute(relativePath));
+}
+
 function resolveWorkspaceRoot(input: { root: string; workspaceRoot?: string }) {
   const configured =
     input.workspaceRoot ??
@@ -101,10 +110,7 @@ function expandHome(path: string) {
 }
 
 function assertPathInsideRoot(root: string, candidate: string) {
-  const resolvedRoot = resolve(root);
-  const resolvedCandidate = resolve(candidate);
-  const rootPrefix = resolvedRoot.endsWith("/") ? resolvedRoot : `${resolvedRoot}/`;
-  if (resolvedCandidate !== resolvedRoot && !resolvedCandidate.startsWith(rootPrefix)) {
-    throw new Error(`Workspace path escapes workspace root: ${resolvedCandidate}`);
+  if (!isPathInsideRoot(root, candidate)) {
+    throw new Error(`Workspace path escapes workspace root: ${resolve(candidate)}`);
   }
 }

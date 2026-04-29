@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import { createIssueState } from "../core/state";
 import {
   cleanupIssueWorkspace,
   ensureIssueWorkspace,
+  isPathInsideRoot,
   planIssueWorkspace,
   sanitizeWorkspaceKey,
 } from "../core/workspace-runtime";
@@ -43,6 +44,14 @@ describe("workspace runtime", () => {
 
   test("sanitizes issue identifiers for workspace keys", () => {
     expect(sanitizeWorkspaceKey("GXPM 2/unsafe")).toBe("GXPM_2_unsafe");
+  });
+
+  test("checks workspace containment with Windows separators", () => {
+    const root = "C:\\repo\\.gxpm\\local\\workspaces";
+
+    expect(isPathInsideRoot(root, "C:\\repo\\.gxpm\\local\\workspaces\\GXPM-1", win32)).toBe(true);
+    expect(isPathInsideRoot(root, "C:\\repo\\.gxpm\\local\\workspaces-other\\GXPM-1", win32)).toBe(false);
+    expect(isPathInsideRoot(root, "C:\\repo\\.gxpm\\local\\workspaces\\..\\outside", win32)).toBe(false);
   });
 
   test("CLI can plan and ensure a workspace", () => {
