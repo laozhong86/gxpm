@@ -1657,7 +1657,7 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
 
   const projectTopicDoc = `${NATIVE_WIKI_CONTENT_ROOT}/${NATIVE_WIKI_PROJECT_TOPIC_FILE}`;
   const projectTopicDocs =
-    allDocs.has(projectTopicDoc) && nativeDocCitesAnyContext(root, projectTopicDoc, contextFiles)
+    allDocs.has(projectTopicDoc) && shouldSuggestNativeProjectTopics(root, contextFiles)
       ? [projectTopicDoc]
       : [];
 
@@ -1679,10 +1679,16 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
   );
 }
 
-function nativeDocCitesAnyContext(root: string, repoPath: string, contextFiles: string[]) {
+function shouldSuggestNativeProjectTopics(root: string, contextFiles: string[]) {
   if (contextFiles.length === 0) return false;
-  const cited = extractCitedFiles(safeRead(join(root, repoPath)));
-  return cited.some((path) => contextFiles.includes(path));
+  const dimensions = readNativeWikiDimensionsIfPresent(root);
+  if (!dimensions) return false;
+  const contextFileSet = new Set(contextFiles);
+  return dimensions.files.some(
+    (entry) =>
+      contextFileSet.has(entry.path) &&
+      NATIVE_WIKI_PROJECT_TOPIC_RULES.some((rule) => scoreNativeProjectTopicFile(rule, entry) > 0),
+  );
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {

@@ -369,6 +369,9 @@ describe("gxpm-native wiki engine", () => {
 
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(wikiDoc).toContain("file://core/wiki.ts#L");
+
+    const overviewDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
+    expect(overviewDoc).toContain("[Project Topics](file://.gxpm/wiki/content/Project-Topics.md)");
   });
 
   test("generates a project-derived topic map from native dimensions", () => {
@@ -479,6 +482,23 @@ describe("gxpm-native wiki engine", () => {
     expect(hookGovernance === -1 || projectTopics < hookGovernance).toBe(true);
     expect(fileIndex === -1 || projectTopics < fileIndex).toBe(true);
     expect(codeGraph === -1 || projectTopics < codeGraph).toBe(true);
+  });
+
+  test("suggests the project topic map from raw dimensions even when the context file is not rendered", () => {
+    const root = tempRoot();
+    for (let i = 0; i < 13; i += 1) {
+      writeRepoFile(root, `hosts/adapter-${String(i).padStart(2, "0")}.ts`, `export function adapter${i}() {}\n`);
+    }
+    writeRepoFile(root, "hosts/zz-late.ts", "export function lateHost() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const topicMap = readFileSync(join(root, ".gxpm", "wiki", "content", "Project-Topics.md"), "utf8");
+    expect(topicMap).not.toContain("hosts/zz-late.ts");
+
+    const result = queryNativeWiki({ root, query: "zz late", limit: 3 });
+
+    expect(result.contextFiles).toContain("hosts/zz-late.ts");
+    expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Project-Topics.md");
   });
 
   test("keeps generated topic doc table cells on one markdown row", () => {
