@@ -34,6 +34,9 @@ bun run gen:skill-docs
 bun run check
 bin/gxpm issue create local-demo
 bin/gxpm issue status local-demo
+bin/gxpm workspace plan local-demo
+bin/gxpm run list local-demo
+bin/gxpm orchestrator tick --dry-run
 bin/gxpm artifact list local-demo
 bin/gxpm artifact read local-demo acceptance-contract
 ```
@@ -42,4 +45,4 @@ bin/gxpm artifact read local-demo acceptance-contract
 
 ## 当前边界
 
-当前已进入脚手架阶段：先建立 gstack-style 的模板、host adapter、生成和检查骨架，再继续实现 gxpm 原生 state graph 与 capability runtime。下一步应把 PMC/gstack 能力拆成 gxpm 原生模块，并围绕 V0 最小替代闭环补齐 `.gxpm` 状态与证据写回。
+当前已具备脚手架、host adapter、生成检查、`.gxpm` state graph、phase artifact gate、checkpoint/resume、可选 Qoder wiki 导航，以及第一批 execution runtime 原语：run ledger、workspace runtime 和只读 orchestrator dry-run。下一步应继续把 PMC/gstack 能力拆成 gxpm 原生模块，并围绕 V0 最小替代闭环补齐真实 agent run、browser evidence 和 release governance。

@@ -12,6 +12,7 @@
 | gate | `bun run check` | 提交前、生成器或 governance 改动后 | host config、生成文档和治理文档检查 |
 | generated | `bun run gen:skill-docs` | 修改 `*.tmpl`、host config、preamble 后 | 刷新生成的 skill surface |
 | state | `gxpm issue create/status/transition` | state graph 或 phase 规则改动后 | 本地 `.gxpm` 真值写回和恢复验证 |
+| runtime | `gxpm run start/list/status/event`、`gxpm workspace plan/ensure/cleanup`、`gxpm orchestrator tick --dry-run` | run ledger、workspace runtime、orchestrator dry-run 改动后 | 执行运行时原语、路径安全、只读派发判断 |
 | artifact | `gxpm triage init`、`gxpm plan init`、`gxpm dispatch init`、`gxpm implement verify`、`gxpm local-verify ac-check`、`gxpm ac-check self-review`、`gxpm self-review ship`、`gxpm ship pr-check`、`gxpm pr-check verify`、`gxpm verify qa`、`gxpm qa land`、`gxpm artifact list/read` | artifact store 或 phase gate 改动后 | 产物写入、读取、索引和 gate 验证 |
 | context | `gxpm wiki status`、`gxpm wiki mark-sync`、`gxpm wiki mark-reminder` | 仓库存在 `.qoder/repowiki`，或代码改动可能导致 wiki 漂移时 | 会话前 wiki-first 导航、手动同步提醒与提醒证据 |
 | future-e2e | 待实现 | browser/runtime capability 落地后 | 真实浏览器和 agent workflow 证据 |
@@ -40,6 +41,14 @@
 - gate 测试需要把通用 phase setup 放在 `test/helpers/workflow.ts`，不要在每个 gate 文件重复写完整前置 phase 链。
 - `test/helpers/workflow.ts` 的 phase setup 顺序必须从 phase gate registry 派生，不再手写第二份 workflow chain。
 - gate 测试文件只保留当前 gate 的 artifact payload、blocked event、CLI command 和 transition 断言。
+
+## Execution Runtime 规则
+
+- `gxpm run *` 只记录或读取 issue-local run ledger；不得隐式推进 phase。
+- `gxpm workspace plan` 是只读路径规划；`ensure` 只创建/复用当前 issue workspace；`cleanup` 只能删除该 issue 对应 workspace。
+- workspace key 必须由 issue identifier 派生并限制在 `[A-Za-z0-9._-]`，不允许把用户输入拼进任意路径。
+- `gxpm orchestrator tick --dry-run` 必须保持只读：不 claim、不创建 workspace、不启动 agent、不写 artifact、不 transition。
+- 真正的长驻 poll/retry daemon 需要另行设计；不要把 dry-run tick 偷偷扩成后台服务。
 
 ## 失败归因协议
 

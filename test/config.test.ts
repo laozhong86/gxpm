@@ -77,6 +77,7 @@ describe("setConfigValue + getConfigValue", () => {
     expect(entries.map((entry) => entry.key)).toEqual([
       "worktree.enforcement",
       "worktree.default",
+      "workspace.root",
       "update_check",
     ]);
     expect(entries.find((entry) => entry.key === "update_check")).toMatchObject({
@@ -107,6 +108,7 @@ describe("setConfigValue + getConfigValue", () => {
     expect(list.exitCode).toBe(0);
     expect(list.stdout.toString()).toContain("worktree.enforcement");
     expect(list.stdout.toString()).toContain("worktree.default");
+    expect(list.stdout.toString()).toContain("workspace.root");
     expect(list.stdout.toString()).toContain("update_check: false");
   });
 });
@@ -147,6 +149,11 @@ worktree.enforcement: optional
     const cfg = parseAgentsMdConfig("## gxpm Config\n- random.key: true\n- update_check: false");
     expect((cfg as any).random).toBeUndefined();
     expect((cfg as any).update_check).toBe(false);
+  });
+
+  test("parses workspace root when present", () => {
+    const cfg = parseAgentsMdConfig("## gxpm Config\n- workspace.root: .gxpm/local/workspaces");
+    expect((cfg as any).workspace.root).toBe(".gxpm/local/workspaces");
   });
 });
 
