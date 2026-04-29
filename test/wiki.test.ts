@@ -334,6 +334,17 @@ describe("gxpm-native wiki engine", () => {
     expect(wikiDoc).toContain("file://core/wiki.ts#L");
   });
 
+  test("escapes generated topic source links while preserving cited file extraction", () => {
+    const root = tempRoot();
+    writeRepoFile(root, ".githooks/branch guard (draft)", "#!/bin/sh\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const hookDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Hook-Governance.md"), "utf8");
+    expect(hookDoc).toContain("file://.githooks/branch%20guard%20%28draft%29#L1-L1");
+    expect(extractCitedFiles(hookDoc)).toContain(".githooks/branch guard (draft)");
+  });
+
   test("queries native wiki docs and source files from the structured index", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
@@ -359,6 +370,9 @@ describe("gxpm-native wiki engine", () => {
     expect(phase.contextFiles).toContain("core/phase-gates.ts");
     expect(phase.suggestedDocs[0]).toBe(".gxpm/wiki/content/Phase-Lifecycle.md");
     expect(phase.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+
+    const hyphenatedPhase = queryNativeWiki({ root, query: "phase-lifecycle", limit: 3 });
+    expect(hyphenatedPhase.suggestedDocs[0]).toBe(".gxpm/wiki/content/Phase-Lifecycle.md");
 
     const wiki = queryNativeWiki({ root, query: "qoder native wiki initialization update", limit: 3 });
     expect(wiki.contextFiles).toContain("core/wiki.ts");

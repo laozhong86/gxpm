@@ -573,7 +573,7 @@ export function extractCitedFiles(markdown: string): string[] {
   const re = /file:\/\/([^)#\s]+)(?:#[^)]+)?/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(markdown)) !== null) {
-    files.add(match[1]);
+    files.add(decodeFileUrlPath(match[1]));
   }
   return [...files].sort();
 }
@@ -1072,7 +1072,24 @@ function nativeTopicOwnsPath(topic: NativeWikiTopic, path: string) {
 
 function nativeSourceLink(file: NativeWikiFileEntry) {
   const endLine = Math.max(1, file.lineCount || 1);
-  return `file://${file.path}#L1-L${endLine}`;
+  return `file://${encodeFileUrlPath(file.path)}#L1-L${endLine}`;
+}
+
+function encodeFileUrlPath(path: string) {
+  return path
+    .split("/")
+    .map((part) =>
+      encodeURIComponent(part).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`),
+    )
+    .join("/");
+}
+
+function decodeFileUrlPath(path: string) {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }
 
 function renderPhaseLifecycleDiagram() {
@@ -1240,7 +1257,7 @@ function isNativeTopicDoc(repoPath: string) {
 function tokenizeQuery(query: string) {
   return query
     .toLowerCase()
-    .split(/[^a-z0-9_/-]+/)
+    .split(/[^a-z0-9_]+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 2);
 }
