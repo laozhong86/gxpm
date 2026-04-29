@@ -21,6 +21,7 @@ const NATIVE_WIKI_STATE_PATH = ".gxpm/wiki/state.json";
 const NATIVE_WIKI_INDEX_PATH = ".gxpm/wiki/index/files.json";
 const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
 const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
+const NATIVE_WIKI_DOC_MANIFEST_PATH = ".gxpm/wiki/content/generated-docs.json";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
@@ -826,6 +827,7 @@ function writeNativeWikiDocs(
   index: NativeWikiIndex,
   graph: NativeWikiGraph,
 ) {
+  const previousGeneratedPaths = readNativeWikiDocManifest(root);
   const docs = [
     ["Overview.md", renderNativeOverview(state, index, graph)],
     ["File-Index.md", renderNativeFileIndex(index)],
@@ -838,16 +840,38 @@ function writeNativeWikiDocs(
     writeFileSync(path, content);
     paths.push(toRepoPath(root, path));
   }
-  pruneStaleNativeWikiDocs(root, paths);
+  pruneStaleNativeWikiDocs(root, previousGeneratedPaths, paths);
+  writeNativeWikiDocManifest(root, state, paths);
   return paths;
 }
 
-function pruneStaleNativeWikiDocs(root: string, generatedDocPaths: string[]) {
+function readNativeWikiDocManifest(root: string) {
+  const path = join(root, NATIVE_WIKI_DOC_MANIFEST_PATH);
+  if (!existsSync(path)) return [];
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as { docs?: unknown };
+    return Array.isArray(value.docs) ? value.docs.filter((doc): doc is string => typeof doc === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeNativeWikiDocManifest(root: string, state: NativeWikiState, generatedDocPaths: string[]) {
+  writeJson(join(root, NATIVE_WIKI_DOC_MANIFEST_PATH), {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: state.generatedAt,
+    docs: generatedDocPaths,
+  });
+}
+
+function pruneStaleNativeWikiDocs(root: string, previousGeneratedPaths: string[], generatedDocPaths: string[]) {
+  const previousGenerated = new Set(previousGeneratedPaths);
   const generated = new Set(generatedDocPaths);
   walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
     if (!file.endsWith(".md")) return;
     const repoPath = toRepoPath(root, file);
-    if (!generated.has(repoPath)) rmSync(file, { force: true });
+    if (previousGenerated.has(repoPath) && !generated.has(repoPath)) rmSync(file, { force: true });
   });
 }
 
@@ -1018,9 +1042,9 @@ function renderNativeTopicDoc(topic: NativeWikiTopic, index: NativeWikiIndex, gr
     "",
     topic.summary,
     "",
-    "<cite>",
+    "## Sources",
+    "",
     ...(citeLines.length > 0 ? citeLines : ["- No matching indexed source files."]),
-    "</cite>",
     "",
     ...(topic.mermaid ? ["## Flow", "", "```mermaid", topic.mermaid, "```", ""] : []),
     "## Source Files",

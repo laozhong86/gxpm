@@ -303,7 +303,7 @@ describe("gxpm-native wiki engine", () => {
     });
   });
 
-  test("generates topic docs with source anchors, cite blocks, and a phase diagram", () => {
+  test("generates topic docs with source anchors, markdown source lists, and a phase diagram", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
     writeRepoFile(root, "core/phase-gates.ts", `${Array.from({ length: 120 }, (_, index) => `// gate ${index + 1}`).join("\n")}\n`);
@@ -323,7 +323,9 @@ describe("gxpm-native wiki engine", () => {
     expect(result.docs).toContain(".gxpm/wiki/content/CLI-Surface.md");
 
     const phaseDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Phase-Lifecycle.md"), "utf8");
-    expect(phaseDoc).toContain("<cite>");
+    expect(phaseDoc).toContain("## Sources");
+    expect(phaseDoc).toContain("- [core/phase-gates.ts](file://core/phase-gates.ts#L1-L120)");
+    expect(phaseDoc).not.toContain("<cite>");
     expect(phaseDoc).toContain("file://core/phase-gates.ts#L1-L120");
     expect(phaseDoc).toContain("```mermaid");
     expect(phaseDoc).toContain("triage --> plan");
@@ -433,12 +435,19 @@ describe("gxpm-native wiki engine", () => {
   test("prunes stale generated native wiki docs on update", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
-    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    writeRepoFile(
+      root,
+      ".gxpm/wiki/content/generated-docs.json",
+      JSON.stringify({ docs: [...result.docs, ".gxpm/wiki/content/Removed-Topic.md"] }, null, 2),
+    );
     writeRepoFile(root, ".gxpm/wiki/content/Removed-Topic.md", "# stale generated topic\n");
+    writeRepoFile(root, ".gxpm/wiki/content/Hand-Written.md", "# hand written topic\n");
 
     updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
 
     expect(existsSync(join(root, ".gxpm", "wiki", "content", "Removed-Topic.md"))).toBe(false);
+    expect(existsSync(join(root, ".gxpm", "wiki", "content", "Hand-Written.md"))).toBe(true);
   });
 
   test("indexes git-tracked files and excludes ignored or untracked local files", () => {
