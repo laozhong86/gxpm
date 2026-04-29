@@ -464,6 +464,10 @@ describe("gxpm wiki CLI", () => {
 
     expect(context.exitCode).toBe(1);
     expect(output(context)).toContain("Usage: gxpm wiki context <issue-id>");
+
+    const unknownFlag = runCli(root, ["wiki", "context", "GXPM-92", "--wirte-artifact", "--json"]);
+    expect(unknownFlag.exitCode).toBe(1);
+    expect(output(unknownFlag)).toContain("Unknown option for gxpm wiki context: --wirte-artifact");
   });
 });
 

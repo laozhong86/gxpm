@@ -796,7 +796,10 @@ function assertNoUnexpectedWikiContextPositionals(argv: string[]) {
       index++;
       continue;
     }
-    if (flagOptions.has(arg) || arg.startsWith("--")) continue;
+    if (flagOptions.has(arg)) continue;
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown option for gxpm wiki context: ${arg}`);
+    }
     throw new Error(WIKI_CONTEXT_USAGE);
   }
 }

@@ -334,7 +334,7 @@ describe("gxpm-native wiki engine", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/wiki.ts", "export function getNativeWikiContextForIssue() {}\n");
     createIssueState({ root, issueId: "GXPM-92" });
-    rmSync(join(root, ".gxpm", "issues", "GXPM-92", "artifacts", "index.json"));
+    rmSync(join(root, ".gxpm", "issues", "GXPM-92", "artifacts", "index.json"), { force: true });
     initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
 
     const result = getNativeWikiContextForIssue({ root, issueId: "GXPM-92", limit: 2 });
