@@ -12,11 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  initializeNativeWiki,
   extractCitedFiles,
   getQoderWikiStatus,
   markQoderWikiReminder,
   markQoderWikiSync,
+  queryNativeWiki,
+  updateNativeWiki,
 } from "../core/wiki";
+import { output, runCli } from "./helpers/workflow";
 
 function tempRoot() {
   const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-"));
@@ -239,5 +243,93 @@ describe("Qoder wiki capability", () => {
     expect(record.schemaVersion).toBe(1);
     expect(record.provider).toBe("qoder");
     expect(record.repoWikiRoot).toBe(".qoder/repowiki");
+  });
+});
+
+function writeRepoFile(root: string, relativePath: string, content: string) {
+  const path = join(root, relativePath);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content);
+}
+
+describe("gxpm-native wiki engine", () => {
+  test("initializes a local wiki index, graph, docs, and state without Qoder", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
+    writeRepoFile(root, "scripts/gxpm.ts", 'import { transitionIssuePhase } from "../core/state";\n');
+    writeRepoFile(root, "README.md", "# GXPM\n\nLocal project manager.\n");
+
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    expect(result.provider).toBe("gxpm");
+    expect(result.index.files.map((file) => file.path)).toContain("core/state.ts");
+    expect(result.index.files.find((file) => file.path === "core/state.ts")?.exports).toContain(
+      "transitionIssuePhase",
+    );
+    expect(result.graph.edges).toContainEqual({
+      from: "scripts/gxpm.ts",
+      to: "core/state.ts",
+      kind: "imports",
+    });
+    expect(existsSync(join(root, ".gxpm", "wiki", "index", "files.json"))).toBe(true);
+    expect(existsSync(join(root, ".gxpm", "wiki", "index", "graph.json"))).toBe(true);
+    expect(readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8")).toContain(
+      "file://core/state.ts",
+    );
+    expect(JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "state.json"), "utf8"))).toMatchObject({
+      provider: "gxpm",
+      status: "idle",
+      indexPath: ".gxpm/wiki/index/files.json",
+    });
+  });
+
+  test("queries native wiki docs and source files from the structured index", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/state.ts", 'import { PHASE_GATE_RULES } from "./phase-gates";\n');
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const result = queryNativeWiki({ root, query: "phase gate rules", limit: 3 });
+
+    expect(result.provider).toBe("gxpm");
+    expect(result.results[0].path).toBe("core/phase-gates.ts");
+    expect(result.results[0].source).toBe("file-index");
+    expect(result.contextFiles).toContain("core/phase-gates.ts");
+    expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+  });
+
+  test("updates the native wiki after repository files change", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    writeRepoFile(root, "core/wiki-query.ts", "export function queryNativeWiki() {}\n");
+
+    const result = updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    expect(result.state.generatedAt).toBe("2026-04-29T01:00:00.000Z");
+    expect(result.index.files.map((file) => file.path)).toContain("core/wiki-query.ts");
+    expect(result.state.status).toBe("idle");
+  });
+});
+
+describe("gxpm native wiki CLI", () => {
+  test("supports init, query, and update commands", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
+
+    const init = runCli(root, ["wiki", "init", "--json"]);
+    expect(init.exitCode).toBe(0);
+    expect(JSON.parse(output(init))).toMatchObject({ provider: "gxpm" });
+
+    const query = runCli(root, ["wiki", "query", "transition phase", "--json"]);
+    expect(query.exitCode).toBe(0);
+    expect(JSON.parse(output(query)).contextFiles).toContain("core/state.ts");
+
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    const update = runCli(root, ["wiki", "update", "--json"]);
+    expect(update.exitCode).toBe(0);
+    expect(JSON.parse(output(update)).index.files.map((file: { path: string }) => file.path)).toContain(
+      "core/wiki.ts",
+    );
   });
 });

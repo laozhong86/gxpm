@@ -6,12 +6,42 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, extname, join, relative, sep } from "node:path";
 
 const QODER_REPOWIKI_ROOT = ".qoder/repowiki";
 const QODER_STATE_PATH = ".gxpm/wiki/qoder.json";
+const NATIVE_WIKI_ROOT = ".gxpm/wiki";
+const NATIVE_WIKI_STATE_PATH = ".gxpm/wiki/state.json";
+const NATIVE_WIKI_INDEX_PATH = ".gxpm/wiki/index/files.json";
+const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
+const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
+const NATIVE_MAX_FILE_BYTES = 1_000_000;
+const NATIVE_TEXT_EXTENSIONS = new Set([
+  ".cjs",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".sh",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
+const NATIVE_SKIP_DIRS = new Set([
+  ".git",
+  ".gxpm",
+  ".qoder",
+  ".turbo",
+  "coverage",
+  "dist",
+  "node_modules",
+]);
 
 export interface WikiPageSummary {
   path: string;
@@ -54,6 +84,72 @@ interface QoderWikiRecord {
   lastSyncAt?: string;
   lastReminderAt?: string;
   note?: string;
+}
+
+export interface NativeWikiFileEntry {
+  path: string;
+  language: string;
+  sizeBytes: number;
+  mtimeMs: number;
+  exports: string[];
+  imports: string[];
+  headings: string[];
+}
+
+export interface NativeWikiIndex {
+  schemaVersion: 1;
+  provider: "gxpm";
+  generatedAt: string;
+  files: NativeWikiFileEntry[];
+}
+
+export interface NativeWikiGraphEdge {
+  from: string;
+  to: string;
+  kind: "imports";
+}
+
+export interface NativeWikiGraph {
+  schemaVersion: 1;
+  provider: "gxpm";
+  generatedAt: string;
+  nodes: Array<{ path: string; language: string }>;
+  edges: NativeWikiGraphEdge[];
+  unresolvedImports: Array<{ from: string; specifier: string }>;
+}
+
+export interface NativeWikiState {
+  schemaVersion: 1;
+  provider: "gxpm";
+  status: "idle" | "updating" | "queued";
+  baseCommit: string | null;
+  generatedAt: string;
+  indexPath: string;
+  graphPath: string;
+  contentRoot: string;
+  queuedCommit: string | null;
+}
+
+export interface NativeWikiBuildResult {
+  provider: "gxpm";
+  mode: "init" | "update";
+  state: NativeWikiState;
+  index: NativeWikiIndex;
+  graph: NativeWikiGraph;
+  docs: string[];
+}
+
+export interface NativeWikiQueryResult {
+  provider: "gxpm";
+  query: string;
+  results: Array<{
+    path: string;
+    source: "file-index";
+    score: number;
+    matches: string[];
+  }>;
+  contextFiles: string[];
+  suggestedDocs: string[];
 }
 
 export function getQoderWikiStatus(input: { root?: string; now?: Date } = {}): QoderWikiStatus {
@@ -100,6 +196,56 @@ export function markQoderWikiReminder(input: { root?: string; now?: Date; note?:
     lastReminderAt: (input.now ?? new Date()).toISOString(),
     note: input.note,
   });
+}
+
+export function initializeNativeWiki(input: { root?: string; now?: Date } = {}): NativeWikiBuildResult {
+  return writeNativeWiki({ root: input.root, now: input.now, mode: "init" });
+}
+
+export function updateNativeWiki(input: { root?: string; now?: Date } = {}): NativeWikiBuildResult {
+  return writeNativeWiki({ root: input.root, now: input.now, mode: "update" });
+}
+
+export function buildNativeWikiIndex(input: { root?: string; now?: Date } = {}): NativeWikiIndex {
+  const root = input.root ?? process.cwd();
+  const generatedAt = (input.now ?? new Date()).toISOString();
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt,
+    files: listNativeRepoFiles(root).map((file) => summarizeNativeFile(root, file)),
+  };
+}
+
+export function queryNativeWiki(input: {
+  root?: string;
+  query: string;
+  limit?: number;
+}): NativeWikiQueryResult {
+  const root = input.root ?? process.cwd();
+  const index = readNativeWikiIndex(root);
+  const tokens = tokenizeQuery(input.query);
+  const scored = index.files
+    .map((file) => {
+      const matches = nativeFileMatches(file, tokens);
+      return {
+        path: file.path,
+        source: "file-index" as const,
+        score: matches.reduce((sum, match) => sum + match.score, 0),
+        matches: matches.map((match) => match.label),
+      };
+    })
+    .filter((result) => result.score > 0)
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
+    .slice(0, input.limit ?? 5);
+  const contextFiles = scored.map((result) => result.path);
+  return {
+    provider: "gxpm",
+    query: input.query,
+    results: scored,
+    contextFiles,
+    suggestedDocs: suggestedNativeDocs(root, contextFiles),
+  };
 }
 
 function buildStatus(input: {
@@ -296,6 +442,304 @@ function writeQoderWikiRecord(root: string, patch: Partial<QoderWikiRecord>) {
   return next;
 }
 
+function writeNativeWiki(input: {
+  root?: string;
+  now?: Date;
+  mode: NativeWikiBuildResult["mode"];
+}): NativeWikiBuildResult {
+  const root = input.root ?? process.cwd();
+  const now = input.now ?? new Date();
+  const index = buildNativeWikiIndex({ root, now });
+  const graph = buildNativeWikiGraph(index);
+  const state: NativeWikiState = {
+    schemaVersion: 1,
+    provider: "gxpm",
+    status: "idle",
+    baseCommit: currentGitCommit(root),
+    generatedAt: now.toISOString(),
+    indexPath: NATIVE_WIKI_INDEX_PATH,
+    graphPath: NATIVE_WIKI_GRAPH_PATH,
+    contentRoot: NATIVE_WIKI_CONTENT_ROOT,
+    queuedCommit: null,
+  };
+  mkdirSync(join(root, NATIVE_WIKI_ROOT, "index"), { recursive: true });
+  mkdirSync(join(root, NATIVE_WIKI_CONTENT_ROOT), { recursive: true });
+  writeJson(join(root, NATIVE_WIKI_INDEX_PATH), index);
+  writeJson(join(root, NATIVE_WIKI_GRAPH_PATH), graph);
+  writeJson(join(root, NATIVE_WIKI_STATE_PATH), state);
+  const docs = writeNativeWikiDocs(root, state, index, graph);
+  return { provider: "gxpm", mode: input.mode, state, index, graph, docs };
+}
+
+function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
+  const filePaths = new Set(index.files.map((file) => file.path));
+  const edges: NativeWikiGraphEdge[] = [];
+  const unresolvedImports: NativeWikiGraph["unresolvedImports"] = [];
+  for (const file of index.files) {
+    for (const specifier of file.imports) {
+      const target = resolveNativeImport(file.path, specifier, filePaths);
+      if (target) {
+        edges.push({ from: file.path, to: target, kind: "imports" });
+      } else if (specifier.startsWith(".")) {
+        unresolvedImports.push({ from: file.path, specifier });
+      }
+    }
+  }
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: index.generatedAt,
+    nodes: index.files.map((file) => ({ path: file.path, language: file.language })),
+    edges: dedupeBy(edges, (edge) => `${edge.from}\0${edge.to}\0${edge.kind}`),
+    unresolvedImports,
+  };
+}
+
+function listNativeRepoFiles(root: string) {
+  const files: string[] = [];
+  walkNativeRepoFiles(root, (file) => {
+    const ext = extname(file).toLowerCase();
+    if (!NATIVE_TEXT_EXTENSIONS.has(ext)) return;
+    try {
+      if (statSync(file).size > NATIVE_MAX_FILE_BYTES) return;
+    } catch {
+      return;
+    }
+    files.push(file);
+  });
+  return files.sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
+}
+
+function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
+  const content = safeRead(file);
+  const stat = statSync(file);
+  const repoPath = toRepoPath(root, file);
+  return {
+    path: repoPath,
+    language: languageForPath(repoPath),
+    sizeBytes: stat.size,
+    mtimeMs: stat.mtimeMs,
+    exports: extractExports(content),
+    imports: extractImports(content),
+    headings: extractMarkdownHeadings(content),
+  };
+}
+
+function writeNativeWikiDocs(
+  root: string,
+  state: NativeWikiState,
+  index: NativeWikiIndex,
+  graph: NativeWikiGraph,
+) {
+  const docs = [
+    ["Overview.md", renderNativeOverview(state, index, graph)],
+    ["File-Index.md", renderNativeFileIndex(index)],
+    ["Code-Graph.md", renderNativeCodeGraph(graph)],
+  ] as const;
+  const paths: string[] = [];
+  for (const [name, content] of docs) {
+    const path = join(root, NATIVE_WIKI_CONTENT_ROOT, name);
+    writeFileSync(path, content);
+    paths.push(toRepoPath(root, path));
+  }
+  return paths;
+}
+
+function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, graph: NativeWikiGraph) {
+  const languages = countBy(index.files, (file) => file.language)
+    .map(([language, count]) => `- ${language}: ${count}`)
+    .join("\n");
+  const highSignalFiles = index.files
+    .filter((file) => file.exports.length > 0 || file.headings.length > 0)
+    .slice(0, 20)
+    .map((file) => `- [${file.path}](file://${file.path})`)
+    .join("\n");
+  return [
+    "# GXPM Wiki Overview",
+    "",
+    `Generated: ${state.generatedAt}`,
+    `Base commit: ${state.baseCommit ?? "unknown"}`,
+    `Indexed files: ${index.files.length}`,
+    `Import edges: ${graph.edges.length}`,
+    "",
+    "## Languages",
+    "",
+    languages || "- none",
+    "",
+    "## High Signal Files",
+    "",
+    highSignalFiles || "- none",
+    "",
+  ].join("\n");
+}
+
+function renderNativeFileIndex(index: NativeWikiIndex) {
+  const rows = index.files
+    .slice(0, 200)
+    .map((file) => `| [${file.path}](file://${file.path}) | ${file.language} | ${file.exports.join(", ")} |`);
+  return [
+    "# File Index",
+    "",
+    "| File | Language | Exports |",
+    "| --- | --- | --- |",
+    ...rows,
+    "",
+  ].join("\n");
+}
+
+function renderNativeCodeGraph(graph: NativeWikiGraph) {
+  const edges = graph.edges
+    .slice(0, 200)
+    .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
+  return ["# Code Graph", "", ...edges, ""].join("\n");
+}
+
+function readNativeWikiIndex(root: string): NativeWikiIndex {
+  const path = join(root, NATIVE_WIKI_INDEX_PATH);
+  if (!existsSync(path)) {
+    throw new Error("Native gxpm wiki index not found. Run `gxpm wiki init` first.");
+  }
+  return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+}
+
+function suggestedNativeDocs(root: string, contextFiles: string[]) {
+  const contentRoot = join(root, NATIVE_WIKI_CONTENT_ROOT);
+  const docs: string[] = [];
+  walkFiles(contentRoot, (file) => {
+    if (!file.endsWith(".md")) return;
+    const repoPath = toRepoPath(root, file);
+    const cited = extractCitedFiles(safeRead(file));
+    if (cited.some((path) => contextFiles.includes(path)) || repoPath.endsWith("/Overview.md")) {
+      docs.push(repoPath);
+    }
+  });
+  return docs.sort();
+}
+
+function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
+  const matches: Array<{ label: string; score: number }> = [];
+  const path = file.path.toLowerCase();
+  const exports = file.exports.join(" ").toLowerCase();
+  const imports = file.imports.join(" ").toLowerCase();
+  const headings = file.headings.join(" ").toLowerCase();
+  for (const token of tokens) {
+    if (path.includes(token)) matches.push({ label: `path:${token}`, score: 5 });
+    if (exports.includes(token)) matches.push({ label: `export:${token}`, score: 4 });
+    if (headings.includes(token)) matches.push({ label: `heading:${token}`, score: 3 });
+    if (imports.includes(token)) matches.push({ label: `import:${token}`, score: 1 });
+  }
+  return matches;
+}
+
+function tokenizeQuery(query: string) {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9_/-]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function extractExports(content: string) {
+  const exports = new Set<string>();
+  collectRegex(content, /^\s*export\s+(?:async\s+)?(?:function|class|interface|type|const|let|var|enum)\s+([A-Za-z_$][\w$]*)/gm, exports);
+  collectRegex(content, /^\s*export\s+default\s+(?:async\s+)?(?:function|class)?\s*([A-Za-z_$][\w$]*)?/gm, exports, "default");
+  const namedExportRe = /^\s*export\s*\{([^}]+)\}/gm;
+  let match: RegExpExecArray | null;
+  while ((match = namedExportRe.exec(content)) !== null) {
+    for (const raw of match[1].split(",")) {
+      const name = raw.trim().split(/\s+as\s+/i)[0]?.trim();
+      if (name) exports.add(name);
+    }
+  }
+  return [...exports].sort();
+}
+
+function extractImports(content: string) {
+  const imports = new Set<string>();
+  const staticImportRe = /\b(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/g;
+  const dynamicImportRe = /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g;
+  collectRegex(content, staticImportRe, imports);
+  collectRegex(content, dynamicImportRe, imports);
+  return [...imports].sort();
+}
+
+function extractMarkdownHeadings(content: string) {
+  const headings = new Set<string>();
+  collectRegex(content, /^#{1,6}\s+(.+)$/gm, headings);
+  return [...headings].sort();
+}
+
+function collectRegex(content: string, regex: RegExp, values: Set<string>, fallback?: string) {
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    const value = match[1]?.trim() || fallback;
+    if (value) values.add(value);
+  }
+}
+
+function resolveNativeImport(from: string, specifier: string, filePaths: Set<string>) {
+  if (!specifier.startsWith(".")) return null;
+  const base = normalizeRepoPath(join(dirname(from), specifier));
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.js`,
+    `${base}.jsx`,
+    `${base}.json`,
+    `${base}.md`,
+    `${base}/index.ts`,
+    `${base}/index.tsx`,
+    `${base}/index.js`,
+  ];
+  return candidates.find((candidate) => filePaths.has(candidate)) ?? null;
+}
+
+function languageForPath(path: string) {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".ts" || ext === ".tsx") return "typescript";
+  if (ext === ".js" || ext === ".jsx" || ext === ".mjs" || ext === ".cjs") return "javascript";
+  if (ext === ".md") return "markdown";
+  if (ext === ".json") return "json";
+  if (ext === ".sh") return "shell";
+  if (ext === ".yaml" || ext === ".yml") return "yaml";
+  return ext.replace(/^\./, "") || "text";
+}
+
+function currentGitCommit(root: string) {
+  const result = Bun.spawnSync({
+    cmd: ["git", "rev-parse", "HEAD"],
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return null;
+  const value = result.stdout.toString().trim();
+  return value || null;
+}
+
+function walkNativeRepoFiles(dir: string, visit: (file: string) => void) {
+  if (!existsSync(dir)) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (!NATIVE_SKIP_DIRS.has(entry.name)) walkNativeRepoFiles(join(dir, entry.name), visit);
+    } else if (entry.isFile()) {
+      visit(join(dir, entry.name));
+    }
+  }
+}
+
+function writeJson(path: string, value: unknown) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
 function definedOnly<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
@@ -316,6 +760,31 @@ function newestKnownWikiTimestamp(root: string) {
   }
   const newest = timestamps.sort((a, b) => b - a)[0];
   return newest !== undefined ? new Date(newest).toISOString() : undefined;
+}
+
+function dedupeBy<T>(values: T[], key: (value: T) => string) {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const value of values) {
+    const id = key(value);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(value);
+  }
+  return result;
+}
+
+function countBy<T>(values: T[], key: (value: T) => string) {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const id = key(value);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function normalizeRepoPath(path: string) {
+  return path.split(sep).join("/").replace(/^\.\//, "");
 }
 
 function walkDirs(dir: string, visit: (dir: string) => void) {

@@ -32,9 +32,14 @@ import { initializeLandFindings, reconcileLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { ensureQoderWikiLink } from "../core/qoder";
 import {
+  initializeNativeWiki,
   getQoderWikiStatus,
   markQoderWikiReminder,
   markQoderWikiSync,
+  queryNativeWiki,
+  updateNativeWiki,
+  type NativeWikiBuildResult,
+  type NativeWikiQueryResult,
   type QoderWikiStatus,
 } from "../core/wiki";
 import { runCleanupLandCommand } from "./cleanup";
@@ -568,6 +573,43 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
+  if (subcommand === "init" || subcommand === "index") {
+    const result = initializeNativeWiki();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatNativeWikiBuildResult(result));
+    }
+    return;
+  }
+
+  if (subcommand === "update") {
+    const result = updateNativeWiki();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatNativeWikiBuildResult(result));
+    }
+    return;
+  }
+
+  if (subcommand === "query") {
+    const query = wikiQueryText(argv);
+    if (!query) {
+      throw new Error("Usage: gxpm wiki query <text> [--limit <n>] [--json]");
+    }
+    const result = queryNativeWiki({
+      query,
+      limit: parsePositiveIntegerOption(argv, "--limit"),
+    });
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatNativeWikiQueryResult(result));
+    }
+    return;
+  }
+
   if (subcommand === "mark-sync") {
     const record = markQoderWikiSync({ note: optionValue(argv, "--note") ?? undefined });
     console.log(`recorded Qoder wiki manual sync at ${record.lastSyncAt}`);
@@ -582,7 +624,7 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
-  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
 }
 
 function runQoderCommand(argv: string[], subcommand: string | undefined) {
@@ -639,6 +681,47 @@ function formatQoderWikiStatus(status: QoderWikiStatus) {
   }
   lines.push(`After manual Qoder resync, run: ${status.commands.markSync}`);
   return lines.join("\n");
+}
+
+function formatNativeWikiBuildResult(result: NativeWikiBuildResult) {
+  return [
+    `Native gxpm wiki: ${result.mode}`,
+    `state: ${result.state.status}`,
+    `baseCommit: ${result.state.baseCommit ?? "unknown"}`,
+    `files: ${result.index.files.length}`,
+    `edges: ${result.graph.edges.length}`,
+    `docs: ${result.docs.join(", ")}`,
+  ].join("\n");
+}
+
+function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
+  const lines = [`Native gxpm wiki query: ${result.query}`];
+  if (result.results.length === 0) {
+    lines.push("No matches. Try `gxpm wiki init` if the index is stale.");
+    return lines.join("\n");
+  }
+  lines.push("Context files:");
+  for (const file of result.contextFiles) lines.push(`- ${file}`);
+  if (result.suggestedDocs.length > 0) {
+    lines.push("Suggested docs:");
+    for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
+  }
+  return lines.join("\n");
+}
+
+function wikiQueryText(argv: string[]) {
+  const values: string[] = [];
+  for (let index = 2; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === "--json") continue;
+    if (arg === "--limit") {
+      index++;
+      continue;
+    }
+    if (arg.startsWith("--")) continue;
+    values.push(arg);
+  }
+  return values.join(" ").trim();
 }
 
 function runIssueHistory(issueId: string, asJson: boolean) {
