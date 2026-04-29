@@ -445,6 +445,25 @@ describe("gxpm wiki CLI", () => {
     expect(parsed.artifactWritten).toBe("wiki-context");
     const stored = JSON.parse(readFileSync(join(root, ".gxpm", "issues", "GXPM-91", "artifacts", "wiki-context.json"), "utf8"));
     expect(stored.payload.contextFiles).toContain("core/phase-gates.ts");
+
+    const phaseOverride = runCli(root, ["wiki", "context", "GXPM-91", "--phase", "plan", "--limit", "2", "--json"]);
+    expect(phaseOverride.exitCode).toBe(0);
+    expect(JSON.parse(output(phaseOverride)).phase).toBe("plan");
+
+    const invalidPhase = runCli(root, ["wiki", "context", "GXPM-91", "--phase", "INVALID_PHASE", "--json"]);
+    expect(invalidPhase.exitCode).toBe(1);
+    expect(output(invalidPhase)).toContain("Invalid phase: INVALID_PHASE");
+  });
+
+  test("rejects extra positional tokens for native wiki context", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-extra-"));
+    expect(runCli(root, ["issue", "create", "GXPM-92"]).exitCode).toBe(0);
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    const context = runCli(root, ["wiki", "context", "GXPM-92", "extra-token", "--json"]);
+
+    expect(context.exitCode).toBe(1);
+    expect(output(context)).toContain("Usage: gxpm wiki context <issue-id>");
   });
 });
 

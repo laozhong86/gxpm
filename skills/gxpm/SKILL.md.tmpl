@@ -133,7 +133,8 @@ gxpm wiki init                         # generate .gxpm/wiki index, graph, docs,
 gxpm wiki index                        # alias for local index/doc generation
 gxpm wiki update                       # refresh local wiki after repo changes
 gxpm wiki query <text> [--json]        # return context files and suggested docs
-gxpm wiki context <issue-id> [--json]  # derive query from issue state/artifacts
+gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]
+# derive query from issue state/artifacts
 ```
 
 Native wiki state is ignored by git and lives under:

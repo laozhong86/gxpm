@@ -330,6 +330,19 @@ describe("gxpm-native wiki engine", () => {
     expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
   });
 
+  test("builds issue context when legacy issue artifact index is missing", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/wiki.ts", "export function getNativeWikiContextForIssue() {}\n");
+    createIssueState({ root, issueId: "GXPM-92" });
+    rmSync(join(root, ".gxpm", "issues", "GXPM-92", "artifacts", "index.json"));
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const result = getNativeWikiContextForIssue({ root, issueId: "GXPM-92", limit: 2 });
+
+    expect(result.issueId).toBe("GXPM-92");
+    expect(result.artifactsUsed).toEqual([]);
+  });
+
   test("updates the native wiki after repository files change", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");

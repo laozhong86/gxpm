@@ -70,6 +70,7 @@ import { dryRunOrchestratorTick } from "../core/orchestrator";
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
 const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}]`;
+const WIKI_CONTEXT_USAGE = "Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -628,11 +629,12 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
   if (subcommand === "context") {
     const contextIssueId = argv[2];
     if (!contextIssueId || contextIssueId.startsWith("--")) {
-      throw new Error("Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]");
+      throw new Error(WIKI_CONTEXT_USAGE);
     }
+    assertNoUnexpectedWikiContextPositionals(argv);
     const result = getNativeWikiContextForIssue({
       issueId: contextIssueId,
-      phase: optionValue(argv, "--phase") ?? undefined,
+      phase: argv.includes("--phase") ? optionRequiredValue(argv, "--phase") : undefined,
       limit: parsePositiveIntegerOption(argv, "--limit"),
     });
     const artifactWritten = argv.includes("--write-artifact");
@@ -661,7 +663,7 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
-  throw new Error("Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json] | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]");
+  throw new Error(`Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | ${WIKI_CONTEXT_USAGE.replace(/^Usage: /, "")} | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]`);
 }
 
 function runQoderCommand(argv: string[], subcommand: string | undefined) {
@@ -783,6 +785,20 @@ function wikiQueryText(argv: string[]) {
     values.push(arg);
   }
   return values.join(" ").trim();
+}
+
+function assertNoUnexpectedWikiContextPositionals(argv: string[]) {
+  const optionsWithValues = new Set(["--phase", "--limit"]);
+  const flagOptions = new Set(["--json", "--write-artifact"]);
+  for (let index = 3; index < argv.length; index++) {
+    const arg = argv[index];
+    if (optionsWithValues.has(arg)) {
+      index++;
+      continue;
+    }
+    if (flagOptions.has(arg) || arg.startsWith("--")) continue;
+    throw new Error(WIKI_CONTEXT_USAGE);
+  }
 }
 
 function runIssueHistory(issueId: string, asJson: boolean) {

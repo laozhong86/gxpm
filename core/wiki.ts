@@ -325,7 +325,7 @@ function resolveIssueContextPhase(value: GxpmPhase | string): GxpmPhase {
 }
 
 function readIssueContextArtifacts(root: string, issueId: string) {
-  const records = listArtifacts({ root, issueId });
+  const records = listIssueArtifactsIfPresent(root, issueId);
   const available = new Map(records.map((record) => [record.type, record]));
   return ISSUE_CONTEXT_ARTIFACT_PRIORITY.filter((type) => available.has(type)).map((type) => {
     const stored = readArtifact({ root, issueId, type });
@@ -335,6 +335,17 @@ function readIssueContextArtifacts(root: string, issueId: string) {
       payload: stored.payload,
     };
   });
+}
+
+function listIssueArtifactsIfPresent(root: string, issueId: string) {
+  try {
+    return listArtifacts({ root, issueId });
+  } catch (error) {
+    if (error instanceof Error && error.message === `Artifact index not found: ${issueId}`) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 function buildIssueContextQuery(input: {
@@ -359,30 +370,41 @@ function buildIssueContextQuery(input: {
 
 function payloadSearchText(payload: unknown) {
   const values: string[] = [];
-  collectPayloadSearchText(payload, values, 0);
+  collectPayloadSearchText(payload, values, 0, { length: 0 });
   return values;
 }
 
-function collectPayloadSearchText(value: unknown, values: string[], depth: number) {
-  if (depth > 5 || values.join(" ").length > 4000) return;
+function collectPayloadSearchText(
+  value: unknown,
+  values: string[],
+  depth: number,
+  state: { length: number },
+) {
+  if (depth > 5 || state.length > 4000) return;
   if (typeof value === "string") {
-    values.push(value);
+    pushPayloadSearchText(values, state, value);
     return;
   }
   if (typeof value === "number" || typeof value === "boolean") {
-    values.push(String(value));
+    pushPayloadSearchText(values, state, String(value));
     return;
   }
   if (Array.isArray(value)) {
-    value.forEach((item) => collectPayloadSearchText(item, values, depth + 1));
+    value.forEach((item) => collectPayloadSearchText(item, values, depth + 1, state));
     return;
   }
   if (value && typeof value === "object") {
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      values.push(key);
-      collectPayloadSearchText(nested, values, depth + 1);
+      pushPayloadSearchText(values, state, key);
+      collectPayloadSearchText(nested, values, depth + 1, state);
     }
   }
+}
+
+function pushPayloadSearchText(values: string[], state: { length: number }, value: string) {
+  if (state.length > 4000) return;
+  values.push(value);
+  state.length += value.length + 1;
 }
 
 function buildStatus(input: {
