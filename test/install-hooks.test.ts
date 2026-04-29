@@ -16,7 +16,7 @@ function bunRun(args: string[], cwd: string) {
 }
 
 describe("install-hooks", () => {
-  test("installs 4 hook files into target repo's .githooks/", () => {
+  test("installs gxpm hook files into target repo's .githooks/", () => {
     const repo = mkdtempSync(join(tmpdir(), "gxpm-install-target-"));
     execSync("git init -q", { cwd: repo });
 
@@ -27,6 +27,11 @@ describe("install-hooks", () => {
     expect(existsSync(join(repo, ".githooks", "gxpm-commit-msg"))).toBe(true);
     expect(existsSync(join(repo, ".githooks", "gxpm-pre-push"))).toBe(true);
     expect(existsSync(join(repo, ".githooks", "gxpm-post-merge"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "gxpm-post-checkout"))).toBe(true);
+    const preCommit = readFileSync(join(repo, ".githooks", "gxpm-pre-commit"), "utf8");
+    expect(preCommit).toContain("gate branch-policy");
+    const postCheckout = readFileSync(join(repo, ".githooks", "gxpm-post-checkout"), "utf8");
+    expect(postCheckout).toContain("gate branch-policy");
     const postMerge = readFileSync(join(repo, ".githooks", "gxpm-post-merge"), "utf8");
     expect(postMerge).toContain('gxpm gate post-merge "$issue_id" || true');
     expect(postMerge).toContain("post-merge-reconcile");
@@ -73,8 +78,11 @@ describe("install-hooks", () => {
     expect(existsSync(join(repo, ".githooks", "commit-msg"))).toBe(true);
     expect(existsSync(join(repo, ".githooks", "pre-push"))).toBe(true);
     expect(existsSync(join(repo, ".githooks", "post-merge"))).toBe(true);
+    expect(existsSync(join(repo, ".githooks", "post-checkout"))).toBe(true);
 
     const preCommit = readFileSync(join(repo, ".githooks", "pre-commit"), "utf8");
     expect(preCommit).toContain("gxpm-pre-commit");
+    const postCheckout = readFileSync(join(repo, ".githooks", "post-checkout"), "utf8");
+    expect(postCheckout).toContain("gxpm-post-checkout");
   });
 });

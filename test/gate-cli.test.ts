@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initializeDispatch } from "../core/dispatch";
@@ -38,6 +38,38 @@ describe("gxpm gate pre-commit CLI", () => {
     ]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("no-state");
+  });
+});
+
+describe("gxpm gate branch-policy CLI", () => {
+  test("blocks a feature branch in the canonical main checkout", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-main-"));
+
+    const r = runCli(root, [
+      "gate", "branch-policy",
+      "--branch", "gxpm-27-main-branch-guard",
+      "--canonical-main", root,
+    ]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("main-worktree-non-main");
+  });
+
+  test("allows a feature branch under the configured worktree root", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-root-"));
+    const worktreeRoot = join(root, "gxpm-worktrees");
+    const worktree = join(worktreeRoot, "gxpm-27-main-branch-guard");
+    mkdirSync(worktree, { recursive: true });
+
+    const r = runCli(worktree, [
+      "gate", "branch-policy",
+      "--branch", "gxpm-27-main-branch-guard",
+      "--canonical-main", root,
+      "--worktree-root", worktreeRoot,
+    ]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("phase-ok");
   });
 });
 

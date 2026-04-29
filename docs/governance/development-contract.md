@@ -64,6 +64,7 @@
 - 模板改动和生成物刷新可以同一提交，但不要混入无关重构。
 - 测试基础设施、host adapter、产品文档变更应尽量独立，便于回滚。
 - 提交前至少运行 `bun test`、`bun run check`、`git diff --check`。
+- 主目录 checkout 必须保持在 `main`。`gxpm gate branch-policy` 会阻止 canonical main checkout 在非 `main` 分支上提交或推送；feature 分支应在 dedicated git worktree 中运行。
 
 ## Live Install 风险
 
