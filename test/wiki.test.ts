@@ -303,6 +303,35 @@ describe("gxpm-native wiki engine", () => {
     });
   });
 
+  test("generates topic docs with source anchors, cite blocks, and a phase diagram", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/artifacts.ts", "export function writeArtifact() {}\n");
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "scripts/gxpm.ts", 'import { initializeNativeWiki } from "../core/wiki";\n');
+    writeRepoFile(root, ".githooks/pre-commit", "#!/bin/sh\n");
+
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    expect(result.docs).toContain(".gxpm/wiki/content/Phase-Lifecycle.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Artifact-System.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Hook-Governance.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Config-Worktree.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Native-Wiki.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/CLI-Surface.md");
+
+    const phaseDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Phase-Lifecycle.md"), "utf8");
+    expect(phaseDoc).toContain("<cite>");
+    expect(phaseDoc).toContain("file://core/phase-gates.ts#L");
+    expect(phaseDoc).toContain("```mermaid");
+    expect(phaseDoc).toContain("triage --> plan");
+
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(wikiDoc).toContain("file://core/wiki.ts#L");
+  });
+
   test("queries native wiki docs and source files from the structured index", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
@@ -316,6 +345,22 @@ describe("gxpm-native wiki engine", () => {
     expect(result.results[0].source).toBe("file-index");
     expect(result.contextFiles).toContain("core/phase-gates.ts");
     expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+  });
+
+  test("suggests relevant topic docs before generic wiki pages", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\nexport function getQoderWikiStatus() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const phase = queryNativeWiki({ root, query: "phase gate transition artifacts", limit: 3 });
+    expect(phase.contextFiles).toContain("core/phase-gates.ts");
+    expect(phase.suggestedDocs[0]).toBe(".gxpm/wiki/content/Phase-Lifecycle.md");
+    expect(phase.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+
+    const wiki = queryNativeWiki({ root, query: "qoder native wiki initialization update", limit: 3 });
+    expect(wiki.contextFiles).toContain("core/wiki.ts");
+    expect(wiki.suggestedDocs[0]).toBe(".gxpm/wiki/content/Native-Wiki.md");
   });
 
   test("builds issue context from issue state and artifacts", () => {

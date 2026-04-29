@@ -404,6 +404,8 @@ describe("gxpm wiki CLI", () => {
     expect(parsed.native.detected).toBe(true);
     expect(parsed.native.state).toBe("current");
     expect(parsed.native.indexedFiles).toBe(1);
+    expect(parsed.native.docs).toContain(".gxpm/wiki/content/Phase-Lifecycle.md");
+    expect(parsed.native.docs).toContain(".gxpm/wiki/content/Native-Wiki.md");
     expect(parsed.qoder.detected).toBe(true);
     expect(parsed.qoder.pageCount).toBe(1);
     expect(parsed.qoder.topPages[0].citedFiles).toContain("core/state.ts");

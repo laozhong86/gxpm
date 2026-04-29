@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
 import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
-import { isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
+import { GXPM_PHASES, isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
 const QODER_REPOWIKI_ROOT = ".qoder/repowiki";
 const QODER_STATE_PATH = ".gxpm/wiki/qoder.json";
@@ -21,6 +21,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
 const NATIVE_TEXT_EXTENSIONS = new Set([
+  "",
   ".cjs",
   ".js",
   ".json",
@@ -95,6 +96,7 @@ export interface NativeWikiFileEntry {
   language: string;
   sizeBytes: number;
   mtimeMs: number;
+  lineCount: number;
   exports: string[];
   imports: string[];
   headings: string[];
@@ -355,7 +357,7 @@ export function queryNativeWiki(input: {
     query: input.query,
     results: scored,
     contextFiles,
-    suggestedDocs: suggestedNativeDocs(root, contextFiles),
+    suggestedDocs: suggestedNativeDocs(root, contextFiles, tokens),
   };
 }
 
@@ -806,6 +808,7 @@ function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
     language: languageForPath(repoPath),
     sizeBytes: stat.size,
     mtimeMs: stat.mtimeMs,
+    lineCount: countLines(content),
     exports: extractExports(content),
     imports: extractImports(content),
     headings: extractMarkdownHeadings(content),
@@ -822,6 +825,7 @@ function writeNativeWikiDocs(
     ["Overview.md", renderNativeOverview(state, index, graph)],
     ["File-Index.md", renderNativeFileIndex(index)],
     ["Code-Graph.md", renderNativeCodeGraph(graph)],
+    ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, renderNativeTopicDoc(topic, index, graph)] as const),
   ] as const;
   const paths: string[] = [];
   for (const [name, content] of docs) {
@@ -879,6 +883,162 @@ function renderNativeCodeGraph(graph: NativeWikiGraph) {
     .slice(0, 200)
     .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
   return ["# Code Graph", "", ...edges, ""].join("\n");
+}
+
+interface NativeWikiTopic {
+  fileName: string;
+  title: string;
+  summary: string;
+  keywords: string[];
+  sourcePaths: string[];
+  sourcePrefixes?: string[];
+  mermaid?: string;
+}
+
+const NATIVE_WIKI_TOPICS: NativeWikiTopic[] = [
+  {
+    fileName: "Phase-Lifecycle.md",
+    title: "Phase Lifecycle",
+    summary: "How gxpm moves issue work through phase gates and artifact-backed transitions.",
+    keywords: ["phase", "phases", "gate", "gates", "transition", "workflow", "lifecycle", "verify", "land"],
+    sourcePaths: [
+      "core/state.ts",
+      "core/phase-gates.ts",
+      "core/phase-artifact.ts",
+      "core/triage.ts",
+      "core/plan.ts",
+      "core/dispatch.ts",
+      "core/implement.ts",
+      "core/ac-check.ts",
+      "core/self-review.ts",
+      "core/ship.ts",
+      "core/pr-check.ts",
+      "core/verify.ts",
+      "core/qa.ts",
+      "core/land.ts",
+      "scripts/phase-artifact-commands.ts",
+    ],
+    mermaid: renderPhaseLifecycleDiagram(),
+  },
+  {
+    fileName: "Artifact-System.md",
+    title: "Artifact System",
+    summary: "How gxpm stores phase evidence, acceptance contracts, checkpoints, and wiki context.",
+    keywords: ["artifact", "artifacts", "evidence", "acceptance", "checkpoint", "context", "memory"],
+    sourcePaths: [
+      "core/artifacts.ts",
+      "core/phase-artifact.ts",
+      "core/state.ts",
+      "scripts/phase-artifact-commands.ts",
+    ],
+  },
+  {
+    fileName: "Hook-Governance.md",
+    title: "Hook Governance",
+    summary: "How shell and Codex hooks guard branches, sessions, generated files, and workflow prompts.",
+    keywords: ["hook", "hooks", "governance", "branch", "session", "codex", "pre-commit"],
+    sourcePaths: [
+      "core/gate.ts",
+      "scripts/install-hooks.ts",
+      "scripts/install-codex-hooks.ts",
+      "templates/hooks/gxpm-commit-msg",
+      "templates/hooks/gxpm-post-merge",
+      "templates/hooks/gxpm-pre-commit",
+      "templates/hooks/gxpm-pre-push",
+      "templates/codex-hooks/pre-tool-use.sh",
+      "templates/codex-hooks/session-start.sh",
+      "templates/codex-hooks/user-prompt-submit.sh",
+    ],
+    sourcePrefixes: [".githooks/", "templates/hooks/", "templates/codex-hooks/"],
+  },
+  {
+    fileName: "Config-Worktree.md",
+    title: "Config And Worktree",
+    summary: "How gxpm resolves repo config, workspace runtime behavior, and worktree policy.",
+    keywords: ["config", "configuration", "worktree", "workspace", "branch", "main"],
+    sourcePaths: [
+      "core/config.ts",
+      "core/workspace-runtime.ts",
+      "AGENTS.md",
+      "docs/governance/development-contract.md",
+    ],
+  },
+  {
+    fileName: "Native-Wiki.md",
+    title: "Native Wiki",
+    summary: "How gxpm initializes, updates, queries, and compares its first-party wiki with optional Qoder output.",
+    keywords: ["wiki", "native", "qoder", "repowiki", "index", "query", "context", "knowledge"],
+    sourcePaths: [
+      "core/wiki.ts",
+      "core/qoder.ts",
+      "test/wiki.test.ts",
+      "test/qoder-link.test.ts",
+      "docs/governance/development-contract.md",
+    ],
+  },
+  {
+    fileName: "CLI-Surface.md",
+    title: "CLI Surface",
+    summary: "How gxpm exposes issue, artifact, wiki, hook, and workflow commands to agents.",
+    keywords: ["cli", "command", "commands", "gxpm", "bin", "surface", "issue"],
+    sourcePaths: ["scripts/gxpm.ts", "bin/gxpm", "README.md", "package.json"],
+  },
+];
+
+function renderNativeTopicDoc(topic: NativeWikiTopic, index: NativeWikiIndex, graph: NativeWikiGraph) {
+  const files = topicFiles(topic, index);
+  const citeLines = files.map((file) => `- [${file.path}](${nativeSourceLink(file)})`);
+  const rows = files.map((file) => {
+    const signals = [...file.exports, ...file.headings].slice(0, 8).map(escapeMarkdownCell).join(", ");
+    return `| [${escapeMarkdownCell(file.path)}](${nativeSourceLink(file)}) | ${file.language} | ${signals || "-"} |`;
+  });
+  const fileSet = new Set(files.map((file) => file.path));
+  const edges = graph.edges
+    .filter((edge) => fileSet.has(edge.from) || fileSet.has(edge.to))
+    .slice(0, 30)
+    .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
+
+  return [
+    `# ${topic.title}`,
+    "",
+    topic.summary,
+    "",
+    "<cite>",
+    ...(citeLines.length > 0 ? citeLines : ["- No matching indexed source files."]),
+    "</cite>",
+    "",
+    ...(topic.mermaid ? ["## Flow", "", "```mermaid", topic.mermaid, "```", ""] : []),
+    "## Source Files",
+    "",
+    "| File | Language | Signals |",
+    "| --- | --- | --- |",
+    ...(rows.length > 0 ? rows : ["| - | - | - |"]),
+    "",
+    "## Related Imports",
+    "",
+    ...(edges.length > 0 ? edges : ["- none"]),
+    "",
+  ].join("\n");
+}
+
+function topicFiles(topic: NativeWikiTopic, index: NativeWikiIndex) {
+  return index.files
+    .filter((file) => nativeTopicOwnsPath(topic, file.path))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function nativeTopicOwnsPath(topic: NativeWikiTopic, path: string) {
+  return topic.sourcePaths.includes(path) || (topic.sourcePrefixes ?? []).some((prefix) => path.startsWith(prefix));
+}
+
+function nativeSourceLink(file: NativeWikiFileEntry) {
+  const endLine = Math.max(1, Math.min(file.lineCount || 1, 80));
+  return `file://${file.path}#L1-L${endLine}`;
+}
+
+function renderPhaseLifecycleDiagram() {
+  const edges = GXPM_PHASES.slice(0, -1).map((phase, index) => `  ${phase} --> ${GXPM_PHASES[index + 1]}`);
+  return ["flowchart LR", ...edges].join("\n");
 }
 
 function readNativeWikiIndex(root: string): NativeWikiIndex {
@@ -971,18 +1131,30 @@ function nativeWikiStatusCommands() {
   };
 }
 
-function suggestedNativeDocs(root: string, contextFiles: string[]) {
-  const contentRoot = join(root, NATIVE_WIKI_CONTENT_ROOT);
-  const docs: string[] = [];
-  walkFiles(contentRoot, (file) => {
+function suggestedNativeDocs(root: string, contextFiles: string[], tokens: string[] = []) {
+  const allDocs = new Set(listNativeWikiDocs(root));
+  const topicDocs = NATIVE_WIKI_TOPICS.map((topic, index) => ({
+    path: `${NATIVE_WIKI_CONTENT_ROOT}/${topic.fileName}`,
+    score: scoreNativeTopicSuggestion(topic, contextFiles, tokens),
+    index,
+  }))
+    .filter((topic) => topic.score > 0 && allDocs.has(topic.path))
+    .sort((a, b) => b.score - a.score || a.index - b.index || a.path.localeCompare(b.path))
+    .map((topic) => topic.path);
+
+  const genericDocs: string[] = [];
+  walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
     if (!file.endsWith(".md")) return;
     const repoPath = toRepoPath(root, file);
+    if (isNativeTopicDoc(repoPath) || repoPath.endsWith("/Overview.md")) return;
     const cited = extractCitedFiles(safeRead(file));
-    if (cited.some((path) => contextFiles.includes(path)) || repoPath.endsWith("/Overview.md")) {
-      docs.push(repoPath);
-    }
+    if (cited.some((path) => contextFiles.includes(path))) genericDocs.push(repoPath);
   });
-  return docs.sort();
+
+  const overview = allDocs.has(`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`)
+    ? [`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`]
+    : [];
+  return dedupeBy([...topicDocs, ...genericDocs.sort(), ...overview], (path) => path);
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
@@ -998,6 +1170,22 @@ function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
     if (imports.includes(token)) matches.push({ label: `import:${token}`, score: 1 });
   }
   return matches;
+}
+
+function scoreNativeTopicSuggestion(topic: NativeWikiTopic, contextFiles: string[], tokens: string[]) {
+  let score = 0;
+  for (const file of contextFiles) {
+    if (nativeTopicOwnsPath(topic, file)) score += 20;
+  }
+  for (const token of tokens) {
+    if (topic.keywords.includes(token)) score += 3;
+    if (topic.sourcePaths.some((path) => path.toLowerCase().includes(token))) score += 1;
+  }
+  return score;
+}
+
+function isNativeTopicDoc(repoPath: string) {
+  return NATIVE_WIKI_TOPICS.some((topic) => repoPath === `${NATIVE_WIKI_CONTENT_ROOT}/${topic.fileName}`);
 }
 
 function tokenizeQuery(query: string) {
@@ -1193,6 +1381,17 @@ function safeRead(path: string) {
   }
 }
 
+function countLines(content: string) {
+  if (content.length === 0) return 0;
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const trimmedTrailingNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+  return trimmedTrailingNewline.length === 0 ? 1 : trimmedTrailingNewline.split("\n").length;
+}
+
 function toRepoPath(root: string, path: string) {
   return relative(root, path).split(sep).join("/");
+}
+
+function escapeMarkdownCell(value: string) {
+  return value.replace(/\|/g, "\\|");
 }
