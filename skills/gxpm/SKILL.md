@@ -85,6 +85,24 @@ gxpm issue resume <issue-id>
 `.gxpm/issues/<issue-id>/memory/resume-packet.json`. A new session should run
 `gxpm issue resume <issue-id>` before continuing issue work.
 
+To inspect execution-runtime state without relying on chat memory:
+
+```bash
+gxpm run start <issue-id> [--workspace <path>] [--json]
+gxpm run list <issue-id> [--json]
+gxpm run status <issue-id> <run-id> [--json]
+gxpm run event <issue-id> <run-id> --type <event> [--status <status>]
+gxpm workspace plan <issue-id> [--root <path>] [--json]
+gxpm workspace ensure <issue-id> [--root <path>] [--json]
+gxpm orchestrator tick --dry-run [--json] [--include-all]
+```
+
+`orchestrator tick --dry-run` is read-only. It reports local `.gxpm` issue
+dispatchability and blocker reasons, but does not claim work, create
+workspaces, launch agents, write artifacts, or transition phases. Run ledger
+records live under `.gxpm/issues/<id>/runs/`; workspace runtime defaults to
+`workspace.root` (`.gxpm/local/workspaces`) unless overridden.
+
 If no state exists, create it before phase work:
 
 ```bash

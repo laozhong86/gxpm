@@ -45,6 +45,9 @@ interface ConfigDoc {
     enforcement?: WorktreeEnforcement;
     default?: WorktreeDefault;
   };
+  workspace?: {
+    root?: string;
+  };
   update_check?: boolean;
   [k: string]: unknown;
 }
@@ -63,6 +66,11 @@ const CONFIG_REGISTRY = {
     defaultValue: "ask" satisfies WorktreeDefault,
     description: "Default worktree choice when enforcement is optional: use, skip, or ask.",
     normalize: (value: unknown) => normalizeEnum("worktree.default", value, WORKTREE_DEFAULT_VALUES),
+  },
+  "workspace.root": {
+    defaultValue: ".gxpm/local/workspaces",
+    description: "Default root for gxpm-managed per-issue execution workspaces.",
+    normalize: (value: unknown) => normalizeNonEmptyString("workspace.root", value),
   },
   update_check: {
     defaultValue: true,
@@ -296,6 +304,13 @@ function normalizeBoolean(value: unknown) {
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error("update_check must be true or false");
+}
+
+function normalizeNonEmptyString(key: string, value: unknown) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${key} must be a non-empty string`);
+  }
+  return value;
 }
 
 function normalizeEnum<T extends readonly string[]>(key: string, value: unknown, allowed: T): T[number] {

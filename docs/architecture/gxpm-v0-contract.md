@@ -55,6 +55,8 @@ V0 已实现的本地目录：
     resume-packet.json
     checkpoints/
       20260427-044500-handoff.md
+  runs/
+    run-20260428123000-1a2b3c4d.json
 ```
 
 V0 已支持 JSON artifact store。当前 artifact type：
@@ -83,6 +85,16 @@ V0 的上下文恢复入口是 issue-local memory，而不是聊天历史或 gst
 - `gxpm issue resume <issue-id>`：读取 `resume-packet.json`，打印 phase、checkpoint path、summary、remaining work 和 notes，供新对话恢复上下文。
 
 checkpoint payload 至少包含 `summary`，可选 `decisions`、`remainingWork`、`notes`、`filesModified`、`status`、`sessionDurationSeconds`。`memory/resume-packet.json` 是恢复流程的机器可读入口，markdown checkpoint 是人类可读交接文档。
+
+### Run Ledger / Workspace Runtime
+
+V0 的执行运行时先提供可审计原语，不启动长驻 daemon：
+
+- run ledger 保存在 `.gxpm/issues/<issue-id>/runs/`，每条 run 记录包含 `runId`、`attempt`、`status`、`sessionId`、`workspacePath`、失败原因和事件序列。
+- workspace runtime 负责把 issue 映射到安全的 per-issue workspace 路径，默认根目录来自 `workspace.root`（默认 `.gxpm/local/workspaces`），并提供 plan / ensure / cleanup 三个动作。
+- orchestrator dry-run tick 只读本地 `.gxpm` issue state，报告哪些 issue 可派发、哪些被 phase/artifact 阻塞；它不 claim、不启动 agent、不写 phase state。
+
+这些运行时原语属于 Capability Runtime 的 execution 层，但不改变 phase 顺序，也不替代 phase artifact gate。
 
 ### Phase
 
@@ -221,6 +233,14 @@ gxpm issue status <issue-id>
 gxpm issue transition <issue-id> <phase>
 gxpm issue checkpoint <issue-id> --title "handoff" --stdin
 gxpm issue resume <issue-id>
+gxpm run start <issue-id>
+gxpm run list <issue-id>
+gxpm run status <issue-id> <run-id>
+gxpm run event <issue-id> <run-id> --type <event>
+gxpm workspace plan <issue-id>
+gxpm workspace ensure <issue-id>
+gxpm workspace cleanup <issue-id>
+gxpm orchestrator tick --dry-run
 gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> <type>
 gxpm triage init <issue-id>
