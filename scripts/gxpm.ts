@@ -1223,14 +1223,11 @@ function detectCanonicalMainRoot() {
     stderr: "pipe",
   });
   if (result.exitCode !== 0) return undefined;
-  const records = result.stdout.toString().split(/\n(?=worktree )/);
-  for (const record of records) {
-    const lines = record.trim().split("\n");
-    const worktree = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
-    const branch = lines.find((line) => line.startsWith("branch "))?.slice("branch ".length);
-    if (worktree && branch === "refs/heads/main") return worktree;
-  }
-  return undefined;
+  return result.stdout
+    .toString()
+    .split("\n")
+    .find((line) => line.startsWith("worktree "))
+    ?.slice("worktree ".length);
 }
 
 function gateEvent(verdict: { allowed: boolean; code: string; reason: string; details?: Record<string, unknown> }, gate: string, issueId: string): StateEvent {

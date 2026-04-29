@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import {
   CODE_COMMIT_PHASES,
   PHASE_GATE_RULES,
@@ -69,7 +69,8 @@ function normalizePath(path: string): string {
 function isInsidePath(root: string, candidate: string): boolean {
   const normalizedRoot = normalizePath(root);
   const normalizedCandidate = normalizePath(candidate);
-  return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(`${normalizedRoot}/`);
+  const rel = relative(normalizedRoot, normalizedCandidate);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 export function evaluateBranchPolicy(input: BranchPolicyInput): GateVerdict {

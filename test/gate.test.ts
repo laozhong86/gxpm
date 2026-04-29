@@ -73,7 +73,7 @@ describe("evaluateBranchPolicy", () => {
 
   test("blocks a feature branch in the canonical main checkout", () => {
     const v = evaluateBranchPolicy({
-      currentRoot: "/repo/gxpm",
+      currentRoot: "/repo/gxpm/",
       currentBranch: "gxpm-27-main-branch-guard",
       canonicalMainRoot: "/repo/gxpm",
       env: {},
@@ -81,6 +81,19 @@ describe("evaluateBranchPolicy", () => {
 
     expect(v.allowed).toBe(false);
     expect(v.code).toBe("main-worktree-non-main");
+  });
+
+  test("treats trailing separators as the same worktree path", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm-worktrees/gxpm-27-main-branch-guard/",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm/",
+      allowedWorktreeRoot: "/repo/gxpm-worktrees/",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("phase-ok");
   });
 
   test("allows a feature branch in an allowed worktree root", () => {

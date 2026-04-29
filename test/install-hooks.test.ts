@@ -30,6 +30,8 @@ describe("install-hooks", () => {
     expect(existsSync(join(repo, ".githooks", "gxpm-post-checkout"))).toBe(true);
     const preCommit = readFileSync(join(repo, ".githooks", "gxpm-pre-commit"), "utf8");
     expect(preCommit).toContain("gate branch-policy");
+    expect(preCommit).toContain("git diff --cached --name-only --diff-filter=ACMR -z");
+    expect(preCommit).toContain('"${staged_files[@]}"');
     const postCheckout = readFileSync(join(repo, ".githooks", "gxpm-post-checkout"), "utf8");
     expect(postCheckout).toContain("gate branch-policy");
     const postMerge = readFileSync(join(repo, ".githooks", "gxpm-post-merge"), "utf8");

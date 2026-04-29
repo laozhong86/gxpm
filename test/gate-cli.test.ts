@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,6 +71,22 @@ describe("gxpm gate branch-policy CLI", () => {
 
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("phase-ok");
+  });
+
+  test("detects the primary worktree as canonical even when a linked worktree is on main", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-primary-"));
+    const linkedMain = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-linked-main-"));
+    execSync("git init -q -b main", { cwd: root });
+    writeFileSync(join(root, "README.md"), "initial\n");
+    execSync("git add README.md", { cwd: root });
+    execSync("git -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial", { cwd: root });
+    execSync("git switch -q -c gxpm-27-main-branch-guard", { cwd: root });
+    execSync(`git worktree add "${linkedMain}" main`, { cwd: root });
+
+    const r = runCli(root, ["gate", "branch-policy"]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("main-worktree-non-main");
   });
 });
 
