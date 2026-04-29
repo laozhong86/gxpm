@@ -418,6 +418,57 @@ describe("gxpm wiki CLI", () => {
     expect(stored.lastReminderAt).toBeTruthy();
     expect(stored.note).toBe("session reminder");
   });
+
+  test("prints native wiki context for an issue and can persist it as an artifact", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-"));
+    const source = join(root, "core", "phase-gates.ts");
+    mkdirSync(dirname(source), { recursive: true });
+    writeFileSync(source, "export const PHASE_GATE_RULES = [];\n");
+    expect(runCli(root, ["issue", "create", "GXPM-91"]).exitCode).toBe(0);
+    expect(
+      runCli(root, [
+        "artifact",
+        "write",
+        "GXPM-91",
+        "issue-intake",
+        "--json",
+        JSON.stringify({ summary: "Need phase gate context for implementation." }),
+      ]).exitCode,
+    ).toBe(0);
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    const context = runCli(root, ["wiki", "context", "GXPM-91", "--limit", "2", "--write-artifact", "--json"]);
+
+    expect(context.exitCode).toBe(0);
+    const parsed = JSON.parse(output(context));
+    expect(parsed.contextFiles).toContain("core/phase-gates.ts");
+    expect(parsed.artifactWritten).toBe("wiki-context");
+    const stored = JSON.parse(readFileSync(join(root, ".gxpm", "issues", "GXPM-91", "artifacts", "wiki-context.json"), "utf8"));
+    expect(stored.payload.contextFiles).toContain("core/phase-gates.ts");
+
+    const phaseOverride = runCli(root, ["wiki", "context", "GXPM-91", "--phase", "plan", "--limit", "2", "--json"]);
+    expect(phaseOverride.exitCode).toBe(0);
+    expect(JSON.parse(output(phaseOverride)).phase).toBe("plan");
+
+    const invalidPhase = runCli(root, ["wiki", "context", "GXPM-91", "--phase", "INVALID_PHASE", "--json"]);
+    expect(invalidPhase.exitCode).toBe(1);
+    expect(output(invalidPhase)).toContain("Invalid phase: INVALID_PHASE");
+  });
+
+  test("rejects extra positional tokens for native wiki context", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-extra-"));
+    expect(runCli(root, ["issue", "create", "GXPM-92"]).exitCode).toBe(0);
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    const context = runCli(root, ["wiki", "context", "GXPM-92", "extra-token", "--json"]);
+
+    expect(context.exitCode).toBe(1);
+    expect(output(context)).toContain("Usage: gxpm wiki context <issue-id>");
+
+    const unknownFlag = runCli(root, ["wiki", "context", "GXPM-92", "--wirte-artifact", "--json"]);
+    expect(unknownFlag.exitCode).toBe(1);
+    expect(output(unknownFlag)).toContain("Unknown option for gxpm wiki context: --wirte-artifact");
+  });
 });
 
 describe("gxpm issue checkpoint/resume CLI", () => {

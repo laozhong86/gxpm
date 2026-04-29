@@ -66,6 +66,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `acceptance-contract`
 - `implementation-plan`
 - `dispatch-handoff`
+- `wiki-context`
 - `local-verify`
 - `acceptance-check`
 - `self-review`

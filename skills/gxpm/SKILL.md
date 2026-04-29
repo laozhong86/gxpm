@@ -142,6 +142,8 @@ gxpm wiki init                         # generate .gxpm/wiki index, graph, docs,
 gxpm wiki index                        # alias for local index/doc generation
 gxpm wiki update                       # refresh local wiki after repo changes
 gxpm wiki query <text> [--json]        # return context files and suggested docs
+gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]
+# derive query from issue state/artifacts
 ```
 
 Native wiki state is ignored by git and lives under:
@@ -152,6 +154,9 @@ Native wiki state is ignored by git and lives under:
 - `.gxpm/wiki/state.json`
 
 Use this native wiki as the preferred gxpm-owned knowledge source when present.
+For issue work, prefer `gxpm wiki context <issue-id>` after `gxpm wiki init` or
+`gxpm wiki update`; add `--write-artifact` when the selected context must be
+persisted as the issue's `wiki-context` artifact.
 Qoder RepoWiki remains an optional read-only navigation aid, not a gxpm runtime
 dependency or state truth.
 
