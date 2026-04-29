@@ -19,6 +19,21 @@ describe("cleanup land command", () => {
     expect(output(result)).toContain("WOULD DELETE branch:");
   });
 
+  test("dry-run accepts dispatch-handoff payload.workspace as worktree target", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-workspace-field-"));
+    const worktreePath = "/tmp/GXPM-716";
+    enterLandedIssue(root, "GXPM-716", {
+      workspace: worktreePath,
+      branch: "feature/GXPM-716",
+    });
+
+    const result = runCli(root, ["cleanup", "land", "GXPM-716"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(output(result)).toContain(`WOULD REMOVE worktree: ${worktreePath}`);
+    expect(output(result)).toContain("WOULD DELETE branch: feature/GXPM-716");
+  });
+
   test("refusal-path: phase is not land", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-wrong-phase-"));
     // Set up issue in qa phase (not land) to test phase validation

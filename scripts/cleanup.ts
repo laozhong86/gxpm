@@ -22,8 +22,11 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     throw new Error("cleanup requires dispatch-handoff artifact");
   }
 
-  // Prefer newer fields (worktree / branch), fall back to legacy (worktreePath / targetBranch)
-  const worktree = (handoffPayload.worktree ?? handoffPayload.worktreePath) as string | undefined;
+  // Prefer newer fields (worktree / branch), then current handoff workspace,
+  // and finally legacy worktreePath / targetBranch.
+  const worktree = (handoffPayload.worktree ?? handoffPayload.workspace ?? handoffPayload.worktreePath) as
+    | string
+    | undefined;
   const branch = (handoffPayload.branch ?? handoffPayload.targetBranch) as string | undefined;
 
   if (!worktree) {
