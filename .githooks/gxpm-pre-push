@@ -2,15 +2,21 @@
 # gxpm pre-push hook
 set -e
 
-if ! command -v gxpm >/dev/null 2>&1; then
+if [ -x "./bin/gxpm" ]; then
+  GXPM_BIN="./bin/gxpm"
+elif command -v gxpm >/dev/null 2>&1; then
+  GXPM_BIN="$(command -v gxpm)"
+else
   exit 0
 fi
+
+"$GXPM_BIN" gate branch-policy
 
 current_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
 issue_id=$(printf '%s' "$current_branch" | grep -oEi '(gxg|gxpm)-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
 
 if [ -n "$issue_id" ] && [ -f ".gxpm/issues/${issue_id}/state.json" ]; then
-  exec gxpm gate pre-push "$issue_id"
+  exec "$GXPM_BIN" gate pre-push "$issue_id"
 fi
 
 exit 0

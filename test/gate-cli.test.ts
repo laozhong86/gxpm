@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initializeDispatch } from "../core/dispatch";
@@ -38,6 +39,54 @@ describe("gxpm gate pre-commit CLI", () => {
     ]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toContain("no-state");
+  });
+});
+
+describe("gxpm gate branch-policy CLI", () => {
+  test("blocks a feature branch in the canonical main checkout", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-main-"));
+
+    const r = runCli(root, [
+      "gate", "branch-policy",
+      "--branch", "gxpm-27-main-branch-guard",
+      "--canonical-main", root,
+    ]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("main-worktree-non-main");
+  });
+
+  test("allows a feature branch under the configured worktree root", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-root-"));
+    const worktreeRoot = join(root, "gxpm-worktrees");
+    const worktree = join(worktreeRoot, "gxpm-27-main-branch-guard");
+    mkdirSync(worktree, { recursive: true });
+
+    const r = runCli(worktree, [
+      "gate", "branch-policy",
+      "--branch", "gxpm-27-main-branch-guard",
+      "--canonical-main", root,
+      "--worktree-root", worktreeRoot,
+    ]);
+
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("phase-ok");
+  });
+
+  test("detects the primary worktree as canonical even when a linked worktree is on main", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-primary-"));
+    const linkedMain = mkdtempSync(join(tmpdir(), "gxpm-branch-policy-linked-main-"));
+    execSync("git init -q -b main", { cwd: root });
+    writeFileSync(join(root, "README.md"), "initial\n");
+    execSync("git add README.md", { cwd: root });
+    execSync("git -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial", { cwd: root });
+    execSync("git switch -q -c gxpm-27-main-branch-guard", { cwd: root });
+    execSync(`git worktree add "${linkedMain}" main`, { cwd: root });
+
+    const r = runCli(root, ["gate", "branch-policy"]);
+
+    expect(r.exitCode).toBe(1);
+    expect(output(r)).toContain("main-worktree-non-main");
   });
 });
 

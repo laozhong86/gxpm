@@ -6,9 +6,15 @@
 
 set -e
 
-if ! command -v gxpm >/dev/null 2>&1; then
+if [ -x "./bin/gxpm" ]; then
+  GXPM_BIN="./bin/gxpm"
+elif command -v gxpm >/dev/null 2>&1; then
+  GXPM_BIN="$(command -v gxpm)"
+else
   exit 0
 fi
+
+"$GXPM_BIN" gate branch-policy
 
 current_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
 issue_id=$(printf '%s' "$current_branch" | grep -oEi '(gxg|gxpm)-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
@@ -21,10 +27,13 @@ if [ ! -f ".gxpm/issues/${issue_id}/state.json" ]; then
   exit 0
 fi
 
-staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
-if [ -z "$staged_files" ]; then
+staged_files=()
+while IFS= read -r -d '' staged_file; do
+  staged_files+=("$staged_file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ "${#staged_files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# shellcheck disable=SC2086
-exec gxpm gate pre-commit "$issue_id" --staged $staged_files
+exec "$GXPM_BIN" gate pre-commit "$issue_id" --staged "${staged_files[@]}"

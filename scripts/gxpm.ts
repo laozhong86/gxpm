@@ -16,6 +16,7 @@ import {
 import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../core/checkpoint";
 import {
+  evaluateBranchPolicy,
   evaluateCommitMsg,
   evaluatePostMerge,
   evaluatePreCommit,
@@ -332,6 +333,11 @@ function main(argv: string[]) {
 
   if (command === "gate" && subcommand === "pre-commit") {
     runPreCommitGate(argv, issueId);
+    return;
+  }
+
+  if (command === "gate" && subcommand === "branch-policy") {
+    runBranchPolicyGate(argv);
     return;
   }
 
@@ -1197,6 +1203,33 @@ function currentGitBranch() {
   return branch || undefined;
 }
 
+function currentGitRoot() {
+  const result = Bun.spawnSync({
+    cmd: ["git", "rev-parse", "--show-toplevel"],
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return undefined;
+  const root = result.stdout.toString().trim();
+  return root || undefined;
+}
+
+function detectCanonicalMainRoot() {
+  const result = Bun.spawnSync({
+    cmd: ["git", "worktree", "list", "--porcelain"],
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return undefined;
+  return result.stdout
+    .toString()
+    .split("\n")
+    .find((line) => line.startsWith("worktree "))
+    ?.slice("worktree ".length);
+}
+
 function gateEvent(verdict: { allowed: boolean; code: string; reason: string; details?: Record<string, unknown> }, gate: string, issueId: string): StateEvent {
   return {
     schemaVersion: 1,
@@ -1205,6 +1238,33 @@ function gateEvent(verdict: { allowed: boolean; code: string; reason: string; de
     timestamp: new Date().toISOString(),
     payload: { gate, code: verdict.code, reason: verdict.reason, ...(verdict.details ?? {}) },
   };
+}
+
+function runBranchPolicyGate(argv: string[]) {
+  const currentRoot = currentGitRoot() ?? process.cwd();
+  const currentBranch = optionValue(argv, "--branch") ?? currentGitBranch();
+  const canonicalMainRoot =
+    optionValue(argv, "--canonical-main") ??
+    process.env.GXPM_CANONICAL_MAIN ??
+    detectCanonicalMainRoot() ??
+    currentRoot;
+  const allowedWorktreeRoot = optionValue(argv, "--worktree-root") ?? process.env.GXPM_WORKTREE_ROOT ?? undefined;
+  const verdict = evaluateBranchPolicy({
+    currentRoot,
+    currentBranch,
+    canonicalMainRoot,
+    allowedWorktreeRoot,
+    env: process.env,
+  });
+
+  if (!verdict.allowed) {
+    console.error(`[gxpm gate branch-policy] ${verdict.code}: ${verdict.reason}`);
+    console.error("Use a dedicated git worktree for feature branches; keep the canonical checkout on main.");
+    console.error("Escape: GXPM_GATE_DISABLE=1 git ...");
+    process.exit(1);
+  }
+
+  console.log(`[gxpm gate branch-policy] ${verdict.code}: ${verdict.reason}`);
 }
 
 function runPreCommitGate(argv: string[], issueId: string | undefined) {

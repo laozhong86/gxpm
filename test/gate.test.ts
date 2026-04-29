@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  evaluateBranchPolicy,
   evaluatePreCommit,
   evaluateCommitMsg,
   evaluatePrePush,
@@ -54,6 +55,83 @@ describe("evaluatePreCommit", () => {
     const v = evaluatePreCommit(stateAt("plan"), ["docs/foo.md", "server/y.ts"], {});
     expect(v.allowed).toBe(false);
     expect(v.code).toBe("wrong-phase");
+  });
+});
+
+describe("evaluateBranchPolicy", () => {
+  test("allows the canonical main checkout on main", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm",
+      currentBranch: "main",
+      canonicalMainRoot: "/repo/gxpm",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("phase-ok");
+  });
+
+  test("blocks a feature branch in the canonical main checkout", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm/",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(false);
+    expect(v.code).toBe("main-worktree-non-main");
+  });
+
+  test("treats trailing separators as the same worktree path", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm-worktrees/gxpm-27-main-branch-guard/",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm/",
+      allowedWorktreeRoot: "/repo/gxpm-worktrees/",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("phase-ok");
+  });
+
+  test("allows a feature branch in an allowed worktree root", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm-worktrees/gxpm-27-main-branch-guard",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm",
+      allowedWorktreeRoot: "/repo/gxpm-worktrees",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("phase-ok");
+  });
+
+  test("blocks a feature branch outside the allowed worktree root", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/tmp/gxpm-copy",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm",
+      allowedWorktreeRoot: "/repo/gxpm-worktrees",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(false);
+    expect(v.code).toBe("feature-branch-outside-worktree-root");
+  });
+
+  test("respects GXPM_GATE_DISABLE env", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm",
+      currentBranch: "gxpm-27-main-branch-guard",
+      canonicalMainRoot: "/repo/gxpm",
+      env: { GXPM_GATE_DISABLE: "1" },
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("disabled");
   });
 });
 

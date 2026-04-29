@@ -1,0 +1,15 @@
+#!/bin/bash
+# gxpm post-checkout hook
+# Git runs this after checkout/switch. It cannot prevent the switch, but it
+# fails loudly when the canonical checkout is no longer on main.
+set -e
+
+if [ -x "./bin/gxpm" ]; then
+  GXPM_BIN="./bin/gxpm"
+elif command -v gxpm >/dev/null 2>&1; then
+  GXPM_BIN="$(command -v gxpm)"
+else
+  exit 0
+fi
+
+exec "$GXPM_BIN" gate branch-policy

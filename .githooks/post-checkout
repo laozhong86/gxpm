@@ -1,0 +1,8 @@
+#!/bin/bash
+# gxpm dispatcher (installed by gxpm-init --install-hooks)
+# Calls the gxpm-specific hook if present; harmless otherwise.
+set -e
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$HOOK_DIR/gxpm-post-checkout" ]; then
+  "$HOOK_DIR/gxpm-post-checkout" "$@"
+fi
