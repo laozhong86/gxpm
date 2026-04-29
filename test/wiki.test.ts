@@ -295,6 +295,7 @@ describe("gxpm-native wiki engine", () => {
     expect(existsSync(join(root, ".gxpm", "wiki", "index", "files.json"))).toBe(true);
     expect(existsSync(join(root, ".gxpm", "wiki", "index", "graph.json"))).toBe(true);
     expect(existsSync(join(root, ".gxpm", "wiki", "index", "dimensions.json"))).toBe(true);
+    expect(existsSync(join(root, ".gxpm", "wiki", "content", "Project-Topics.md"))).toBe(true);
     expect(readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8")).toContain(
       "file://core/state.ts",
     );
@@ -350,6 +351,7 @@ describe("gxpm-native wiki engine", () => {
 
     const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
 
+    expect(result.docs).toContain(".gxpm/wiki/content/Project-Topics.md");
     expect(result.docs).toContain(".gxpm/wiki/content/Phase-Lifecycle.md");
     expect(result.docs).toContain(".gxpm/wiki/content/Artifact-System.md");
     expect(result.docs).toContain(".gxpm/wiki/content/Hook-Governance.md");
@@ -367,6 +369,33 @@ describe("gxpm-native wiki engine", () => {
 
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(wikiDoc).toContain("file://core/wiki.ts#L");
+
+    const overviewDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
+    expect(overviewDoc).toContain("[Project Topics](file://.gxpm/wiki/content/Project-Topics.md)");
+  });
+
+  test("generates a project-derived topic map from native dimensions", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "scripts/gxpm.ts", "console.log('gxpm wiki status');\n");
+    writeRepoFile(root, "hosts/codex.ts", "export function installCodexAdapter() {}\n");
+    writeRepoFile(root, "docs/architecture/overview.md", "# Architecture\n");
+    writeRepoFile(root, "test/wiki.test.ts", "import { describe, test } from 'bun:test';\ndescribe('wiki', () => test('works', () => {}));\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const topicMap = readFileSync(join(root, ".gxpm", "wiki", "content", "Project-Topics.md"), "utf8");
+    expect(topicMap).toContain("# Project Topics");
+    expect(topicMap).toContain("Project-derived navigation generated from gxpm native dimensions");
+    expect(topicMap).toContain("### Phase And Gate System");
+    expect(topicMap).toContain("[core/phase-gates.ts](file://core/phase-gates.ts#L1-L1)");
+    expect(topicMap).toContain("### CLI Command Surface");
+    expect(topicMap).toContain("[scripts/gxpm.ts](file://scripts/gxpm.ts#L1-L1)");
+    expect(topicMap).toContain("### Host Adapters");
+    expect(topicMap).toContain("[hosts/codex.ts](file://hosts/codex.ts#L1-L1)");
+    expect(topicMap).toContain("### Tests And Verification");
+    expect(topicMap).toContain("## Top Dimension Signals");
+    expect(topicMap).toContain("## Import Hubs");
   });
 
   test("escapes generated topic source links while preserving cited file extraction", () => {
@@ -434,6 +463,42 @@ describe("gxpm-native wiki engine", () => {
     const wiki = queryNativeWiki({ root, query: "qoder native wiki initialization update", limit: 3 });
     expect(wiki.contextFiles).toContain("core/wiki.ts");
     expect(wiki.suggestedDocs[0]).toBe(".gxpm/wiki/content/Native-Wiki.md");
+  });
+
+  test("suggests the project topic map before generic index docs for inferred topics", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "hosts/codex.ts", "export function installCodexAdapter() {}\n");
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const result = queryNativeWiki({ root, query: "hosts codex adapter", limit: 3 });
+
+    expect(result.contextFiles).toContain("hosts/codex.ts");
+    const projectTopics = result.suggestedDocs.indexOf(".gxpm/wiki/content/Project-Topics.md");
+    const hookGovernance = result.suggestedDocs.indexOf(".gxpm/wiki/content/Hook-Governance.md");
+    const fileIndex = result.suggestedDocs.indexOf(".gxpm/wiki/content/File-Index.md");
+    const codeGraph = result.suggestedDocs.indexOf(".gxpm/wiki/content/Code-Graph.md");
+    expect(projectTopics).toBeGreaterThanOrEqual(0);
+    expect(hookGovernance === -1 || projectTopics < hookGovernance).toBe(true);
+    expect(fileIndex === -1 || projectTopics < fileIndex).toBe(true);
+    expect(codeGraph === -1 || projectTopics < codeGraph).toBe(true);
+  });
+
+  test("suggests the project topic map from raw dimensions even when the context file is not rendered", () => {
+    const root = tempRoot();
+    for (let i = 0; i < 13; i += 1) {
+      writeRepoFile(root, `hosts/adapter-${String(i).padStart(2, "0")}.ts`, `export function adapter${i}() {}\n`);
+    }
+    writeRepoFile(root, "hosts/zz-late.ts", "export function lateHost() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const topicMap = readFileSync(join(root, ".gxpm", "wiki", "content", "Project-Topics.md"), "utf8");
+    expect(topicMap).not.toContain("hosts/zz-late.ts");
+
+    const result = queryNativeWiki({ root, query: "zz late", limit: 3 });
+
+    expect(result.contextFiles).toContain("hosts/zz-late.ts");
+    expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Project-Topics.md");
   });
 
   test("keeps generated topic doc table cells on one markdown row", () => {
