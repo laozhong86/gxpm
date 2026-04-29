@@ -430,6 +430,17 @@ describe("gxpm-native wiki engine", () => {
     expect(result.state.status).toBe("idle");
   });
 
+  test("prunes stale generated native wiki docs on update", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    writeRepoFile(root, ".gxpm/wiki/content/Removed-Topic.md", "# stale generated topic\n");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    expect(existsSync(join(root, ".gxpm", "wiki", "content", "Removed-Topic.md"))).toBe(false);
+  });
+
   test("indexes git-tracked files and excludes ignored or untracked local files", () => {
     const root = tempRoot();
     initGitRepo(root);

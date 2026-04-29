@@ -1,8 +1,12 @@
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -96,7 +100,7 @@ export interface NativeWikiFileEntry {
   language: string;
   sizeBytes: number;
   mtimeMs: number;
-  lineCount: number;
+  lineCount?: number;
   exports: string[];
   imports: string[];
   headings: string[];
@@ -834,7 +838,17 @@ function writeNativeWikiDocs(
     writeFileSync(path, content);
     paths.push(toRepoPath(root, path));
   }
+  pruneStaleNativeWikiDocs(root, paths);
   return paths;
+}
+
+function pruneStaleNativeWikiDocs(root: string, generatedDocPaths: string[]) {
+  const generated = new Set(generatedDocPaths);
+  walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
+    if (!file.endsWith(".md")) return;
+    const repoPath = toRepoPath(root, file);
+    if (!generated.has(repoPath)) rmSync(file, { force: true });
+  });
 }
 
 function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, graph: NativeWikiGraph) {
@@ -1047,7 +1061,7 @@ function readNativeWikiIndex(root: string): NativeWikiIndex {
   if (!existsSync(path)) {
     throw new Error("Native gxpm wiki index not found. Run `gxpm wiki init` first.");
   }
-  return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+  return normalizeNativeWikiIndex(JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex);
 }
 
 function readNativeWikiStateIfPresent(root: string): NativeWikiState | null {
@@ -1064,7 +1078,7 @@ function readNativeWikiIndexIfPresent(root: string): NativeWikiIndex | null {
   const path = join(root, NATIVE_WIKI_INDEX_PATH);
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+    return normalizeNativeWikiIndex(JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex);
   } catch {
     return null;
   }
@@ -1078,6 +1092,16 @@ function readNativeWikiGraphIfPresent(root: string): NativeWikiGraph | null {
   } catch {
     return null;
   }
+}
+
+function normalizeNativeWikiIndex(index: NativeWikiIndex): NativeWikiIndex {
+  return {
+    ...index,
+    files: index.files.map((file) => ({
+      ...file,
+      lineCount: typeof file.lineCount === "number" ? file.lineCount : 0,
+    })),
+  };
 }
 
 function listNativeWikiDocs(root: string) {
@@ -1383,18 +1407,22 @@ function safeRead(path: string) {
 }
 
 function isLikelyTextFile(path: string) {
-  let bytes;
+  let fd: number | undefined;
   try {
-    bytes = readFileSync(path);
+    fd = openSync(path, "r");
+    const sample = Buffer.alloc(4096);
+    const bytesRead = readSync(fd, sample, 0, sample.length, 0);
+    const bytes = sample.subarray(0, bytesRead);
+    for (const byte of bytes) {
+      if (byte === 0) return false;
+      if (byte < 7 || (byte > 13 && byte < 32)) return false;
+    }
+    return true;
   } catch {
     return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
-  const sample = bytes.subarray(0, Math.min(bytes.length, 4096));
-  for (const byte of sample) {
-    if (byte === 0) return false;
-    if (byte < 7 || (byte > 13 && byte < 32)) return false;
-  }
-  return true;
 }
 
 function countLines(content: string) {
