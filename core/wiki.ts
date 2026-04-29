@@ -115,6 +115,11 @@ export interface NativeWikiIndex {
   files: NativeWikiFileEntry[];
 }
 
+interface NativeWikiIndexSnapshot {
+  index: NativeWikiIndex;
+  contents: Map<string, string>;
+}
+
 export interface NativeWikiGraphEdge {
   from: string;
   to: string;
@@ -356,13 +361,21 @@ export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): 
 }
 
 export function buildNativeWikiIndex(input: { root?: string; now?: Date } = {}): NativeWikiIndex {
+  return buildNativeWikiIndexSnapshot(input).index;
+}
+
+function buildNativeWikiIndexSnapshot(input: { root?: string; now?: Date } = {}): NativeWikiIndexSnapshot {
   const root = input.root ?? process.cwd();
   const generatedAt = (input.now ?? new Date()).toISOString();
+  const contents = new Map<string, string>();
   return {
-    schemaVersion: 1,
-    provider: "gxpm",
-    generatedAt,
-    files: listNativeRepoFiles(root).map((file) => summarizeNativeFile(root, file)),
+    index: {
+      schemaVersion: 1,
+      provider: "gxpm",
+      generatedAt,
+      files: listNativeRepoFiles(root).map((file) => summarizeNativeFile(root, file, contents)),
+    },
+    contents,
   };
 }
 
@@ -739,9 +752,10 @@ function writeNativeWiki(input: {
 }): NativeWikiBuildResult {
   const root = input.root ?? process.cwd();
   const now = input.now ?? new Date();
-  const index = buildNativeWikiIndex({ root, now });
+  const snapshot = buildNativeWikiIndexSnapshot({ root, now });
+  const index = snapshot.index;
   const graph = buildNativeWikiGraph(index);
-  const dimensions = buildNativeWikiDimensions({ root, index, graph });
+  const dimensions = buildNativeWikiDimensions({ index, graph, contents: snapshot.contents });
   const state: NativeWikiState = {
     schemaVersion: 1,
     provider: "gxpm",
@@ -789,9 +803,9 @@ function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
 }
 
 function buildNativeWikiDimensions(input: {
-  root: string;
   index: NativeWikiIndex;
   graph: NativeWikiGraph;
+  contents: Map<string, string>;
 }): NativeWikiDimensions {
   const outgoing = new Map<string, NativeWikiGraphEdge[]>();
   const incoming = new Map<string, NativeWikiGraphEdge[]>();
@@ -809,8 +823,8 @@ function buildNativeWikiDimensions(input: {
     generatedAt: input.index.generatedAt,
     files: input.index.files.map((file) =>
       buildNativeFileDimensions({
-        root: input.root,
         file,
+        content: input.contents.get(file.path) ?? "",
         outgoing: outgoing.get(file.path) ?? [],
         incoming: incoming.get(file.path) ?? [],
         unresolvedImports: unresolved.get(file.path) ?? [],
@@ -820,23 +834,22 @@ function buildNativeWikiDimensions(input: {
 }
 
 function buildNativeFileDimensions(input: {
-  root: string;
   file: NativeWikiFileEntry;
+  content: string;
   outgoing: NativeWikiGraphEdge[];
   incoming: NativeWikiGraphEdge[];
   unresolvedImports: string[];
 }): NativeWikiFileDimensions {
-  const content = safeRead(join(input.root, input.file.path));
   return {
     path: input.file.path,
     language: input.file.language,
     dimensions: {
       structure: nativeStructureSignals(input.file),
       symbols: nativeSymbolSignals(input.file),
-      apis: nativeApiSignals(input.file, content),
-      workflows: nativeWorkflowSignals(input.file, content),
-      config: nativeConfigSignals(input.file, content),
-      tests: nativeTestSignals(input.file, content),
+      apis: nativeApiSignals(input.file, input.content),
+      workflows: nativeWorkflowSignals(input.file, input.content),
+      config: nativeConfigSignals(input.file, input.content),
+      tests: nativeTestSignals(input.file, input.content),
       docs: nativeDocSignals(input.file),
       relations: nativeRelationSignals(input.file, input.outgoing, input.incoming, input.unresolvedImports),
     },
@@ -982,10 +995,11 @@ function gitTrackedRepoFiles(root: string) {
     });
 }
 
-function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
+function summarizeNativeFile(root: string, file: string, contents?: Map<string, string>): NativeWikiFileEntry {
   const content = safeRead(file);
   const stat = statSync(file);
   const repoPath = toRepoPath(root, file);
+  contents?.set(repoPath, content);
   return {
     path: repoPath,
     language: languageForPath(repoPath),
@@ -1320,10 +1334,23 @@ function readNativeWikiDimensionsIfPresent(root: string): NativeWikiDimensions |
   const path = join(root, NATIVE_WIKI_DIMENSIONS_PATH);
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiDimensions;
+    const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    if (!isNativeWikiDimensions(value)) return null;
+    return value;
   } catch {
     return null;
   }
+}
+
+function isNativeWikiDimensions(value: unknown): value is NativeWikiDimensions {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<NativeWikiDimensions>;
+  return (
+    candidate.schemaVersion === 1 &&
+    candidate.provider === "gxpm" &&
+    typeof candidate.generatedAt === "string" &&
+    Array.isArray(candidate.files)
+  );
 }
 
 function normalizeNativeWikiIndex(index: NativeWikiIndex): NativeWikiIndex {

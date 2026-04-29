@@ -625,6 +625,17 @@ describe("gxpm-native wiki engine", () => {
     expect(missingDimensions.state).toBe("stale");
     expect(missingDimensions.stale).toBe(true);
     expect(missingDimensions.reason).toContain("index/dimensions.json missing or unreadable");
+
+    const invalidDimensionsRoot = tempRoot();
+    writeRepoFile(invalidDimensionsRoot, "core/state.ts", "export function readIssueState() {}\n");
+    initializeNativeWiki({ root: invalidDimensionsRoot, now: new Date("2026-04-29T00:00:00Z") });
+    writeFileSync(join(invalidDimensionsRoot, ".gxpm", "wiki", "index", "dimensions.json"), "{}\n");
+
+    const invalidDimensions = getNativeWikiStatus({ root: invalidDimensionsRoot });
+    expect(invalidDimensions.detected).toBe(true);
+    expect(invalidDimensions.state).toBe("stale");
+    expect(invalidDimensions.stale).toBe(true);
+    expect(invalidDimensions.reason).toContain("index/dimensions.json missing or unreadable");
   });
 });
 
