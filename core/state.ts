@@ -82,6 +82,20 @@ export interface StateEvent {
   payload: Record<string, unknown>;
 }
 
+type RawIssueState = Partial<IssueState> & {
+  schemaVersion?: number;
+  issueId?: unknown;
+  issueType?: unknown;
+  currentPhase?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  stateRoot?: unknown;
+  artifactRoot?: unknown;
+  archived?: unknown;
+  archivedAt?: unknown;
+  phaseHistory?: unknown;
+};
+
 interface IssueInput {
   root?: string;
   issueId: string;
@@ -179,12 +193,8 @@ export function readIssueState(input: IssueInput): IssueState {
     throw new Error(`Issue state not found: ${input.issueId}`);
   }
 
-  const state = JSON.parse(readFileSync(paths.statePath, "utf8")) as IssueState;
-  return {
-    ...state,
-    issueType: normalizeIssueType(state.issueType),
-    ownership: normalizeOwnership(state.ownership),
-  };
+  const raw = JSON.parse(readFileSync(paths.statePath, "utf8")) as RawIssueState;
+  return migrateIssueState(raw);
 }
 
 export function transitionIssuePhase(input: TransitionInput): IssueState {
@@ -294,6 +304,38 @@ export function isIssueType(value: string): value is IssueType {
 
 export function normalizeIssueType(value: unknown): IssueType {
   return typeof value === "string" && isIssueType(value) ? value : "feature";
+}
+
+function migrateIssueState(raw: RawIssueState): IssueState {
+  if (raw.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+    throw new Error(`Unsupported issue state schemaVersion: ${String(raw.schemaVersion)}`);
+  }
+
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    issueId: String(raw.issueId),
+    issueType: normalizeIssueType(raw.issueType),
+    currentPhase: assertValidPhase(String(raw.currentPhase)),
+    createdAt: String(raw.createdAt),
+    updatedAt: String(raw.updatedAt),
+    stateRoot: String(raw.stateRoot),
+    artifactRoot: String(raw.artifactRoot),
+    archived: typeof raw.archived === "boolean" ? raw.archived : undefined,
+    archivedAt:
+      typeof raw.archivedAt === "string" || raw.archivedAt === null ? raw.archivedAt : undefined,
+    ownership: normalizeOwnership(raw.ownership),
+    phaseHistory: Array.isArray(raw.phaseHistory)
+      ? raw.phaseHistory.map((entry) => {
+          const record = entry as Record<string, unknown>;
+          return {
+            phase: assertValidPhase(String(record.phase)),
+            enteredAt: String(record.enteredAt),
+            fromPhase:
+              record.fromPhase === null ? null : assertValidPhase(String(record.fromPhase)),
+          };
+        })
+      : [],
+  };
 }
 
 function assertValidIssueId(issueId: string) {

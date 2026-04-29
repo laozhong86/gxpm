@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -98,12 +98,34 @@ describe("gxpm state graph", () => {
     const statePath = join(root, ".gxpm", "issues", "GXPM-4", "state.json");
     const legacy = JSON.parse(readFileSync(statePath, "utf8"));
     delete legacy.ownership;
-    readFileSync(statePath, "utf8");
-    require("node:fs").writeFileSync(statePath, `${JSON.stringify(legacy, null, 2)}\n`);
+    writeFileSync(statePath, `${JSON.stringify(legacy, null, 2)}\n`);
 
     const state = readIssueState({ root, issueId: "GXPM-4" }) as any;
     expect(state.currentPhase).toBe("triage");
     expect(state.ownership).toBeUndefined();
+  });
+
+  test("reads legacy v1 state files through the migration path", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-legacy-"));
+    const issueDir = join(root, ".gxpm", "issues", "GXPM-LEGACY");
+    mkdirSync(issueDir, { recursive: true });
+
+    const legacyState = {
+      schemaVersion: 1,
+      issueId: "GXPM-LEGACY",
+      currentPhase: "triage",
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+      stateRoot: ".gxpm/issues/GXPM-LEGACY",
+      artifactRoot: ".gxpm/issues/GXPM-LEGACY/artifacts",
+      phaseHistory: [{ phase: "triage", enteredAt: "2025-01-01T00:00:00Z", fromPhase: null }],
+    };
+    writeFileSync(join(issueDir, "state.json"), `${JSON.stringify(legacyState, null, 2)}\n`);
+
+    const state = readIssueState({ root, issueId: "GXPM-LEGACY" });
+
+    expect(state.issueType).toBe("feature");
+    expect(state.currentPhase).toBe("triage");
   });
 
   test("records session id on phase transition events", () => {
@@ -129,5 +151,33 @@ describe("gxpm state graph", () => {
       },
     });
     delete process.env.CODEX_COMPANION_SESSION_ID;
+  });
+
+  test("rejects unsupported schema versions on read", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-legacy-unsupported-"));
+    const issueDir = join(root, ".gxpm", "issues", "GXPM-UNSUPPORTED");
+    mkdirSync(issueDir, { recursive: true });
+
+    writeFileSync(
+      join(issueDir, "state.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 2,
+          issueId: "GXPM-UNSUPPORTED",
+          currentPhase: "triage",
+          createdAt: "2025-01-01T00:00:00Z",
+          updatedAt: "2025-01-01T00:00:00Z",
+          stateRoot: ".gxpm/issues/GXPM-UNSUPPORTED",
+          artifactRoot: ".gxpm/issues/GXPM-UNSUPPORTED/artifacts",
+          phaseHistory: [{ phase: "triage", enteredAt: "2025-01-01T00:00:00Z", fromPhase: null }],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+
+    expect(() => readIssueState({ root, issueId: "GXPM-UNSUPPORTED" })).toThrow(
+      "Unsupported issue state schemaVersion: 2",
+    );
   });
 });
