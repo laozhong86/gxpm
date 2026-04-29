@@ -1,14 +1,18 @@
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
 import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
-import { isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
+import { GXPM_PHASES, isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
 const QODER_REPOWIKI_ROOT = ".qoder/repowiki";
 const QODER_STATE_PATH = ".gxpm/wiki/qoder.json";
@@ -17,10 +21,12 @@ const NATIVE_WIKI_STATE_PATH = ".gxpm/wiki/state.json";
 const NATIVE_WIKI_INDEX_PATH = ".gxpm/wiki/index/files.json";
 const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
 const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
+const NATIVE_WIKI_DOC_MANIFEST_PATH = ".gxpm/wiki/content/generated-docs.json";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
 const NATIVE_TEXT_EXTENSIONS = new Set([
+  "",
   ".cjs",
   ".js",
   ".json",
@@ -95,6 +101,7 @@ export interface NativeWikiFileEntry {
   language: string;
   sizeBytes: number;
   mtimeMs: number;
+  lineCount?: number;
   exports: string[];
   imports: string[];
   headings: string[];
@@ -355,7 +362,7 @@ export function queryNativeWiki(input: {
     query: input.query,
     results: scored,
     contextFiles,
-    suggestedDocs: suggestedNativeDocs(root, contextFiles),
+    suggestedDocs: suggestedNativeDocs(root, contextFiles, tokens),
   };
 }
 
@@ -566,7 +573,7 @@ export function extractCitedFiles(markdown: string): string[] {
   const re = /file:\/\/([^)#\s]+)(?:#[^)]+)?/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(markdown)) !== null) {
-    files.add(match[1]);
+    files.add(decodeFileUrlPath(match[1]));
   }
   return [...files].sort();
 }
@@ -759,6 +766,7 @@ function listNativeRepoFiles(root: string) {
       } catch {
         return false;
       }
+      if (ext === "" && !isLikelyTextFile(file)) return false;
       return true;
     })
     .sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
@@ -806,6 +814,7 @@ function summarizeNativeFile(root: string, file: string): NativeWikiFileEntry {
     language: languageForPath(repoPath),
     sizeBytes: stat.size,
     mtimeMs: stat.mtimeMs,
+    lineCount: countLines(content),
     exports: extractExports(content),
     imports: extractImports(content),
     headings: extractMarkdownHeadings(content),
@@ -818,10 +827,12 @@ function writeNativeWikiDocs(
   index: NativeWikiIndex,
   graph: NativeWikiGraph,
 ) {
+  const previousGeneratedPaths = readNativeWikiDocManifest(root);
   const docs = [
     ["Overview.md", renderNativeOverview(state, index, graph)],
     ["File-Index.md", renderNativeFileIndex(index)],
     ["Code-Graph.md", renderNativeCodeGraph(graph)],
+    ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, renderNativeTopicDoc(topic, index, graph)] as const),
   ] as const;
   const paths: string[] = [];
   for (const [name, content] of docs) {
@@ -829,7 +840,39 @@ function writeNativeWikiDocs(
     writeFileSync(path, content);
     paths.push(toRepoPath(root, path));
   }
+  pruneStaleNativeWikiDocs(root, previousGeneratedPaths, paths);
+  writeNativeWikiDocManifest(root, state, paths);
   return paths;
+}
+
+function readNativeWikiDocManifest(root: string) {
+  const path = join(root, NATIVE_WIKI_DOC_MANIFEST_PATH);
+  if (!existsSync(path)) return [];
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as { docs?: unknown };
+    return Array.isArray(value.docs) ? value.docs.filter((doc): doc is string => typeof doc === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeNativeWikiDocManifest(root: string, state: NativeWikiState, generatedDocPaths: string[]) {
+  writeJson(join(root, NATIVE_WIKI_DOC_MANIFEST_PATH), {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: state.generatedAt,
+    docs: generatedDocPaths,
+  });
+}
+
+function pruneStaleNativeWikiDocs(root: string, previousGeneratedPaths: string[], generatedDocPaths: string[]) {
+  const previousGenerated = new Set(previousGeneratedPaths);
+  const generated = new Set(generatedDocPaths);
+  walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
+    if (!file.endsWith(".md")) return;
+    const repoPath = toRepoPath(root, file);
+    if (previousGenerated.has(repoPath) && !generated.has(repoPath)) rmSync(file, { force: true });
+  });
 }
 
 function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, graph: NativeWikiGraph) {
@@ -839,7 +882,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
   const highSignalFiles = index.files
     .filter((file) => file.exports.length > 0 || file.headings.length > 0)
     .slice(0, 20)
-    .map((file) => `- [${file.path}](file://${file.path})`)
+    .map((file) => `- [${file.path}](${nativeFileUrl(file.path)})`)
     .join("\n");
   return [
     "# GXPM Wiki Overview",
@@ -863,7 +906,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
 function renderNativeFileIndex(index: NativeWikiIndex) {
   const rows = index.files
     .slice(0, 200)
-    .map((file) => `| [${file.path}](file://${file.path}) | ${file.language} | ${file.exports.join(", ")} |`);
+    .map((file) => `| [${file.path}](${nativeFileUrl(file.path)}) | ${file.language} | ${file.exports.join(", ")} |`);
   return [
     "# File Index",
     "",
@@ -877,8 +920,185 @@ function renderNativeFileIndex(index: NativeWikiIndex) {
 function renderNativeCodeGraph(graph: NativeWikiGraph) {
   const edges = graph.edges
     .slice(0, 200)
-    .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
   return ["# Code Graph", "", ...edges, ""].join("\n");
+}
+
+interface NativeWikiTopic {
+  fileName: string;
+  title: string;
+  summary: string;
+  keywords: string[];
+  sourcePaths: string[];
+  sourcePrefixes?: string[];
+  mermaid?: string;
+}
+
+const NATIVE_WIKI_TOPICS: NativeWikiTopic[] = [
+  {
+    fileName: "Phase-Lifecycle.md",
+    title: "Phase Lifecycle",
+    summary: "How gxpm moves issue work through phase gates and artifact-backed transitions.",
+    keywords: ["phase", "phases", "gate", "gates", "transition", "workflow", "lifecycle", "verify", "land"],
+    sourcePaths: [
+      "core/state.ts",
+      "core/phase-gates.ts",
+      "core/phase-artifact.ts",
+      "core/triage.ts",
+      "core/plan.ts",
+      "core/dispatch.ts",
+      "core/implement.ts",
+      "core/ac-check.ts",
+      "core/self-review.ts",
+      "core/ship.ts",
+      "core/pr-check.ts",
+      "core/verify.ts",
+      "core/qa.ts",
+      "core/land.ts",
+      "scripts/phase-artifact-commands.ts",
+    ],
+    mermaid: renderPhaseLifecycleDiagram(),
+  },
+  {
+    fileName: "Artifact-System.md",
+    title: "Artifact System",
+    summary: "How gxpm stores phase evidence, acceptance contracts, checkpoints, and wiki context.",
+    keywords: ["artifact", "artifacts", "evidence", "acceptance", "checkpoint", "context", "memory"],
+    sourcePaths: [
+      "core/artifacts.ts",
+      "core/phase-artifact.ts",
+      "core/state.ts",
+      "scripts/phase-artifact-commands.ts",
+    ],
+  },
+  {
+    fileName: "Hook-Governance.md",
+    title: "Hook Governance",
+    summary: "How shell and Codex hooks guard branches, sessions, generated files, and workflow prompts.",
+    keywords: ["hook", "hooks", "governance", "branch", "session", "codex", "pre-commit"],
+    sourcePaths: [
+      "core/gate.ts",
+      "scripts/install-hooks.ts",
+      "scripts/install-codex-hooks.ts",
+      "templates/hooks/gxpm-commit-msg",
+      "templates/hooks/gxpm-post-merge",
+      "templates/hooks/gxpm-pre-commit",
+      "templates/hooks/gxpm-pre-push",
+      "templates/codex-hooks/pre-tool-use.sh",
+      "templates/codex-hooks/session-start.sh",
+      "templates/codex-hooks/user-prompt-submit.sh",
+    ],
+    sourcePrefixes: [".githooks/", "templates/hooks/", "templates/codex-hooks/"],
+  },
+  {
+    fileName: "Config-Worktree.md",
+    title: "Config And Worktree",
+    summary: "How gxpm resolves repo config, workspace runtime behavior, and worktree policy.",
+    keywords: ["config", "configuration", "worktree", "workspace", "branch", "main"],
+    sourcePaths: [
+      "core/config.ts",
+      "core/workspace-runtime.ts",
+      "AGENTS.md",
+      "docs/governance/development-contract.md",
+    ],
+  },
+  {
+    fileName: "Native-Wiki.md",
+    title: "Native Wiki",
+    summary: "How gxpm initializes, updates, queries, and compares its first-party wiki with optional Qoder output.",
+    keywords: ["wiki", "native", "qoder", "repowiki", "index", "query", "context", "knowledge"],
+    sourcePaths: [
+      "core/wiki.ts",
+      "core/qoder.ts",
+      "test/wiki.test.ts",
+      "test/qoder-link.test.ts",
+      "docs/governance/development-contract.md",
+    ],
+  },
+  {
+    fileName: "CLI-Surface.md",
+    title: "CLI Surface",
+    summary: "How gxpm exposes issue, artifact, wiki, hook, and workflow commands to agents.",
+    keywords: ["cli", "command", "commands", "gxpm", "bin", "surface", "issue"],
+    sourcePaths: ["scripts/gxpm.ts", "bin/gxpm", "README.md", "package.json"],
+  },
+];
+
+function renderNativeTopicDoc(topic: NativeWikiTopic, index: NativeWikiIndex, graph: NativeWikiGraph) {
+  const files = topicFiles(topic, index);
+  const citeLines = files.map((file) => `- [${file.path}](${nativeSourceLink(file)})`);
+  const rows = files.map((file) => {
+    const signals = [...file.exports, ...file.headings].slice(0, 8).map(escapeMarkdownCell).join(", ");
+    return `| [${escapeMarkdownCell(file.path)}](${nativeSourceLink(file)}) | ${file.language} | ${signals || "-"} |`;
+  });
+  const fileSet = new Set(files.map((file) => file.path));
+  const edges = graph.edges
+    .filter((edge) => fileSet.has(edge.from) || fileSet.has(edge.to))
+    .slice(0, 30)
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
+
+  return [
+    `# ${topic.title}`,
+    "",
+    topic.summary,
+    "",
+    "## Sources",
+    "",
+    ...(citeLines.length > 0 ? citeLines : ["- No matching indexed source files."]),
+    "",
+    ...(topic.mermaid ? ["## Flow", "", "```mermaid", topic.mermaid, "```", ""] : []),
+    "## Source Files",
+    "",
+    "| File | Language | Signals |",
+    "| --- | --- | --- |",
+    ...(rows.length > 0 ? rows : ["| - | - | - |"]),
+    "",
+    "## Related Imports",
+    "",
+    ...(edges.length > 0 ? edges : ["- none"]),
+    "",
+  ].join("\n");
+}
+
+function topicFiles(topic: NativeWikiTopic, index: NativeWikiIndex) {
+  return index.files
+    .filter((file) => nativeTopicOwnsPath(topic, file.path))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function nativeTopicOwnsPath(topic: NativeWikiTopic, path: string) {
+  return topic.sourcePaths.includes(path) || (topic.sourcePrefixes ?? []).some((prefix) => path.startsWith(prefix));
+}
+
+function nativeSourceLink(file: NativeWikiFileEntry) {
+  const endLine = Math.max(1, file.lineCount || 1);
+  return `${nativeFileUrl(file.path)}#L1-L${endLine}`;
+}
+
+function nativeFileUrl(path: string) {
+  return `file://${encodeFileUrlPath(path)}`;
+}
+
+function encodeFileUrlPath(path: string) {
+  return path
+    .split("/")
+    .map((part) =>
+      encodeURIComponent(part).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`),
+    )
+    .join("/");
+}
+
+function decodeFileUrlPath(path: string) {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+function renderPhaseLifecycleDiagram() {
+  const edges = GXPM_PHASES.slice(0, -1).map((phase, index) => `  ${phase} --> ${GXPM_PHASES[index + 1]}`);
+  return ["flowchart LR", ...edges].join("\n");
 }
 
 function readNativeWikiIndex(root: string): NativeWikiIndex {
@@ -886,7 +1106,7 @@ function readNativeWikiIndex(root: string): NativeWikiIndex {
   if (!existsSync(path)) {
     throw new Error("Native gxpm wiki index not found. Run `gxpm wiki init` first.");
   }
-  return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+  return normalizeNativeWikiIndex(JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex);
 }
 
 function readNativeWikiStateIfPresent(root: string): NativeWikiState | null {
@@ -903,7 +1123,7 @@ function readNativeWikiIndexIfPresent(root: string): NativeWikiIndex | null {
   const path = join(root, NATIVE_WIKI_INDEX_PATH);
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex;
+    return normalizeNativeWikiIndex(JSON.parse(readFileSync(path, "utf8")) as NativeWikiIndex);
   } catch {
     return null;
   }
@@ -917,6 +1137,16 @@ function readNativeWikiGraphIfPresent(root: string): NativeWikiGraph | null {
   } catch {
     return null;
   }
+}
+
+function normalizeNativeWikiIndex(index: NativeWikiIndex): NativeWikiIndex {
+  return {
+    ...index,
+    files: index.files.map((file) => ({
+      ...file,
+      lineCount: typeof file.lineCount === "number" ? file.lineCount : 0,
+    })),
+  };
 }
 
 function listNativeWikiDocs(root: string) {
@@ -971,18 +1201,30 @@ function nativeWikiStatusCommands() {
   };
 }
 
-function suggestedNativeDocs(root: string, contextFiles: string[]) {
-  const contentRoot = join(root, NATIVE_WIKI_CONTENT_ROOT);
-  const docs: string[] = [];
-  walkFiles(contentRoot, (file) => {
+function suggestedNativeDocs(root: string, contextFiles: string[], tokens: string[] = []) {
+  const allDocs = new Set(listNativeWikiDocs(root));
+  const topicDocs = NATIVE_WIKI_TOPICS.map((topic, index) => ({
+    path: `${NATIVE_WIKI_CONTENT_ROOT}/${topic.fileName}`,
+    score: scoreNativeTopicSuggestion(topic, contextFiles, tokens),
+    index,
+  }))
+    .filter((topic) => topic.score > 0 && allDocs.has(topic.path))
+    .sort((a, b) => b.score - a.score || a.index - b.index || a.path.localeCompare(b.path))
+    .map((topic) => topic.path);
+
+  const genericDocs: string[] = [];
+  walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
     if (!file.endsWith(".md")) return;
     const repoPath = toRepoPath(root, file);
+    if (isNativeTopicDoc(repoPath) || repoPath.endsWith("/Overview.md")) return;
     const cited = extractCitedFiles(safeRead(file));
-    if (cited.some((path) => contextFiles.includes(path)) || repoPath.endsWith("/Overview.md")) {
-      docs.push(repoPath);
-    }
+    if (cited.some((path) => contextFiles.includes(path))) genericDocs.push(repoPath);
   });
-  return docs.sort();
+
+  const overview = allDocs.has(`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`)
+    ? [`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`]
+    : [];
+  return dedupeBy([...topicDocs, ...genericDocs.sort(), ...overview], (path) => path);
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
@@ -1000,10 +1242,26 @@ function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
   return matches;
 }
 
+function scoreNativeTopicSuggestion(topic: NativeWikiTopic, contextFiles: string[], tokens: string[]) {
+  let score = 0;
+  for (const file of contextFiles) {
+    if (nativeTopicOwnsPath(topic, file)) score += 20;
+  }
+  for (const token of tokens) {
+    if (topic.keywords.includes(token)) score += 3;
+    if (topic.sourcePaths.some((path) => path.toLowerCase().includes(token))) score += 1;
+  }
+  return score;
+}
+
+function isNativeTopicDoc(repoPath: string) {
+  return NATIVE_WIKI_TOPICS.some((topic) => repoPath === `${NATIVE_WIKI_CONTENT_ROOT}/${topic.fileName}`);
+}
+
 function tokenizeQuery(query: string) {
   return query
     .toLowerCase()
-    .split(/[^a-z0-9_/-]+/)
+    .split(/[^a-z0-9_]+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 2);
 }
@@ -1193,6 +1451,36 @@ function safeRead(path: string) {
   }
 }
 
+function isLikelyTextFile(path: string) {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    const sample = Buffer.alloc(4096);
+    const bytesRead = readSync(fd, sample, 0, sample.length, 0);
+    const bytes = sample.subarray(0, bytesRead);
+    for (const byte of bytes) {
+      if (byte === 0) return false;
+      if (byte < 7 || (byte > 13 && byte < 32)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function countLines(content: string) {
+  if (content.length === 0) return 0;
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const trimmedTrailingNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+  return trimmedTrailingNewline.length === 0 ? 1 : trimmedTrailingNewline.split("\n").length;
+}
+
 function toRepoPath(root: string, path: string) {
   return relative(root, path).split(sep).join("/");
+}
+
+function escapeMarkdownCell(value: string) {
+  return value.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
 }

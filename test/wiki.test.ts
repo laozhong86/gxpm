@@ -303,6 +303,70 @@ describe("gxpm-native wiki engine", () => {
     });
   });
 
+  test("generates topic docs with source anchors, markdown source lists, and a phase diagram", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
+    writeRepoFile(root, "core/phase-gates.ts", `${Array.from({ length: 120 }, (_, index) => `// gate ${index + 1}`).join("\n")}\n`);
+    writeRepoFile(root, "core/artifacts.ts", "export function writeArtifact() {}\n");
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "scripts/gxpm.ts", 'import { initializeNativeWiki } from "../core/wiki";\n');
+    writeRepoFile(root, ".githooks/pre-commit", "#!/bin/sh\n");
+
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    expect(result.docs).toContain(".gxpm/wiki/content/Phase-Lifecycle.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Artifact-System.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Hook-Governance.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Config-Worktree.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/Native-Wiki.md");
+    expect(result.docs).toContain(".gxpm/wiki/content/CLI-Surface.md");
+
+    const phaseDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Phase-Lifecycle.md"), "utf8");
+    expect(phaseDoc).toContain("## Sources");
+    expect(phaseDoc).toContain("- [core/phase-gates.ts](file://core/phase-gates.ts#L1-L120)");
+    expect(phaseDoc).not.toContain("<cite>");
+    expect(phaseDoc).toContain("file://core/phase-gates.ts#L1-L120");
+    expect(phaseDoc).toContain("```mermaid");
+    expect(phaseDoc).toContain("triage --> plan");
+
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(wikiDoc).toContain("file://core/wiki.ts#L");
+  });
+
+  test("escapes generated topic source links while preserving cited file extraction", () => {
+    const root = tempRoot();
+    writeRepoFile(root, ".githooks/branch guard (draft)", "#!/bin/sh\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const hookDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Hook-Governance.md"), "utf8");
+    expect(hookDoc).toContain("file://.githooks/branch%20guard%20%28draft%29#L1-L1");
+    expect(extractCitedFiles(hookDoc)).toContain(".githooks/branch guard (draft)");
+  });
+
+  test("escapes generated file links in indexes, graphs, and related imports", () => {
+    const root = tempRoot();
+    writeRepoFile(
+      root,
+      "core/wiki.ts",
+      'import { sourceDraft } from "./source (draft)";\nexport function initializeNativeWiki() {}\n',
+    );
+    writeRepoFile(root, "core/source (draft).ts", "export function sourceDraft() {}\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const encoded = "file://core/source%20%28draft%29.ts";
+    const overview = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
+    const fileIndex = readFileSync(join(root, ".gxpm", "wiki", "content", "File-Index.md"), "utf8");
+    const codeGraph = readFileSync(join(root, ".gxpm", "wiki", "content", "Code-Graph.md"), "utf8");
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(overview).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(fileIndex).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(codeGraph).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(wikiDoc).toContain(`[core/source (draft).ts](${encoded})`);
+  });
+
   test("queries native wiki docs and source files from the structured index", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
@@ -316,6 +380,37 @@ describe("gxpm-native wiki engine", () => {
     expect(result.results[0].source).toBe("file-index");
     expect(result.contextFiles).toContain("core/phase-gates.ts");
     expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+  });
+
+  test("suggests relevant topic docs before generic wiki pages", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\nexport function getQoderWikiStatus() {}\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const phase = queryNativeWiki({ root, query: "phase gate transition artifacts", limit: 3 });
+    expect(phase.contextFiles).toContain("core/phase-gates.ts");
+    expect(phase.suggestedDocs[0]).toBe(".gxpm/wiki/content/Phase-Lifecycle.md");
+    expect(phase.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
+
+    const hyphenatedPhase = queryNativeWiki({ root, query: "phase-lifecycle", limit: 3 });
+    expect(hyphenatedPhase.suggestedDocs[0]).toBe(".gxpm/wiki/content/Phase-Lifecycle.md");
+
+    const wiki = queryNativeWiki({ root, query: "qoder native wiki initialization update", limit: 3 });
+    expect(wiki.contextFiles).toContain("core/wiki.ts");
+    expect(wiki.suggestedDocs[0]).toBe(".gxpm/wiki/content/Native-Wiki.md");
+  });
+
+  test("keeps generated topic doc table cells on one markdown row", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "docs/governance/development-contract.md", "# Native | Wiki\r\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(wikiDoc).toContain("Native \\| Wiki");
+    expect(wikiDoc).not.toContain("\r");
   });
 
   test("builds issue context from issue state and artifacts", () => {
@@ -373,18 +468,38 @@ describe("gxpm-native wiki engine", () => {
     expect(result.state.status).toBe("idle");
   });
 
+  test("prunes stale generated native wiki docs on update", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    writeRepoFile(
+      root,
+      ".gxpm/wiki/content/generated-docs.json",
+      JSON.stringify({ docs: [...result.docs, ".gxpm/wiki/content/Removed-Topic.md"] }, null, 2),
+    );
+    writeRepoFile(root, ".gxpm/wiki/content/Removed-Topic.md", "# stale generated topic\n");
+    writeRepoFile(root, ".gxpm/wiki/content/Hand-Written.md", "# hand written topic\n");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    expect(existsSync(join(root, ".gxpm", "wiki", "content", "Removed-Topic.md"))).toBe(false);
+    expect(existsSync(join(root, ".gxpm", "wiki", "content", "Hand-Written.md"))).toBe(true);
+  });
+
   test("indexes git-tracked files and excludes ignored or untracked local files", () => {
     const root = tempRoot();
     initGitRepo(root);
     writeRepoFile(root, ".gitignore", ".codex/\n.claude/\n.gxpm/\n.qoder/\n");
     writeRepoFile(root, "README.md", "# GXPM\n");
+    writeRepoFile(root, "bin/gxpm", "#!/usr/bin/env bun\nconsole.log('gxpm');\n");
     writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeFileSync(join(root, "opaque-binary"), Buffer.from([0, 1, 2, 3]));
     writeRepoFile(root, ".codex/config.toml", "model = 'local'\n");
     writeRepoFile(root, ".claude/settings.local.json", "{}\n");
     writeRepoFile(root, ".gxpm/local/state.md", "# local gxpm state\n");
     writeRepoFile(root, ".qoder/repowiki/en/content/Generated.md", "# generated qoder page\n");
     writeRepoFile(root, "docs/scratch.md", "# local scratch\n");
-    git(root, "add .gitignore README.md core/state.ts");
+    git(root, "add .gitignore README.md bin/gxpm core/state.ts opaque-binary");
     git(root, "add -f .codex/config.toml .claude/settings.local.json .gxpm/local/state.md .qoder/repowiki/en/content/Generated.md");
     git(root, "commit -m 'initial tracked files'");
 
@@ -392,7 +507,9 @@ describe("gxpm-native wiki engine", () => {
     const paths = result.index.files.map((file) => file.path);
 
     expect(paths).toContain("README.md");
+    expect(paths).toContain("bin/gxpm");
     expect(paths).toContain("core/state.ts");
+    expect(paths).not.toContain("opaque-binary");
     expect(paths).not.toContain(".codex/config.toml");
     expect(paths).not.toContain(".claude/settings.local.json");
     expect(paths).not.toContain(".gxpm/local/state.md");
