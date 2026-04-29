@@ -306,7 +306,7 @@ describe("gxpm-native wiki engine", () => {
   test("generates topic docs with source anchors, cite blocks, and a phase diagram", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
-    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/phase-gates.ts", `${Array.from({ length: 120 }, (_, index) => `// gate ${index + 1}`).join("\n")}\n`);
     writeRepoFile(root, "core/artifacts.ts", "export function writeArtifact() {}\n");
     writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
     writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
@@ -324,7 +324,7 @@ describe("gxpm-native wiki engine", () => {
 
     const phaseDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Phase-Lifecycle.md"), "utf8");
     expect(phaseDoc).toContain("<cite>");
-    expect(phaseDoc).toContain("file://core/phase-gates.ts#L");
+    expect(phaseDoc).toContain("file://core/phase-gates.ts#L1-L120");
     expect(phaseDoc).toContain("```mermaid");
     expect(phaseDoc).toContain("triage --> plan");
 
@@ -435,13 +435,15 @@ describe("gxpm-native wiki engine", () => {
     initGitRepo(root);
     writeRepoFile(root, ".gitignore", ".codex/\n.claude/\n.gxpm/\n.qoder/\n");
     writeRepoFile(root, "README.md", "# GXPM\n");
+    writeRepoFile(root, "bin/gxpm", "#!/usr/bin/env bun\nconsole.log('gxpm');\n");
     writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeFileSync(join(root, "opaque-binary"), Buffer.from([0, 1, 2, 3]));
     writeRepoFile(root, ".codex/config.toml", "model = 'local'\n");
     writeRepoFile(root, ".claude/settings.local.json", "{}\n");
     writeRepoFile(root, ".gxpm/local/state.md", "# local gxpm state\n");
     writeRepoFile(root, ".qoder/repowiki/en/content/Generated.md", "# generated qoder page\n");
     writeRepoFile(root, "docs/scratch.md", "# local scratch\n");
-    git(root, "add .gitignore README.md core/state.ts");
+    git(root, "add .gitignore README.md bin/gxpm core/state.ts opaque-binary");
     git(root, "add -f .codex/config.toml .claude/settings.local.json .gxpm/local/state.md .qoder/repowiki/en/content/Generated.md");
     git(root, "commit -m 'initial tracked files'");
 
@@ -449,7 +451,9 @@ describe("gxpm-native wiki engine", () => {
     const paths = result.index.files.map((file) => file.path);
 
     expect(paths).toContain("README.md");
+    expect(paths).toContain("bin/gxpm");
     expect(paths).toContain("core/state.ts");
+    expect(paths).not.toContain("opaque-binary");
     expect(paths).not.toContain(".codex/config.toml");
     expect(paths).not.toContain(".claude/settings.local.json");
     expect(paths).not.toContain(".gxpm/local/state.md");

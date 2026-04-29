@@ -761,6 +761,7 @@ function listNativeRepoFiles(root: string) {
       } catch {
         return false;
       }
+      if (ext === "" && !isLikelyTextFile(file)) return false;
       return true;
     })
     .sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
@@ -1032,7 +1033,7 @@ function nativeTopicOwnsPath(topic: NativeWikiTopic, path: string) {
 }
 
 function nativeSourceLink(file: NativeWikiFileEntry) {
-  const endLine = Math.max(1, Math.min(file.lineCount || 1, 80));
+  const endLine = Math.max(1, file.lineCount || 1);
   return `file://${file.path}#L1-L${endLine}`;
 }
 
@@ -1379,6 +1380,21 @@ function safeRead(path: string) {
   } catch {
     return "";
   }
+}
+
+function isLikelyTextFile(path: string) {
+  let bytes;
+  try {
+    bytes = readFileSync(path);
+  } catch {
+    return false;
+  }
+  const sample = bytes.subarray(0, Math.min(bytes.length, 4096));
+  for (const byte of sample) {
+    if (byte === 0) return false;
+    if (byte < 7 || (byte > 13 && byte < 32)) return false;
+  }
+  return true;
 }
 
 function countLines(content: string) {
