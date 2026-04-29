@@ -363,6 +363,18 @@ describe("gxpm-native wiki engine", () => {
     expect(wiki.suggestedDocs[0]).toBe(".gxpm/wiki/content/Native-Wiki.md");
   });
 
+  test("keeps generated topic doc table cells on one markdown row", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "docs/governance/development-contract.md", "# Native | Wiki\r\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(wikiDoc).toContain("Native \\| Wiki");
+    expect(wikiDoc).not.toContain("\r");
+  });
+
   test("builds issue context from issue state and artifacts", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");

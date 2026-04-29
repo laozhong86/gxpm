@@ -1393,5 +1393,5 @@ function toRepoPath(root: string, path: string) {
 }
 
 function escapeMarkdownCell(value: string) {
-  return value.replace(/\|/g, "\\|");
+  return value.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
 }
