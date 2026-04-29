@@ -30,7 +30,9 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
   const branch = (handoffPayload.branch ?? handoffPayload.targetBranch) as string | undefined;
 
   if (!worktree) {
-    throw new Error("cleanup requires dispatch-handoff.payload.worktree");
+    throw new Error(
+      "cleanup requires one of dispatch-handoff.payload.worktree, dispatch-handoff.payload.workspace, or dispatch-handoff.payload.worktreePath",
+    );
   }
   if (!branch) {
     throw new Error("cleanup requires dispatch-handoff.payload.branch");

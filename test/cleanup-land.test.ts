@@ -73,6 +73,20 @@ describe("cleanup land command", () => {
     expect(output(result)).toContain("cleanup requires dispatch-handoff artifact");
   });
 
+  test("refusal-path: missing worktree target lists accepted handoff fields", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-missing-target-"));
+    enterLandedIssue(root, "GXPM-717", {
+      branch: "feature/GXPM-717",
+    });
+
+    const result = runCli(root, ["cleanup", "land", "GXPM-717"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain(
+      "cleanup requires one of dispatch-handoff.payload.worktree, dispatch-handoff.payload.workspace, or dispatch-handoff.payload.worktreePath",
+    );
+  });
+
   test("execute-path: no cleanup.executed event written when execution fails", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-execute-"));
     enterLandedIssue(root, "GXPM-703");
