@@ -882,7 +882,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
   const highSignalFiles = index.files
     .filter((file) => file.exports.length > 0 || file.headings.length > 0)
     .slice(0, 20)
-    .map((file) => `- [${file.path}](file://${file.path})`)
+    .map((file) => `- [${file.path}](${nativeFileUrl(file.path)})`)
     .join("\n");
   return [
     "# GXPM Wiki Overview",
@@ -906,7 +906,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
 function renderNativeFileIndex(index: NativeWikiIndex) {
   const rows = index.files
     .slice(0, 200)
-    .map((file) => `| [${file.path}](file://${file.path}) | ${file.language} | ${file.exports.join(", ")} |`);
+    .map((file) => `| [${file.path}](${nativeFileUrl(file.path)}) | ${file.language} | ${file.exports.join(", ")} |`);
   return [
     "# File Index",
     "",
@@ -920,7 +920,7 @@ function renderNativeFileIndex(index: NativeWikiIndex) {
 function renderNativeCodeGraph(graph: NativeWikiGraph) {
   const edges = graph.edges
     .slice(0, 200)
-    .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
   return ["# Code Graph", "", ...edges, ""].join("\n");
 }
 
@@ -1035,7 +1035,7 @@ function renderNativeTopicDoc(topic: NativeWikiTopic, index: NativeWikiIndex, gr
   const edges = graph.edges
     .filter((edge) => fileSet.has(edge.from) || fileSet.has(edge.to))
     .slice(0, 30)
-    .map((edge) => `- [${edge.from}](file://${edge.from}) -> [${edge.to}](file://${edge.to})`);
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
 
   return [
     `# ${topic.title}`,
@@ -1072,7 +1072,11 @@ function nativeTopicOwnsPath(topic: NativeWikiTopic, path: string) {
 
 function nativeSourceLink(file: NativeWikiFileEntry) {
   const endLine = Math.max(1, file.lineCount || 1);
-  return `file://${encodeFileUrlPath(file.path)}#L1-L${endLine}`;
+  return `${nativeFileUrl(file.path)}#L1-L${endLine}`;
+}
+
+function nativeFileUrl(path: string) {
+  return `file://${encodeFileUrlPath(path)}`;
 }
 
 function encodeFileUrlPath(path: string) {

@@ -345,6 +345,28 @@ describe("gxpm-native wiki engine", () => {
     expect(extractCitedFiles(hookDoc)).toContain(".githooks/branch guard (draft)");
   });
 
+  test("escapes generated file links in indexes, graphs, and related imports", () => {
+    const root = tempRoot();
+    writeRepoFile(
+      root,
+      "core/wiki.ts",
+      'import { sourceDraft } from "./source (draft)";\nexport function initializeNativeWiki() {}\n',
+    );
+    writeRepoFile(root, "core/source (draft).ts", "export function sourceDraft() {}\n");
+
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const encoded = "file://core/source%20%28draft%29.ts";
+    const overview = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
+    const fileIndex = readFileSync(join(root, ".gxpm", "wiki", "content", "File-Index.md"), "utf8");
+    const codeGraph = readFileSync(join(root, ".gxpm", "wiki", "content", "Code-Graph.md"), "utf8");
+    const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
+    expect(overview).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(fileIndex).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(codeGraph).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(wikiDoc).toContain(`[core/source (draft).ts](${encoded})`);
+  });
+
   test("queries native wiki docs and source files from the structured index", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
