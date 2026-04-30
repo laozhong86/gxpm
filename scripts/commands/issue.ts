@@ -277,12 +277,13 @@ function runIssueClaim(argv: string[], issueId: string | undefined) {
 }
 
 function runIssueRelease(argv: string[], issueId: string | undefined) {
-  if (!issueId) {
+  if (!issueId || issueId.startsWith("-")) {
     throw new Error("Usage: gxpm issue release <issue-id> [--reason <text>] [--json]");
   }
+  const reason = argv.includes("--reason") ? optionRequiredValue(argv, "--reason") : undefined;
   const result = releaseIssueClaim({
     issueId,
-    reason: optionValue(argv, "--reason") ?? undefined,
+    reason,
   });
   if (argv.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
@@ -293,7 +294,7 @@ function runIssueRelease(argv: string[], issueId: string | undefined) {
 }
 
 function runIssueReconcileClaim(argv: string[], issueId: string | undefined) {
-  if (!issueId) {
+  if (!issueId || issueId.startsWith("-")) {
     throw new Error("Usage: gxpm issue reconcile-claim <issue-id> [--stale-after-ms N] [--json]");
   }
   const result = reconcileIssueClaim({

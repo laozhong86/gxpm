@@ -113,12 +113,7 @@ export function claimIssue(input: {
   const root = input.root ?? process.cwd();
   const sessionId = input.sessionId ?? resolveSessionId();
   const actor = input.actor ?? sessionId;
-  const paths = getIssuePaths(root, input.issueId);
-  const lockPath = `${paths.issueDir}/.claim.lock`;
-  let lockFd: number | null = null;
-
-  try {
-    lockFd = openSync(lockPath, "wx");
+  return withClaimLock(root, input.issueId, (paths) => {
     const state = readIssueState({ root, issueId: input.issueId });
 
     if (state.claim?.status === "claimed") {
@@ -163,19 +158,7 @@ export function claimIssue(input: {
     });
 
     return { issueId: state.issueId, claimed: true, claim };
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
-      throw new Error(`Issue claim locked: ${input.issueId}`);
-    }
-    throw error;
-  } finally {
-    if (lockFd !== null) {
-      closeSync(lockFd);
-      try {
-        unlinkSync(lockPath);
-      } catch {}
-    }
-  }
+  });
 }
 
 export function releaseIssueClaim(input: {
@@ -187,35 +170,36 @@ export function releaseIssueClaim(input: {
 }): ReleaseIssueClaimResult {
   const root = input.root ?? process.cwd();
   const sessionId = input.sessionId ?? resolveSessionId();
-  const paths = getIssuePaths(root, input.issueId);
-  const state = readIssueState({ root, issueId: input.issueId });
-  if (!state.claim) {
-    throw new Error(`Issue has no claim to release: ${state.issueId}`);
-  }
-  if (state.claim.status === "released") {
-    return { issueId: state.issueId, released: false, claim: state.claim };
-  }
+  return withClaimLock(root, input.issueId, (paths) => {
+    const state = readIssueState({ root, issueId: input.issueId });
+    if (!state.claim) {
+      throw new Error(`Issue has no claim to release: ${state.issueId}`);
+    }
+    if (state.claim.status === "released") {
+      return { issueId: state.issueId, released: false, claim: state.claim };
+    }
 
-  const now = normalizeNow(input.now);
-  const claim: IssueClaim = {
-    status: "released",
-    actor: state.claim.actor,
-    claimedBySession: state.claim.claimedBySession,
-    claimedAt: state.claim.claimedAt,
-    runId: state.claim.runId,
-    releasedAt: now,
-    releasedBySession: sessionId,
-    releaseReason: input.reason ?? "manual_release",
-  };
-  writeClaimUpdate({
-    paths,
-    state,
-    claim,
-    sessionId,
-    event: issueClaimReleasedEvent(state.issueId, now, claim),
+    const now = normalizeNow(input.now);
+    const claim: IssueClaim = {
+      status: "released",
+      actor: state.claim.actor,
+      claimedBySession: state.claim.claimedBySession,
+      claimedAt: state.claim.claimedAt,
+      runId: state.claim.runId,
+      releasedAt: now,
+      releasedBySession: sessionId,
+      releaseReason: input.reason ?? "manual_release",
+    };
+    writeClaimUpdate({
+      paths,
+      state,
+      claim,
+      sessionId,
+      event: issueClaimReleasedEvent(state.issueId, now, claim),
+    });
+
+    return { issueId: state.issueId, released: true, claim };
   });
-
-  return { issueId: state.issueId, released: true, claim };
 }
 
 export function reconcileIssueClaim(input: {
@@ -226,68 +210,102 @@ export function reconcileIssueClaim(input: {
   staleAfterMs?: number;
 }): ReconcileIssueClaimResult {
   const root = input.root ?? process.cwd();
-  const state = readIssueState({ root, issueId: input.issueId });
-  if (!state.claim) {
-    return { issueId: state.issueId, reconciled: false, action: "none", reason: "no_claim" };
-  }
-  if (state.claim.status !== "claimed") {
-    return {
-      issueId: state.issueId,
-      reconciled: false,
-      action: "none",
-      reason: `claim_${state.claim.status}`,
-      claim: state.claim,
-    };
-  }
+  const sessionId = input.sessionId ?? resolveSessionId();
+  return withClaimLock(root, input.issueId, (paths) => {
+    const state = readIssueState({ root, issueId: input.issueId });
+    if (!state.claim) {
+      return { issueId: state.issueId, reconciled: false, action: "none", reason: "no_claim" };
+    }
+    if (state.claim.status !== "claimed") {
+      return {
+        issueId: state.issueId,
+        reconciled: false,
+        action: "none",
+        reason: `claim_${state.claim.status}`,
+        claim: state.claim,
+      };
+    }
 
-  const terminalRun = terminalRunForClaim(root, state.issueId, state.claim);
-  if (terminalRun) {
-    const released = releaseIssueClaim({
-      root,
-      issueId: state.issueId,
-      sessionId: input.sessionId,
-      now: input.now,
-      reason: `run_${terminalRun.status}`,
-    });
-    return {
-      issueId: state.issueId,
-      reconciled: released.released,
-      action: "released",
-      reason: `run_${terminalRun.status}`,
-      claim: released.claim,
-    };
-  }
+    const terminalRun = terminalRunForClaim(root, state.issueId, state.claim);
+    if (terminalRun) {
+      const now = normalizeNow(input.now);
+      const claim: IssueClaim = {
+        status: "released",
+        actor: state.claim.actor,
+        claimedBySession: state.claim.claimedBySession,
+        claimedAt: state.claim.claimedAt,
+        runId: state.claim.runId,
+        releasedAt: now,
+        releasedBySession: sessionId,
+        releaseReason: `run_${terminalRun.status}`,
+      };
+      writeClaimUpdate({
+        paths,
+        state,
+        claim,
+        sessionId,
+        event: issueClaimReleasedEvent(state.issueId, now, claim),
+      });
+      return {
+        issueId: state.issueId,
+        reconciled: true,
+        action: "released",
+        reason: `run_${terminalRun.status}`,
+        claim,
+      };
+    }
 
-  if (isStaleClaim(state.claim, input.now, input.staleAfterMs)) {
-    const now = normalizeNow(input.now);
-    const sessionId = input.sessionId ?? resolveSessionId();
-    const paths = getIssuePaths(root, input.issueId);
-    const claim: IssueClaim = {
-      status: "stale",
-      actor: state.claim.actor,
-      claimedBySession: state.claim.claimedBySession,
-      claimedAt: state.claim.claimedAt,
-      runId: state.claim.runId,
-      staleAt: now,
-      staleReason: "claim_age_exceeded",
-    };
-    writeClaimUpdate({
-      paths,
-      state,
-      claim,
-      sessionId,
-      event: issueClaimStaleEvent(state.issueId, now, claim),
-    });
-    return {
-      issueId: state.issueId,
-      reconciled: true,
-      action: "marked_stale",
-      reason: "claim_age_exceeded",
-      claim,
-    };
-  }
+    if (isStaleClaim(state.claim, input.now, input.staleAfterMs)) {
+      const now = normalizeNow(input.now);
+      const claim: IssueClaim = {
+        status: "stale",
+        actor: state.claim.actor,
+        claimedBySession: state.claim.claimedBySession,
+        claimedAt: state.claim.claimedAt,
+        runId: state.claim.runId,
+        staleAt: now,
+        staleReason: "claim_age_exceeded",
+      };
+      writeClaimUpdate({
+        paths,
+        state,
+        claim,
+        sessionId,
+        event: issueClaimStaleEvent(state.issueId, now, claim, sessionId),
+      });
+      return {
+        issueId: state.issueId,
+        reconciled: true,
+        action: "marked_stale",
+        reason: "claim_age_exceeded",
+        claim,
+      };
+    }
 
-  return { issueId: state.issueId, reconciled: false, action: "none", reason: "claim_active", claim: state.claim };
+    return { issueId: state.issueId, reconciled: false, action: "none", reason: "claim_active", claim: state.claim };
+  });
+}
+
+function withClaimLock<T>(root: string, issueId: string, action: (paths: ReturnType<typeof getIssuePaths>) => T): T {
+  const paths = getIssuePaths(root, issueId);
+  const lockPath = `${paths.issueDir}/.claim.lock`;
+  let lockFd: number | null = null;
+  try {
+    lockFd = openSync(lockPath, "wx");
+    return action(paths);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
+      throw new Error(`Issue claim locked: ${issueId}`);
+    }
+    throw error;
+  } finally {
+    if (lockFd !== null) {
+      closeSync(lockFd);
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+    }
+  }
 }
 
 function classifyClaim(input: {
@@ -414,18 +432,24 @@ function issueClaimReleasedEvent(issueId: string, timestamp: string, claim: Issu
   };
 }
 
-function issueClaimStaleEvent(issueId: string, timestamp: string, claim: IssueClaim): StateEvent {
+function issueClaimStaleEvent(
+  issueId: string,
+  timestamp: string,
+  claim: IssueClaim,
+  reconciledBySession: string,
+): StateEvent {
   return {
     schemaVersion: 1,
     type: "issue.claim.stale",
     issueId,
     timestamp,
-    sessionId: claim.claimedBySession,
+    sessionId: reconciledBySession,
     payload: {
       actor: claim.actor,
       claimedBySession: claim.claimedBySession,
       claimedAt: claim.claimedAt,
       runId: claim.runId,
+      reconciledBySession,
       staleAt: claim.status === "stale" ? claim.staleAt : undefined,
       staleReason: claim.status === "stale" ? claim.staleReason : undefined,
     },

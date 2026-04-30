@@ -194,6 +194,14 @@ describe("issue readiness", () => {
       reason: "claim_age_exceeded",
       claim: { status: "stale" },
     });
+    const staleEvent = events(root, "GXPM-STALE").find((event) => event.type === "issue.claim.stale");
+    expect(staleEvent).toMatchObject({
+      sessionId: "codex:reconciler",
+      payload: {
+        claimedBySession: "codex:session-a",
+        reconciledBySession: "codex:reconciler",
+      },
+    });
     expect(classifyIssueReadiness({ root, issueId: "GXPM-STALE" })).toMatchObject({
       decision: "blocked",
       reason: "stale_claim",
@@ -258,6 +266,41 @@ describe("issue readiness", () => {
       decision: "ready",
       reason: "claim_released",
     });
+  });
+
+  test("release and reconcile use the claim lock before mutating claim state", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-mutator-lock-"));
+    enterPhase(root, "GXPM-RELEASE-LOCK", "implement");
+    enterPhase(root, "GXPM-RECONCILE-LOCK", "implement");
+    claimIssue({
+      root,
+      issueId: "GXPM-RELEASE-LOCK",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+    claimIssue({
+      root,
+      issueId: "GXPM-RECONCILE-LOCK",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+    writeFileSync(join(root, ".gxpm", "issues", "GXPM-RELEASE-LOCK", ".claim.lock"), "held\n");
+    writeFileSync(join(root, ".gxpm", "issues", "GXPM-RECONCILE-LOCK", ".claim.lock"), "held\n");
+
+    expect(() =>
+      releaseIssueClaim({
+        root,
+        issueId: "GXPM-RELEASE-LOCK",
+        sessionId: "codex:session-b",
+      }),
+    ).toThrow("Issue claim locked: GXPM-RELEASE-LOCK");
+    expect(() =>
+      reconcileIssueClaim({
+        root,
+        issueId: "GXPM-RECONCILE-LOCK",
+        sessionId: "codex:session-b",
+      }),
+    ).toThrow("Issue claim locked: GXPM-RECONCILE-LOCK");
   });
 
   test("orchestrator dry-run treats claimed issues as blocked", () => {
@@ -346,6 +389,24 @@ describe("issue ready/claim CLI", () => {
       action: "none",
       reason: "claim_released",
     });
+  });
+
+  test("release and reconcile CLI reject flag-like issue ids and missing reason values", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-claim-cli-validation-"));
+    enterPhase(root, "GXPM-CLI-VALIDATE", "implement");
+    expect(runCli(root, ["issue", "claim", "GXPM-CLI-VALIDATE", "--actor", "worker-cli"]).exitCode).toBe(0);
+
+    const missingReason = runCli(root, ["issue", "release", "GXPM-CLI-VALIDATE", "--reason"]);
+    expect(missingReason.exitCode).toBe(1);
+    expect(output(missingReason)).toContain("--reason requires a value");
+
+    const flagLikeRelease = runCli(root, ["issue", "release", "--reason", "manual"]);
+    expect(flagLikeRelease.exitCode).toBe(1);
+    expect(output(flagLikeRelease)).toContain("Usage: gxpm issue release");
+
+    const flagLikeReconcile = runCli(root, ["issue", "reconcile-claim", "--json"]);
+    expect(flagLikeReconcile.exitCode).toBe(1);
+    expect(output(flagLikeReconcile)).toContain("Usage: gxpm issue reconcile-claim");
   });
 
   test("rejects ambiguous --next and explicit issue claim targets", () => {
