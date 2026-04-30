@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createIssueState } from "../core/state";
+import { createIssueState, readIssueState } from "../core/state";
 import { appendRunEvent, listRuns, readRun, startRun } from "../core/runs";
-import { output, runCli } from "./helpers/workflow";
+import { enterPhase, output, runCli, runCliWithEnv } from "./helpers/workflow";
 
 describe("run ledger", () => {
   test("starts, reads, lists, and updates an issue-local run", () => {
@@ -67,6 +67,45 @@ describe("run ledger", () => {
 
     const raw = readFileSync(join(root, ".gxpm", "issues", "GXPM-2", "runs", `${run.runId}.json`), "utf8");
     expect(JSON.parse(raw).workspacePath).toBe("/tmp/w");
+  });
+
+  test("CLI can start a run and bind the issue claim to the run ledger", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-run-cli-claim-"));
+    enterPhase(root, "GXPM-CLAIM-RUN", "implement");
+
+    const start = runCliWithEnv(
+      root,
+      [
+        "run",
+        "start",
+        "GXPM-CLAIM-RUN",
+        "--workspace",
+        "/tmp/w",
+        "--claim",
+        "--actor",
+        "runtime-worker",
+        "--json",
+      ],
+      { CODEX_COMPANION_SESSION_ID: "runtime-claim" },
+    );
+
+    expect(start.exitCode).toBe(0);
+    const payload = JSON.parse(output(start));
+    expect(payload.claim).toMatchObject({
+      claimed: true,
+      claim: {
+        actor: "runtime-worker",
+        claimedBySession: "codex:runtime-claim",
+      },
+    });
+    expect(payload.run.events.map((event: { type: string }) => event.type)).toEqual([
+      "run.started",
+      "run.claimed",
+    ]);
+    expect(readIssueState({ root, issueId: "GXPM-CLAIM-RUN" }).claim).toMatchObject({
+      status: "claimed",
+      runId: payload.run.runId,
+    });
   });
 
   test("rejects invalid statuses", () => {

@@ -1,6 +1,7 @@
 import { appendRunEvent, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
 import { cleanupIssueWorkspace, ensureIssueWorkspace, planIssueWorkspace } from "../../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
+import { claimIssue } from "../../core/issue-readiness";
 import { optionValue, parsePositiveIntegerOption } from "./helpers";
 
 export function runRunCommand(
@@ -14,18 +15,39 @@ export function runRunCommand(
   }
 
   if (subcommand === "start") {
-    const run = startRun({
+    let run = startRun({
       issueId,
       attempt: parsePositiveIntegerOption(argv, "--attempt"),
       status: optionValue(argv, "--status") ?? undefined,
       workspacePath: optionValue(argv, "--workspace") ?? undefined,
       message: optionValue(argv, "--message") ?? undefined,
     });
+    const claim = argv.includes("--claim")
+      ? claimIssue({
+          issueId,
+          actor: optionValue(argv, "--actor") ?? undefined,
+          runId: run.runId,
+        })
+      : null;
+    if (claim) {
+      run = appendRunEvent({
+        issueId,
+        runId: run.runId,
+        type: "run.claimed",
+        status: run.status,
+        payload: {
+          actor: claim.claim.actor,
+          claimedBySession: claim.claim.claimedBySession,
+          workspacePath: run.workspacePath,
+        },
+      });
+    }
     if (argv.includes("--json")) {
-      console.log(JSON.stringify(run, null, 2));
+      console.log(JSON.stringify(claim ? { run, claim } : run, null, 2));
     } else {
       console.log(`started ${run.runId} for ${issueId}`);
       console.log(`status: ${run.status}`);
+      if (claim) console.log(`claim: ${claim.claimed ? "claimed" : "already claimed"}`);
     }
     return;
   }
@@ -90,7 +112,7 @@ export function runRunCommand(
     return;
   }
 
-  throw new Error(`Usage: gxpm run start <issue-id> [--attempt N] [--status ${RUN_STATUSES.join("|")}] [--workspace <path>] [--json]
+  throw new Error(`Usage: gxpm run start <issue-id> [--attempt N] [--status ${RUN_STATUSES.join("|")}] [--workspace <path>] [--claim] [--actor <name>] [--json]
        gxpm run list <issue-id> [--json]
        gxpm run status <issue-id> <run-id> [--json]
        gxpm run event <issue-id> <run-id> --type <event> [--status <status>] [--message <text>] [--reason <text>]`);

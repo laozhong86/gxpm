@@ -24,6 +24,16 @@ export const RUN_STATUSES = [
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
+export const TERMINAL_RUN_STATUSES = [
+  "succeeded",
+  "failed",
+  "timed-out",
+  "stalled",
+  "canceled-by-reconciliation",
+] as const satisfies readonly RunStatus[];
+
+export type TerminalRunStatus = (typeof TERMINAL_RUN_STATUSES)[number];
+
 export interface RunEvent {
   schemaVersion: 1;
   type: string;
@@ -154,6 +164,10 @@ export function listRuns(input: { root?: string; issueId: string }): RunRecord[]
     .filter((name) => name.endsWith(".json"))
     .map((name) => JSON.parse(readFileSync(join(dir, name), "utf8")) as RunRecord)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}
+
+export function isTerminalRunStatus(status: RunStatus): status is TerminalRunStatus {
+  return TERMINAL_RUN_STATUSES.includes(status as TerminalRunStatus);
 }
 
 function writeRunRecord(root: string, run: RunRecord) {
