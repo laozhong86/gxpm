@@ -77,6 +77,18 @@ describe("Qoder wiki local link", () => {
     expect(readlinkSync(join(target, ".qoder", "repowiki"))).toBe(sharedRoot);
   });
 
+  test("CLI rejects qoder link options without values", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-qoder-cli-missing-value-"));
+
+    const missingTarget = runCli(root, ["qoder", "link", "--target", "--replace"]);
+    const missingSharedRoot = runCli(root, ["qoder", "link", "--shared-root"]);
+
+    expect(missingTarget.exitCode).not.toBe(0);
+    expect(output(missingTarget)).toContain("--target requires a value");
+    expect(missingSharedRoot.exitCode).not.toBe(0);
+    expect(output(missingSharedRoot)).toContain("--shared-root requires a value");
+  });
+
   test(".gitignore keeps Qoder repowiki out of git status", () => {
     const ignore = readFileSync(join(repoRoot, ".gitignore"), "utf8");
 
