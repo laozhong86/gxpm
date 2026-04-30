@@ -95,6 +95,21 @@ describe("issue readiness", () => {
     ).toThrow("Issue already claimed: GXPM-CONFLICT by codex:session-a");
   });
 
+  test("claim refuses when another local claim mutation holds the lock", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-lock-"));
+    enterPhase(root, "GXPM-LOCK", "implement");
+    writeFileSync(join(root, ".gxpm", "issues", "GXPM-LOCK", ".claim.lock"), "held\n");
+
+    expect(() =>
+      claimIssue({
+        root,
+        issueId: "GXPM-LOCK",
+        actor: "worker-a",
+        sessionId: "codex:session-a",
+      }),
+    ).toThrow("Issue claim locked: GXPM-LOCK");
+  });
+
   test("orchestrator dry-run treats claimed issues as blocked", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ready-orch-claimed-"));
     enterPhase(root, "GXPM-CLAIMED", "implement");
@@ -150,5 +165,25 @@ describe("issue ready/claim CLI", () => {
         claimedBySession: "codex:claim-cli",
       },
     });
+  });
+
+  test("rejects ambiguous --next and explicit issue claim targets", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-claim-cli-mixed-"));
+    enterPhase(root, "GXPM-MIXED", "implement");
+
+    const result = runCli(root, ["issue", "claim", "GXPM-MIXED", "--next"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("choose either `gxpm issue claim <issue-id>` or `gxpm issue claim --next`");
+  });
+
+  test("rejects --actor without a value", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-claim-cli-actor-"));
+    enterPhase(root, "GXPM-ACTOR", "implement");
+
+    const result = runCli(root, ["issue", "claim", "GXPM-ACTOR", "--actor"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("--actor requires a value");
   });
 });

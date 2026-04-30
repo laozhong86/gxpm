@@ -970,6 +970,10 @@ function runIssueReady(argv: string[]) {
 
 function runIssueClaim(argv: string[], issueId: string | undefined) {
   const useNext = argv.includes("--next");
+  if (useNext && issueId && !issueId.startsWith("--")) {
+    throw new Error("Usage: choose either `gxpm issue claim <issue-id>` or `gxpm issue claim --next`");
+  }
+  const actor = argv.includes("--actor") ? optionRequiredValue(argv, "--actor") : undefined;
   const targetIssueId = useNext ? listReadyIssues()[0]?.issueId : issueId;
   if (useNext && !targetIssueId) {
     throw new Error("No ready issues to claim");
@@ -979,7 +983,7 @@ function runIssueClaim(argv: string[], issueId: string | undefined) {
   }
   const result = claimIssue({
     issueId: targetIssueId,
-    actor: optionValue(argv, "--actor") ?? undefined,
+    actor,
   });
   if (argv.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));

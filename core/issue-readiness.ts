@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { closeSync, openSync, unlinkSync, writeFileSync } from "node:fs";
 import { hasArtifact } from "./artifacts";
 import { listIssues } from "./issues";
 import {
@@ -85,50 +85,68 @@ export function claimIssue(input: {
   const sessionId = input.sessionId ?? resolveSessionId();
   const actor = input.actor ?? sessionId;
   const paths = getIssuePaths(root, input.issueId);
-  const state = readIssueState({ root, issueId: input.issueId });
+  const lockPath = `${paths.issueDir}/.claim.lock`;
+  let lockFd: number | null = null;
 
-  if (state.claim?.status === "claimed") {
-    if (state.claim.claimedBySession === sessionId && state.claim.actor === actor) {
-      return { issueId: state.issueId, claimed: false, claim: state.claim };
+  try {
+    lockFd = openSync(lockPath, "wx");
+    const state = readIssueState({ root, issueId: input.issueId });
+
+    if (state.claim?.status === "claimed") {
+      if (state.claim.claimedBySession === sessionId && state.claim.actor === actor) {
+        return { issueId: state.issueId, claimed: false, claim: state.claim };
+      }
+      throw new Error(`Issue already claimed: ${state.issueId} by ${state.claim.claimedBySession}`);
     }
-    throw new Error(`Issue already claimed: ${state.issueId} by ${state.claim.claimedBySession}`);
+
+    const readiness = classifyIssueReadiness({ root, issueId: input.issueId });
+    if (readiness.decision !== "ready") {
+      throw new Error(`Issue not claimable: ${state.issueId} (${readiness.reason})`);
+    }
+
+    const now = new Date().toISOString();
+    const claim: IssueClaim = {
+      status: "claimed",
+      actor,
+      claimedBySession: sessionId,
+      claimedAt: now,
+      runId: input.runId,
+    };
+    const updated = touchIssueOwnership({
+      state: { ...state, claim, updatedAt: now },
+      sessionId,
+    });
+
+    writeFileSync(paths.statePath, `${JSON.stringify(updated, null, 2)}\n`);
+    const ownershipEvent = buildOwnershipChangedEvent({
+      issueId: state.issueId,
+      timestamp: now,
+      previousState: state,
+      nextState: updated,
+      sessionId,
+    });
+    if (ownershipEvent) {
+      appendIssueEvent({ issueDir: paths.issueDir, event: ownershipEvent });
+    }
+    appendIssueEvent({
+      issueDir: paths.issueDir,
+      event: issueClaimedEvent(state.issueId, now, claim),
+    });
+
+    return { issueId: state.issueId, claimed: true, claim };
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
+      throw new Error(`Issue claim locked: ${input.issueId}`);
+    }
+    throw error;
+  } finally {
+    if (lockFd !== null) {
+      closeSync(lockFd);
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+    }
   }
-
-  const readiness = classifyIssueReadiness({ root, issueId: input.issueId });
-  if (readiness.decision !== "ready") {
-    throw new Error(`Issue not claimable: ${state.issueId} (${readiness.reason})`);
-  }
-
-  const now = new Date().toISOString();
-  const claim: IssueClaim = {
-    status: "claimed",
-    actor,
-    claimedBySession: sessionId,
-    claimedAt: now,
-    runId: input.runId,
-  };
-  const updated = touchIssueOwnership({
-    state: { ...state, claim, updatedAt: now },
-    sessionId,
-  });
-
-  writeFileSync(paths.statePath, `${JSON.stringify(updated, null, 2)}\n`);
-  const ownershipEvent = buildOwnershipChangedEvent({
-    issueId: state.issueId,
-    timestamp: now,
-    previousState: state,
-    nextState: updated,
-    sessionId,
-  });
-  if (ownershipEvent) {
-    appendIssueEvent({ issueDir: paths.issueDir, event: ownershipEvent });
-  }
-  appendIssueEvent({
-    issueDir: paths.issueDir,
-    event: issueClaimedEvent(state.issueId, now, claim),
-  });
-
-  return { issueId: state.issueId, claimed: true, claim };
 }
 
 function issueClaimedEvent(issueId: string, timestamp: string, claim: IssueClaim): StateEvent {
