@@ -1,4 +1,4 @@
-import { appendRunEvent, createRunId, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
+import { appendRunEvent, deleteRun, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
 import { cleanupIssueWorkspace, ensureIssueWorkspace, planIssueWorkspace } from "../../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
 import { claimIssue } from "../../core/issue-readiness";
@@ -23,25 +23,20 @@ export function runRunCommand(
     const workspacePath = optionValue(argv, "--workspace") ?? undefined;
     const message = optionValue(argv, "--message") ?? undefined;
     const shouldClaim = argv.includes("--claim");
-    const plannedRunId = shouldClaim ? createRunId(new Date().toISOString()) : undefined;
-    const claim = shouldClaim
-      ? claimIssue({
-          issueId,
-          actor: optionValue(argv, "--actor") ?? undefined,
-          runId: plannedRunId,
-        })
-      : null;
-    if (claim && !claim.claimed) {
-      throw new Error(`Issue already claimed: ${issueId}; no run started`);
-    }
     let run = startRun({
       issueId,
-      runId: plannedRunId,
       attempt,
       status,
       workspacePath,
       message,
     });
+    const claim = shouldClaim
+      ? claimRunOrRollback({
+          issueId,
+          runId: run.runId,
+          actor: optionValue(argv, "--actor") ?? undefined,
+        })
+      : null;
     if (claim) {
       run = appendRunEvent({
         issueId,
@@ -60,7 +55,7 @@ export function runRunCommand(
     } else {
       console.log(`started ${run.runId} for ${issueId}`);
       console.log(`status: ${run.status}`);
-      if (claim) console.log(`claim: ${claim.claimed ? "claimed" : "already claimed"}`);
+      if (claim) console.log("claim: claimed");
     }
     return;
   }
@@ -129,6 +124,24 @@ export function runRunCommand(
        gxpm run list <issue-id> [--json]
        gxpm run status <issue-id> <run-id> [--json]
        gxpm run event <issue-id> <run-id> --type <event> [--status <status>] [--message <text>] [--reason <text>]`);
+}
+
+function claimRunOrRollback(input: { issueId: string; runId: string; actor?: string }) {
+  try {
+    const claim = claimIssue({
+      issueId: input.issueId,
+      actor: input.actor,
+      runId: input.runId,
+    });
+    if (!claim.claimed) {
+      deleteRun({ issueId: input.issueId, runId: input.runId });
+      throw new Error(`Issue already claimed: ${input.issueId}; no run started`);
+    }
+    return claim;
+  } catch (error) {
+    deleteRun({ issueId: input.issueId, runId: input.runId });
+    throw error;
+  }
 }
 
 export function runWorkspaceCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {

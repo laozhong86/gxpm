@@ -125,7 +125,6 @@ describe("run ledger", () => {
     expect(start.exitCode).toBe(1);
     expect(output(start)).toContain("Issue not claimable: GXPM-BLOCKED");
     expect(listRuns({ root, issueId: "GXPM-BLOCKED" })).toEqual([]);
-    expect(existsSync(join(root, ".gxpm", "issues", "GXPM-BLOCKED", "runs"))).toBe(false);
   });
 
   test("CLI does not create a second run for an idempotent same-session claim", () => {

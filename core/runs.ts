@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -151,6 +152,16 @@ export function readRun(input: RunRefInput): RunRecord {
     throw new Error(`Run not found: ${input.runId}`);
   }
   return JSON.parse(readFileSync(file, "utf8")) as RunRecord;
+}
+
+export function deleteRun(input: RunRefInput): boolean {
+  const root = input.root ?? process.cwd();
+  const file = runPath(root, input.issueId, input.runId);
+  if (!existsSync(file)) {
+    return false;
+  }
+  unlinkSync(file);
+  return true;
 }
 
 export function listRuns(input: { root?: string; issueId: string }): RunRecord[] {
