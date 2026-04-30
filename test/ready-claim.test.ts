@@ -7,7 +7,10 @@ import {
   claimIssue,
   classifyIssueReadiness,
   listReadyIssues,
+  reconcileIssueClaim,
+  releaseIssueClaim,
 } from "../core/issue-readiness";
+import { appendRunEvent, startRun } from "../core/runs";
 import { dryRunOrchestratorTick } from "../core/orchestrator";
 import { enterPhase, output, runCli, runCliWithEnv } from "./helpers/workflow";
 
@@ -110,6 +113,196 @@ describe("issue readiness", () => {
     ).toThrow("Issue claim locked: GXPM-LOCK");
   });
 
+  test("release records the claim outcome and makes the issue ready again", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-release-"));
+    enterPhase(root, "GXPM-RELEASE", "implement");
+    claimIssue({
+      root,
+      issueId: "GXPM-RELEASE",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+
+    const released = releaseIssueClaim({
+      root,
+      issueId: "GXPM-RELEASE",
+      reason: "handoff_complete",
+      sessionId: "codex:session-b",
+      now: "2026-04-30T00:00:00.000Z",
+    });
+
+    expect(released).toMatchObject({
+      released: true,
+      claim: {
+        status: "released",
+        releasedBySession: "codex:session-b",
+        releaseReason: "handoff_complete",
+      },
+    });
+    expect(classifyIssueReadiness({ root, issueId: "GXPM-RELEASE" })).toMatchObject({
+      decision: "ready",
+      reason: "claim_released",
+      claim: { status: "released" },
+    });
+    expect(events(root, "GXPM-RELEASE").map((event) => event.type)).toContain("issue.claim.released");
+  });
+
+  test("reconcile marks old claims stale until an explicit release", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-stale-"));
+    enterPhase(root, "GXPM-STALE", "implement");
+    claimIssue({
+      root,
+      issueId: "GXPM-STALE",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+    const statePath = join(root, ".gxpm", "issues", "GXPM-STALE", "state.json");
+    const state = readIssueState({ root, issueId: "GXPM-STALE" });
+    writeFileSync(
+      statePath,
+      `${JSON.stringify(
+        { ...state, claim: state.claim ? { ...state.claim, claimedAt: "2026-04-28T00:00:00.000Z" } : state.claim },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(
+      classifyIssueReadiness({
+        root,
+        issueId: "GXPM-STALE",
+        now: "2026-04-30T00:00:00.000Z",
+        staleAfterMs: 60 * 60 * 1000,
+      }),
+    ).toMatchObject({
+      decision: "blocked",
+      reason: "stale_claim",
+      claim: { status: "claimed" },
+    });
+
+    const reconciled = reconcileIssueClaim({
+      root,
+      issueId: "GXPM-STALE",
+      sessionId: "codex:reconciler",
+      now: "2026-04-30T00:00:00.000Z",
+      staleAfterMs: 60 * 60 * 1000,
+    });
+
+    expect(reconciled).toMatchObject({
+      reconciled: true,
+      action: "marked_stale",
+      reason: "claim_age_exceeded",
+      claim: { status: "stale" },
+    });
+    const staleEvent = events(root, "GXPM-STALE").find((event) => event.type === "issue.claim.stale");
+    expect(staleEvent).toMatchObject({
+      sessionId: "codex:reconciler",
+      payload: {
+        claimedBySession: "codex:session-a",
+        reconciledBySession: "codex:reconciler",
+      },
+    });
+    expect(classifyIssueReadiness({ root, issueId: "GXPM-STALE" })).toMatchObject({
+      decision: "blocked",
+      reason: "stale_claim",
+      claim: { status: "stale" },
+    });
+
+    releaseIssueClaim({
+      root,
+      issueId: "GXPM-STALE",
+      reason: "stale_claim_released",
+      sessionId: "codex:reconciler",
+      now: "2026-04-30T00:01:00.000Z",
+    });
+    expect(classifyIssueReadiness({ root, issueId: "GXPM-STALE" })).toMatchObject({
+      decision: "ready",
+      reason: "claim_released",
+    });
+  });
+
+  test("reconcile releases claims linked to terminal runs", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-terminal-run-"));
+    enterPhase(root, "GXPM-RUN", "implement");
+    const run = startRun({ root, issueId: "GXPM-RUN", workspacePath: "/tmp/gxpm-run" });
+    claimIssue({
+      root,
+      issueId: "GXPM-RUN",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+      runId: run.runId,
+    });
+    appendRunEvent({
+      root,
+      issueId: "GXPM-RUN",
+      runId: run.runId,
+      type: "run.succeeded",
+      status: "succeeded",
+    });
+
+    expect(classifyIssueReadiness({ root, issueId: "GXPM-RUN" })).toMatchObject({
+      decision: "blocked",
+      reason: "claim_run_succeeded_needs_reconcile",
+    });
+
+    expect(
+      reconcileIssueClaim({
+        root,
+        issueId: "GXPM-RUN",
+        sessionId: "codex:reconciler",
+        now: "2026-04-30T00:00:00.000Z",
+      }),
+    ).toMatchObject({
+      reconciled: true,
+      action: "released",
+      reason: "run_succeeded",
+      claim: {
+        status: "released",
+        releaseReason: "run_succeeded",
+        runId: run.runId,
+      },
+    });
+    expect(classifyIssueReadiness({ root, issueId: "GXPM-RUN" })).toMatchObject({
+      decision: "ready",
+      reason: "claim_released",
+    });
+  });
+
+  test("release and reconcile use the claim lock before mutating claim state", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ready-claim-mutator-lock-"));
+    enterPhase(root, "GXPM-RELEASE-LOCK", "implement");
+    enterPhase(root, "GXPM-RECONCILE-LOCK", "implement");
+    claimIssue({
+      root,
+      issueId: "GXPM-RELEASE-LOCK",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+    claimIssue({
+      root,
+      issueId: "GXPM-RECONCILE-LOCK",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+    });
+    writeFileSync(join(root, ".gxpm", "issues", "GXPM-RELEASE-LOCK", ".claim.lock"), "held\n");
+    writeFileSync(join(root, ".gxpm", "issues", "GXPM-RECONCILE-LOCK", ".claim.lock"), "held\n");
+
+    expect(() =>
+      releaseIssueClaim({
+        root,
+        issueId: "GXPM-RELEASE-LOCK",
+        sessionId: "codex:session-b",
+      }),
+    ).toThrow("Issue claim locked: GXPM-RELEASE-LOCK");
+    expect(() =>
+      reconcileIssueClaim({
+        root,
+        issueId: "GXPM-RECONCILE-LOCK",
+        sessionId: "codex:session-b",
+      }),
+    ).toThrow("Issue claim locked: GXPM-RECONCILE-LOCK");
+  });
+
   test("orchestrator dry-run treats claimed issues as blocked", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ready-orch-claimed-"));
     enterPhase(root, "GXPM-CLAIMED", "implement");
@@ -165,6 +358,55 @@ describe("issue ready/claim CLI", () => {
         claimedBySession: "codex:claim-cli",
       },
     });
+  });
+
+  test("releases and reconciles claims from the CLI", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-claim-cli-release-"));
+    enterPhase(root, "GXPM-CLI-RELEASE", "implement");
+    expect(runCli(root, ["issue", "claim", "GXPM-CLI-RELEASE", "--actor", "worker-cli"]).exitCode).toBe(0);
+
+    const release = runCli(root, [
+      "issue",
+      "release",
+      "GXPM-CLI-RELEASE",
+      "--reason",
+      "manual_cli_release",
+      "--json",
+    ]);
+    expect(release.exitCode).toBe(0);
+    expect(JSON.parse(output(release))).toMatchObject({
+      released: true,
+      claim: {
+        status: "released",
+        releaseReason: "manual_cli_release",
+      },
+    });
+
+    const reconcile = runCli(root, ["issue", "reconcile-claim", "GXPM-CLI-RELEASE", "--json"]);
+    expect(reconcile.exitCode).toBe(0);
+    expect(JSON.parse(output(reconcile))).toMatchObject({
+      reconciled: false,
+      action: "none",
+      reason: "claim_released",
+    });
+  });
+
+  test("release and reconcile CLI reject flag-like issue ids and missing reason values", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-claim-cli-validation-"));
+    enterPhase(root, "GXPM-CLI-VALIDATE", "implement");
+    expect(runCli(root, ["issue", "claim", "GXPM-CLI-VALIDATE", "--actor", "worker-cli"]).exitCode).toBe(0);
+
+    const missingReason = runCli(root, ["issue", "release", "GXPM-CLI-VALIDATE", "--reason"]);
+    expect(missingReason.exitCode).toBe(1);
+    expect(output(missingReason)).toContain("--reason requires a value");
+
+    const flagLikeRelease = runCli(root, ["issue", "release", "--reason", "manual"]);
+    expect(flagLikeRelease.exitCode).toBe(1);
+    expect(output(flagLikeRelease)).toContain("Usage: gxpm issue release");
+
+    const flagLikeReconcile = runCli(root, ["issue", "reconcile-claim", "--json"]);
+    expect(flagLikeReconcile.exitCode).toBe(1);
+    expect(output(flagLikeReconcile)).toContain("Usage: gxpm issue reconcile-claim");
   });
 
   test("rejects ambiguous --next and explicit issue claim targets", () => {

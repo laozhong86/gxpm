@@ -234,7 +234,11 @@ gxpm issue status <issue-id>
 gxpm issue transition <issue-id> <phase>
 gxpm issue checkpoint <issue-id> --title "handoff" --stdin
 gxpm issue resume <issue-id>
-gxpm run start <issue-id>
+gxpm issue ready
+gxpm issue claim <issue-id>
+gxpm issue release <issue-id>
+gxpm issue reconcile-claim <issue-id>
+gxpm run start <issue-id> [--claim]
 gxpm run list <issue-id>
 gxpm run status <issue-id> <run-id>
 gxpm run event <issue-id> <run-id> --type <event>

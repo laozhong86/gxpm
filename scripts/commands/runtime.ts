@@ -1,6 +1,7 @@
-import { appendRunEvent, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
+import { appendRunEvent, deleteRun, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
 import { cleanupIssueWorkspace, ensureIssueWorkspace, planIssueWorkspace } from "../../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
+import { claimIssue } from "../../core/issue-readiness";
 import { optionValue, parsePositiveIntegerOption } from "./helpers";
 
 export function runRunCommand(
@@ -14,18 +15,47 @@ export function runRunCommand(
   }
 
   if (subcommand === "start") {
-    const run = startRun({
+    const status = optionValue(argv, "--status") ?? undefined;
+    if (status && !RUN_STATUSES.includes(status as (typeof RUN_STATUSES)[number])) {
+      throw new Error(`Invalid run status: ${status}`);
+    }
+    const attempt = parsePositiveIntegerOption(argv, "--attempt");
+    const workspacePath = optionValue(argv, "--workspace") ?? undefined;
+    const message = optionValue(argv, "--message") ?? undefined;
+    const shouldClaim = argv.includes("--claim");
+    let run = startRun({
       issueId,
-      attempt: parsePositiveIntegerOption(argv, "--attempt"),
-      status: optionValue(argv, "--status") ?? undefined,
-      workspacePath: optionValue(argv, "--workspace") ?? undefined,
-      message: optionValue(argv, "--message") ?? undefined,
+      attempt,
+      status,
+      workspacePath,
+      message,
     });
+    const claim = shouldClaim
+      ? claimRunOrRollback({
+          issueId,
+          runId: run.runId,
+          actor: optionValue(argv, "--actor") ?? undefined,
+        })
+      : null;
+    if (claim) {
+      run = appendRunEvent({
+        issueId,
+        runId: run.runId,
+        type: "run.claimed",
+        status: run.status,
+        payload: {
+          actor: claim.claim.actor,
+          claimedBySession: claim.claim.claimedBySession,
+          workspacePath: run.workspacePath,
+        },
+      });
+    }
     if (argv.includes("--json")) {
-      console.log(JSON.stringify(run, null, 2));
+      console.log(JSON.stringify(claim ? { run, claim } : run, null, 2));
     } else {
       console.log(`started ${run.runId} for ${issueId}`);
       console.log(`status: ${run.status}`);
+      if (claim) console.log("claim: claimed");
     }
     return;
   }
@@ -90,10 +120,28 @@ export function runRunCommand(
     return;
   }
 
-  throw new Error(`Usage: gxpm run start <issue-id> [--attempt N] [--status ${RUN_STATUSES.join("|")}] [--workspace <path>] [--json]
+  throw new Error(`Usage: gxpm run start <issue-id> [--attempt N] [--status ${RUN_STATUSES.join("|")}] [--workspace <path>] [--claim] [--actor <name>] [--json]
        gxpm run list <issue-id> [--json]
        gxpm run status <issue-id> <run-id> [--json]
        gxpm run event <issue-id> <run-id> --type <event> [--status <status>] [--message <text>] [--reason <text>]`);
+}
+
+function claimRunOrRollback(input: { issueId: string; runId: string; actor?: string }) {
+  try {
+    const claim = claimIssue({
+      issueId: input.issueId,
+      actor: input.actor,
+      runId: input.runId,
+    });
+    if (!claim.claimed) {
+      deleteRun({ issueId: input.issueId, runId: input.runId });
+      throw new Error(`Issue already claimed: ${input.issueId}; no run started`);
+    }
+    return claim;
+  } catch (error) {
+    deleteRun({ issueId: input.issueId, runId: input.runId });
+    throw error;
+  }
 }
 
 export function runWorkspaceCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {

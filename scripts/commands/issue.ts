@@ -14,7 +14,13 @@ import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
 import { PHASE_GATE_RULES } from "../../core/phase-gates";
-import { claimIssue, listIssueReadiness, listReadyIssues } from "../../core/issue-readiness";
+import {
+  claimIssue,
+  listIssueReadiness,
+  listReadyIssues,
+  reconcileIssueClaim,
+  releaseIssueClaim,
+} from "../../core/issue-readiness";
 import { runPostLandSkillSync } from "../post-land-sync";
 import { currentGitBranch, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 
@@ -90,6 +96,16 @@ export function runIssueCommand(argv: string[], subcommand: string | undefined, 
 
   if (subcommand === "claim") {
     runIssueClaim(argv, issueId);
+    return;
+  }
+
+  if (subcommand === "release") {
+    runIssueRelease(argv, issueId);
+    return;
+  }
+
+  if (subcommand === "reconcile-claim") {
+    runIssueReconcileClaim(argv, issueId);
     return;
   }
 
@@ -196,6 +212,10 @@ function formatEventDetail(event: StateEvent): string {
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} blocked: ${p.missingArtifact ?? ""}`;
     case "issue.claimed":
       return `${p.actor ?? "?"} by ${p.claimedBySession ?? "?"}`;
+    case "issue.claim.released":
+      return `${p.releaseReason ?? "released"} by ${p.releasedBySession ?? "?"}`;
+    case "issue.claim.stale":
+      return `${p.staleReason ?? "stale"} since ${p.staleAt ?? "?"}`;
     case "ownership.changed":
       return `${p.fromSession ?? "?"} → ${p.toSession ?? "?"}`;
     default:
@@ -233,16 +253,18 @@ function runIssueClaim(argv: string[], issueId: string | undefined) {
     throw new Error("Usage: choose either `gxpm issue claim <issue-id>` or `gxpm issue claim --next`");
   }
   const actor = argv.includes("--actor") ? optionRequiredValue(argv, "--actor") : undefined;
+  const runId = argv.includes("--run") ? optionRequiredValue(argv, "--run") : undefined;
   const targetIssueId = useNext ? listReadyIssues()[0]?.issueId : issueId;
   if (useNext && !targetIssueId) {
     throw new Error("No ready issues to claim");
   }
   if (!targetIssueId || targetIssueId.startsWith("--")) {
-    throw new Error("Usage: gxpm issue claim <issue-id> [--actor <name>] [--json] | gxpm issue claim --next [--actor <name>] [--json]");
+    throw new Error("Usage: gxpm issue claim <issue-id> [--actor <name>] [--run <run-id>] [--json] | gxpm issue claim --next [--actor <name>] [--run <run-id>] [--json]");
   }
   const result = claimIssue({
     issueId: targetIssueId,
     actor,
+    runId,
   });
   if (argv.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
@@ -251,6 +273,41 @@ function runIssueClaim(argv: string[], issueId: string | undefined) {
   console.log(`${result.claimed ? "claimed" : "already claimed"} ${result.issueId}`);
   console.log(`actor: ${result.claim.actor}`);
   console.log(`session: ${result.claim.claimedBySession}`);
+  if (result.claim.runId) console.log(`runId: ${result.claim.runId}`);
+}
+
+function runIssueRelease(argv: string[], issueId: string | undefined) {
+  if (!issueId || issueId.startsWith("-")) {
+    throw new Error("Usage: gxpm issue release <issue-id> [--reason <text>] [--json]");
+  }
+  const reason = argv.includes("--reason") ? optionRequiredValue(argv, "--reason") : undefined;
+  const result = releaseIssueClaim({
+    issueId,
+    reason,
+  });
+  if (argv.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`${result.released ? "released" : "already released"} ${result.issueId}`);
+  console.log(`reason: ${result.claim.status === "released" ? result.claim.releaseReason : "already_released"}`);
+}
+
+function runIssueReconcileClaim(argv: string[], issueId: string | undefined) {
+  if (!issueId || issueId.startsWith("-")) {
+    throw new Error("Usage: gxpm issue reconcile-claim <issue-id> [--stale-after-ms N] [--json]");
+  }
+  const result = reconcileIssueClaim({
+    issueId,
+    staleAfterMs: parsePositiveIntegerOption(argv, "--stale-after-ms"),
+  });
+  if (argv.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`${result.reconciled ? "reconciled" : "unchanged"} ${result.issueId}`);
+  console.log(`action: ${result.action}`);
+  console.log(`reason: ${result.reason}`);
 }
 
 function runIssueOwnership(argv: string[], issueId: string) {

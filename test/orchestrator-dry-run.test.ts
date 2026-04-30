@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createIssueState } from "../core/state";
 import { dryRunOrchestratorTick } from "../core/orchestrator";
+import { claimIssue } from "../core/issue-readiness";
+import { appendRunEvent, startRun } from "../core/runs";
 import { enterPhase, output, runCli } from "./helpers/workflow";
 
 describe("orchestrator dry-run tick", () => {
@@ -60,6 +62,39 @@ describe("orchestrator dry-run tick", () => {
       decision: "blocked",
       reason: "missing_dispatch_handoff",
     });
+  });
+
+  test("reports terminal-run claim blockers without mutating state", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-orch-terminal-claim-"));
+    enterPhase(root, "GXPM-6", "implement");
+    const run = startRun({ root, issueId: "GXPM-6" });
+    claimIssue({
+      root,
+      issueId: "GXPM-6",
+      actor: "worker-a",
+      sessionId: "codex:session-a",
+      runId: run.runId,
+    });
+    appendRunEvent({
+      root,
+      issueId: "GXPM-6",
+      runId: run.runId,
+      type: "run.failed",
+      status: "failed",
+      failureReason: "validation failed",
+    });
+    const statePath = join(root, ".gxpm", "issues", "GXPM-6", "state.json");
+    const before = readFileSync(statePath, "utf8");
+
+    const report = dryRunOrchestratorTick({ root, includeAll: true });
+
+    expect(report.summary).toEqual({ dispatchable: 0, blocked: 1, ignored: 0 });
+    expect(report.issues[0]).toMatchObject({
+      issueId: "GXPM-6",
+      decision: "blocked",
+      reason: "claim_run_failed_needs_reconcile",
+    });
+    expect(readFileSync(statePath, "utf8")).toBe(before);
   });
 
   test("CLI prints text and JSON reports without mutating state", () => {

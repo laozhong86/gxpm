@@ -88,7 +88,12 @@ gxpm issue resume <issue-id>
 To inspect execution-runtime state without relying on chat memory:
 
 ```bash
-gxpm run start <issue-id> [--workspace <path>] [--json]
+gxpm issue ready [--all] [--json]
+gxpm issue claim <issue-id> [--actor <name>] [--run <run-id>] [--json]
+gxpm issue claim --next [--actor <name>] [--run <run-id>] [--json]
+gxpm issue release <issue-id> [--reason <text>] [--json]
+gxpm issue reconcile-claim <issue-id> [--stale-after-ms N] [--json]
+gxpm run start <issue-id> [--workspace <path>] [--claim] [--actor <name>] [--json]
 gxpm run list <issue-id> [--json]
 gxpm run status <issue-id> <run-id> [--json]
 gxpm run event <issue-id> <run-id> --type <event> [--status <status>]
@@ -102,6 +107,9 @@ dispatchability and blocker reasons, but does not claim work, create
 workspaces, launch agents, write artifacts, or transition phases. Run ledger
 records live under `.gxpm/issues/<id>/runs/`; workspace runtime defaults to
 `workspace.root` (`.gxpm/local/workspaces`) unless overridden.
+Claim lifecycle state is local to the issue: `claim` records active execution,
+`release` makes a completed or abandoned claim ready again, and
+`reconcile-claim` marks stale claims or releases claims linked to terminal runs.
 
 If no state exists, create it before phase work:
 

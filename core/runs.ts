@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -23,6 +24,16 @@ export const RUN_STATUSES = [
 ] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
+
+export const TERMINAL_RUN_STATUSES = [
+  "succeeded",
+  "failed",
+  "timed-out",
+  "stalled",
+  "canceled-by-reconciliation",
+] as const satisfies readonly RunStatus[];
+
+export type TerminalRunStatus = (typeof TERMINAL_RUN_STATUSES)[number];
 
 export interface RunEvent {
   schemaVersion: 1;
@@ -50,6 +61,7 @@ export interface RunRecord {
 export interface StartRunInput {
   root?: string;
   issueId: string;
+  runId?: string;
   attempt?: number;
   status?: RunStatus | string;
   workspacePath?: string;
@@ -82,7 +94,7 @@ export function startRun(input: StartRunInput): RunRecord {
   const run: RunRecord = {
     schemaVersion: 1,
     issueId: input.issueId,
-    runId: createRunId(now),
+    runId: input.runId ? assertRunId(input.runId) : createRunId(now),
     attempt: normalizeAttempt(input.attempt),
     status,
     createdAt: now,
@@ -142,6 +154,16 @@ export function readRun(input: RunRefInput): RunRecord {
   return JSON.parse(readFileSync(file, "utf8")) as RunRecord;
 }
 
+export function deleteRun(input: RunRefInput): boolean {
+  const root = input.root ?? process.cwd();
+  const file = runPath(root, input.issueId, input.runId);
+  if (!existsSync(file)) {
+    return false;
+  }
+  unlinkSync(file);
+  return true;
+}
+
 export function listRuns(input: { root?: string; issueId: string }): RunRecord[] {
   const root = input.root ?? process.cwd();
   readIssueState({ root, issueId: input.issueId });
@@ -156,6 +178,10 @@ export function listRuns(input: { root?: string; issueId: string }): RunRecord[]
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
+export function isTerminalRunStatus(status: RunStatus): status is TerminalRunStatus {
+  return TERMINAL_RUN_STATUSES.includes(status as TerminalRunStatus);
+}
+
 function writeRunRecord(root: string, run: RunRecord) {
   writeFileSync(runPath(root, run.issueId, run.runId), `${JSON.stringify(run, null, 2)}\n`);
 }
@@ -168,7 +194,7 @@ function runPath(root: string, issueId: string, runId: string) {
   return join(runsDir(root, issueId), `${assertRunId(runId)}.json`);
 }
 
-function createRunId(timestamp: string) {
+export function createRunId(timestamp: string) {
   const compact = timestamp.replace(/[-:.TZ]/g, "").slice(0, 14);
   return `run-${compact}-${randomUUID().slice(0, 8)}`;
 }

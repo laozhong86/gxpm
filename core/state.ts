@@ -44,13 +44,31 @@ export interface IssueOwnership {
   history: IssueOwnershipHistoryEntry[];
 }
 
-export interface IssueClaim {
-  status: "claimed";
+interface BaseIssueClaim {
   actor: string;
   claimedBySession: string;
   claimedAt: string;
   runId?: string;
 }
+
+export interface ClaimedIssueClaim extends BaseIssueClaim {
+  status: "claimed";
+}
+
+export interface ReleasedIssueClaim extends BaseIssueClaim {
+  status: "released";
+  releasedAt: string;
+  releasedBySession: string;
+  releaseReason: string;
+}
+
+export interface StaleIssueClaim extends BaseIssueClaim {
+  status: "stale";
+  staleAt: string;
+  staleReason: string;
+}
+
+export type IssueClaim = ClaimedIssueClaim | ReleasedIssueClaim | StaleIssueClaim;
 
 export interface IssueState {
   schemaVersion: 1;
@@ -83,6 +101,8 @@ export interface StateEvent {
     | "gate.blocked"
     | "gate.passed"
     | "issue.claimed"
+    | "issue.claim.released"
+    | "issue.claim.stale"
     | "cleanup.executed"
     | "gate.brainstorm.skipped"
     | "ownership.changed";
@@ -452,7 +472,7 @@ function normalizeClaim(value: unknown): IssueClaim | undefined {
     return undefined;
   }
   const record = value as Record<string, unknown>;
-  if (record.status !== "claimed") {
+  if (record.status !== "claimed" && record.status !== "released" && record.status !== "stale") {
     return undefined;
   }
   const actor = typeof record.actor === "string" && record.actor.trim() ? record.actor : "";
@@ -466,7 +486,34 @@ function normalizeClaim(value: unknown): IssueClaim | undefined {
     return undefined;
   }
   const runId = typeof record.runId === "string" && record.runId.trim() ? record.runId : undefined;
-  return { status: "claimed", actor, claimedBySession, claimedAt, runId };
+  const base = { actor, claimedBySession, claimedAt, runId };
+  if (record.status === "claimed") {
+    return { status: "claimed", ...base };
+  }
+  if (record.status === "released") {
+    const releasedAt =
+      typeof record.releasedAt === "string" && record.releasedAt.trim() ? record.releasedAt : "";
+    const releasedBySession =
+      typeof record.releasedBySession === "string" && record.releasedBySession.trim()
+        ? record.releasedBySession
+        : "";
+    const releaseReason =
+      typeof record.releaseReason === "string" && record.releaseReason.trim()
+        ? record.releaseReason
+        : "";
+    if (!releasedAt || !releasedBySession || !releaseReason) {
+      return undefined;
+    }
+    return { status: "released", ...base, releasedAt, releasedBySession, releaseReason };
+  }
+
+  const staleAt = typeof record.staleAt === "string" && record.staleAt.trim() ? record.staleAt : "";
+  const staleReason =
+    typeof record.staleReason === "string" && record.staleReason.trim() ? record.staleReason : "";
+  if (!staleAt || !staleReason) {
+    return undefined;
+  }
+  return { status: "stale", ...base, staleAt, staleReason };
 }
 
 function normalizeOwnershipHistory(value: unknown): IssueOwnershipHistoryEntry[] {
