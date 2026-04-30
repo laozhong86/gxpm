@@ -123,8 +123,8 @@ export function runWikiCommand(argv: string[], subcommand: string | undefined) {
 export function runQoderCommand(argv: string[], subcommand: string | undefined) {
   if (subcommand === "link") {
     const result = ensureQoderWikiLink({
-      target: optionValue(argv, "--target") ?? undefined,
-      sharedRoot: optionValue(argv, "--shared-root") ?? undefined,
+      target: argv.includes("--target") ? optionRequiredValue(argv, "--target") : undefined,
+      sharedRoot: argv.includes("--shared-root") ? optionRequiredValue(argv, "--shared-root") : undefined,
       replace: argv.includes("--replace"),
     });
     if (argv.includes("--json")) {
