@@ -50,6 +50,14 @@ V0 已实现的本地目录：
     verify-findings.json
   reports/
   evidence/
+    command-logs/
+    browser-snapshots/
+    browser-screenshots/
+    browser-console/
+    browser-errors/
+    investigations/
+    review/
+    release/
     screenshots/
   memory/
     resume-packet.json
@@ -77,6 +85,14 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `land-findings`
 
 V0 只写 JSON artifact，不渲染 markdown report。
+
+### Evidence Store
+
+V0 的 issue-local evidence 统一由 `core/evidence.ts` 分配路径和写入。调用方必须提供 issue id、evidence kind、安全文件名、媒体类型和 payload；helper 负责复用 `core/state.ts` 的 issue id 校验、确认 issue state 存在、创建目标 evidence 子目录，并阻止文件名穿越 issue 目录。
+
+当前 evidence kind 覆盖 command logs、browser snapshots/screenshots/console/errors、investigations、review 和 release。`screenshots` 保留给已有 `gxpm-investigate` 证据路径以维持兼容；新的 browser runtime 证据优先使用更具体的 `browser-*` kind。
+
+Evidence Store 只管理 issue-local files，不替代 phase artifact store；阶段结论仍写入 `artifacts/*.json`，原始截图、console、review 或命令日志写入 `evidence/`。
 
 ### Resume Packet / Checkpoint
 
@@ -173,6 +189,8 @@ gxpm 用 capability runtime 统一所有能力。V0 可以先用 adapter 接入�
 - 是否允许 mutation
 
 V0 的 first-party capability contract 由 `core/capabilities.ts` 维护，并可通过只读命令 `gxpm capability list` / `gxpm capability show <capability-id>` 检查。registry 只描述合同和证据要求，不负责动态加载、执行插件或绕过 phase/artifact gate。
+
+`verification.issue-evidence-store` 是 V0 的共享 evidence 写入能力。它只能在目标 issue 的 `evidence/` 目录内创建或覆盖文件，不能隐式推进 phase、写 phase artifact、claim issue 或调用外部 provider。
 
 ## 与 PMC 的关系
 

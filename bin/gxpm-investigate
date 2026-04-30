@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { getIssuePaths, readIssueState } from "../core/state";
+import {
+  evidenceFilename,
+  prepareIssueEvidencePath,
+  writeIssueEvidenceJson,
+} from "../core/evidence";
+import { readIssueState } from "../core/state";
 
 interface InvestigationArtifact {
   schemaVersion: 1;
@@ -56,24 +59,29 @@ if (!Bun.which("cmux")) {
 }
 
 const root = process.env.GXPM_ROOT ?? process.cwd();
-let issueDir: string;
 try {
-  const paths = getIssuePaths(root, issueId);
   readIssueState({ root, issueId });
-  issueDir = paths.issueDir;
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }
 
-const ts = new Date().toISOString();
-const stamp = ts.replace(/[:.]/g, "-");
-const artifactRelPath = `evidence/investigations/investigation-${stamp}.json`;
-const screenshotRelPath = `evidence/screenshots/investigation-${stamp}.png`;
-const artifactPath = join(issueDir, artifactRelPath);
-const screenshotPath = join(issueDir, screenshotRelPath);
-
-mkdirSync(join(issueDir, "evidence", "investigations"), { recursive: true });
-mkdirSync(join(issueDir, "evidence", "screenshots"), { recursive: true });
+const startedAt = new Date();
+const ts = startedAt.toISOString();
+const artifactFilename = evidenceFilename("investigation", "json", startedAt);
+const investigation = prepareIssueEvidencePath({
+  root,
+  issueId,
+  kind: "investigations",
+  filename: artifactFilename,
+});
+const screenshot = prepareIssueEvidencePath({
+  root,
+  issueId,
+  kind: "screenshots",
+  filename: evidenceFilename("investigation", "png", startedAt),
+});
+const screenshotRelPath = screenshot.path;
+const screenshotPath = screenshot.absolutePath;
 
 const artifact: InvestigationArtifact = {
   schemaVersion: 1,
@@ -92,7 +100,13 @@ const artifact: InvestigationArtifact = {
 };
 
 function persist() {
-  writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
+  writeIssueEvidenceJson({
+    root,
+    issueId,
+    kind: "investigations",
+    filename: artifactFilename,
+    payload: artifact,
+  });
 }
 
 function runCmux(name: string, commandArgs: string[]) {
@@ -165,7 +179,7 @@ try {
   artifact.errors = lines(runCmux("errors", ["errors", "list"]));
   artifact.status = "complete";
   persist();
-  console.log(`wrote ${artifactPath}`);
+  console.log(`wrote ${investigation.absolutePath}`);
 } catch (error) {
   artifact.status = "failed";
   artifact.failure = { message: error instanceof Error ? error.message : String(error) };

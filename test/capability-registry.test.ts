@@ -55,6 +55,7 @@ describe("capability registry", () => {
 
   test("retrieves capabilities by id", () => {
     expect(getCapability("issue.readiness")?.runtime).toBe("issue");
+    expect(getCapability("verification.issue-evidence-store")?.mutationPolicy.scope).toBe("issue-local-files");
     expect(getCapability("missing.capability")).toBeNull();
     expect(() => requireCapability("missing.capability")).toThrow("Unknown capability: missing.capability");
   });
@@ -67,6 +68,9 @@ describe("gxpm capability CLI", () => {
     expect(result.exitCode).toBe(0);
     const capabilities = JSON.parse(output(result));
     expect(capabilities.map((capability: { id: string }) => capability.id)).toContain("issue.readiness");
+    expect(capabilities.map((capability: { id: string }) => capability.id)).toContain(
+      "verification.issue-evidence-store",
+    );
   });
 
   test("shows one capability in human and JSON formats", () => {

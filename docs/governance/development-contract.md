@@ -13,6 +13,7 @@
 | generated | `bun run gen:skill-docs` | 修改 `*.tmpl`、host config、preamble 后 | 刷新生成的 skill surface |
 | state | `gxpm issue create/status/transition` | state graph 或 phase 规则改动后 | 本地 `.gxpm` 真值写回和恢复验证 |
 | capability | `gxpm capability list/show` | 新增或修改 runtime capability contract 后 | 检查 input/output、mutation、idempotency、failure mode 和 evidence metadata |
+| evidence | `bun test test/evidence.test.ts test/investigate.test.ts` | issue-local evidence store、browser/investigation/review 证据写入改动后 | 路径安全、partial failure evidence、截图/日志路径和 payload 保持兼容 |
 | runtime | `gxpm issue ready/claim/release/reconcile-claim`、`gxpm run start/list/status/event`、`gxpm workspace plan/ensure/cleanup`、`gxpm orchestrator tick --dry-run` | claim lifecycle、run ledger、workspace runtime、orchestrator dry-run 改动后 | 执行运行时原语、路径安全、只读派发判断 |
 | artifact | `gxpm triage init`、`gxpm plan init`、`gxpm dispatch init`、`gxpm implement verify`、`gxpm local-verify ac-check`、`gxpm ac-check self-review`、`gxpm self-review ship`、`gxpm ship pr-check`、`gxpm pr-check verify`、`gxpm verify qa`、`gxpm qa land`、`gxpm artifact list/read` | artifact store 或 phase gate 改动后 | 产物写入、读取、索引和 gate 验证 |
 | context | `gxpm wiki init`、`gxpm wiki update`、`gxpm wiki query <text>`、`gxpm wiki status` | 需要仓库知识库上下文、代码改动后刷新本地 wiki，或仓库存在 `.qoder/repowiki` 时 | 原生 wiki 上下文、本地索引/图谱刷新、Qoder 可选导航与手动同步提醒 |
@@ -53,6 +54,13 @@
 - workspace key 必须由 issue identifier 派生并限制在 `[A-Za-z0-9._-]`，不允许把用户输入拼进任意路径。
 - `gxpm orchestrator tick --dry-run` 必须保持只读：不 claim、不创建 workspace、不启动 agent、不写 artifact、不 transition。
 - 真正的长驻 poll/retry daemon 需要另行设计；不要把 dry-run tick 偷偷扩成后台服务。
+
+## Evidence Store 规则
+
+- `core/evidence.ts` 是 issue-local 原始证据的唯一写入/路径分配入口。新增 command、browser、review、release 或 investigate 证据时，先使用它分配 `evidence/<kind>/<filename>`，不要在调用方手拼 `.gxpm/issues/<id>/evidence` 路径。
+- evidence filename 必须是单一安全文件名，不能包含 `/`、`..` 或绝对路径。issue id 校验必须复用 `core/state.ts`，写入前必须确认 issue state 存在。
+- phase artifact 和 evidence 分工保持清楚：结论、gate 结果和验收状态写 `artifacts/*.json`；截图、console、命令输出、review 原文或调查过程写 `evidence/`。
+- `gxpm-investigate` 必须保持 partial evidence 行为：任何 cmux 子命令失败前已经收集到的 URL、viewport、snapshot、screenshot、console 等内容都要落到 `evidence/investigations/*.json`。
 
 ## 失败归因协议
 
