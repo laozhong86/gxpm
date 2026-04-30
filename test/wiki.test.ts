@@ -18,6 +18,7 @@ import {
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
   initializeNativeWiki,
+  evaluateNativeWiki,
   extractCitedFiles,
   getQoderWikiStatus,
   markQoderWikiReminder,
@@ -702,6 +703,47 @@ describe("gxpm-native wiki engine", () => {
     expect(invalidDimensions.stale).toBe(true);
     expect(invalidDimensions.reason).toContain("index/dimensions.json missing or unreadable");
   });
+
+  test("evaluates native wiki quality with optional Qoder comparison and query scenarios", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "hosts/codex.ts", "export function installCodexAdapter() {}\n");
+    writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeWikiPage(root, "Guide/Overview.md", "# Overview\n\n[state](file://core/state.ts#L1)\n");
+    writeWikiPage(root, "API/Commands.md", "# Commands\n\n[cli](file://scripts/gxpm.ts#L1)\n");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const report = evaluateNativeWiki({
+      root,
+      now: new Date("2026-04-29T01:00:00Z"),
+      queryScenarios: ["phase gate rules", "host adapter codex"],
+    });
+
+    expect(report.schemaVersion).toBe(1);
+    expect(report.provider).toBe("gxpm");
+    expect(report.native.status.state).toBe("current");
+    expect(report.native.generatedDocs.count).toBeGreaterThanOrEqual(1);
+    expect(report.native.projectTopics.clusterTitles).toContain("Phase And Gate System");
+    expect(report.native.projectTopics.clusterTitles).toContain("Host Adapters");
+    expect(report.native.sourceCoverage.docsWithSourceAnchors).toBeGreaterThan(0);
+    expect(report.native.queryScenarios[0].topFiles).toContain("core/phase-gates.ts");
+    expect(report.native.queryScenarios[1].topFiles).toContain("hosts/codex.ts");
+    expect(report.qoder.detected).toBe(true);
+    expect(report.qoder.pageCount).toBe(2);
+    expect(report.qoder.topLevelDirs).toEqual(["API", "Guide"]);
+    expect(report.recommendations).not.toContain("Run gxpm wiki init.");
+  });
+
+  test("evaluates absent native wiki with an init recommendation", () => {
+    const root = tempRoot();
+
+    const report = evaluateNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    expect(report.native.status.state).toBe("absent");
+    expect(report.native.generatedDocs.count).toBe(0);
+    expect(report.native.queryScenarios).toEqual([]);
+    expect(report.recommendations).toContain("Run gxpm wiki init.");
+  });
 });
 
 describe("gxpm native wiki CLI", () => {
@@ -729,5 +771,22 @@ describe("gxpm native wiki CLI", () => {
     expect(JSON.parse(output(update)).index.files.map((file: { path: string }) => file.path)).toContain(
       "core/wiki.ts",
     );
+  });
+
+  test("supports wiki eval as JSON and concise human output", () => {
+    const root = tempRoot();
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    const json = runCli(root, ["wiki", "eval", "--json"]);
+    expect(json.exitCode).toBe(0);
+    const parsed = JSON.parse(output(json));
+    expect(parsed.native.status.state).toBe("current");
+    expect(parsed.native.queryScenarios[0].query).toBe("phase gate artifact lifecycle");
+
+    const human = runCli(root, ["wiki", "eval"]);
+    expect(human.exitCode).toBe(0);
+    expect(output(human)).toContain("Native gxpm wiki eval: current");
+    expect(output(human)).toContain("Query scenarios:");
   });
 });

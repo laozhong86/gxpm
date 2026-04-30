@@ -239,6 +239,54 @@ export interface NativeWikiIssueContext {
   suggestedDocs: string[];
 }
 
+export interface NativeWikiEvalReport {
+  schemaVersion: 1;
+  provider: "gxpm";
+  generatedAt: string;
+  native: {
+    status: NativeWikiStatus;
+    generatedDocs: {
+      count: number;
+      names: string[];
+    };
+    projectTopics: {
+      clusterCount: number;
+      clusterTitles: string[];
+    };
+    sourceCoverage: {
+      indexedFiles: number;
+      dimensionedFiles: number;
+      graphEdges: number;
+      docsWithSourceAnchors: number;
+      anchoredFiles: number;
+      orphanIndexedFiles: number;
+      orphanIndexedFileExamples: string[];
+    };
+    queryScenarios: Array<{
+      query: string;
+      topFiles: string[];
+      suggestedDocs: string[];
+    }>;
+  };
+  qoder: {
+    detected: boolean;
+    state: QoderWikiStatus["state"];
+    pageCount: number;
+    contentRoots: string[];
+    topLevelDirs: string[];
+    syncStale: boolean;
+    reminderDue: boolean;
+    reason: string;
+  };
+  recommendations: string[];
+}
+
+const DEFAULT_NATIVE_WIKI_EVAL_QUERIES = [
+  "phase gate artifact lifecycle",
+  "host adapter codex",
+  "qoder sync reminder",
+];
+
 export function getQoderWikiStatus(input: { root?: string; now?: Date } = {}): QoderWikiStatus {
   const root = input.root ?? process.cwd();
   const now = input.now ?? new Date();
@@ -445,6 +493,62 @@ export function getNativeWikiContextForIssue(input: {
   };
 }
 
+export function evaluateNativeWiki(input: {
+  root?: string;
+  now?: Date;
+  queryScenarios?: string[];
+} = {}): NativeWikiEvalReport {
+  const root = input.root ?? process.cwd();
+  const now = input.now ?? new Date();
+  const status = getNativeWikiStatus({ root, now });
+  const qoder = getQoderWikiStatus({ root, now });
+  const index = readNativeWikiIndexIfPresent(root);
+  const graph = readNativeWikiGraphIfPresent(root);
+  const dimensions = readNativeWikiDimensionsIfPresent(root);
+  const clusters = index && dimensions ? buildNativeProjectTopicClusters(index, dimensions) : [];
+  const sourceCoverage = buildNativeWikiSourceCoverage(root, status.docs, index, graph, dimensions);
+  const queryScenarios = index
+    ? (input.queryScenarios ?? DEFAULT_NATIVE_WIKI_EVAL_QUERIES).map((query) => {
+        const result = queryNativeWiki({ root, query, limit: 5 });
+        return {
+          query,
+          topFiles: result.contextFiles,
+          suggestedDocs: result.suggestedDocs,
+        };
+      })
+    : [];
+
+  return {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: now.toISOString(),
+    native: {
+      status,
+      generatedDocs: {
+        count: status.docs.length,
+        names: status.docs.map((doc) => doc.replace(`${NATIVE_WIKI_CONTENT_ROOT}/`, "")),
+      },
+      projectTopics: {
+        clusterCount: clusters.length,
+        clusterTitles: clusters.map((cluster) => cluster.rule.title),
+      },
+      sourceCoverage,
+      queryScenarios,
+    },
+    qoder: {
+      detected: qoder.detected,
+      state: qoder.state,
+      pageCount: qoder.pageCount,
+      contentRoots: qoder.contentRoots,
+      topLevelDirs: qoderTopLevelDirs(root, qoder.contentRoots),
+      syncStale: qoder.reminder.syncStale,
+      reminderDue: qoder.reminder.reminderDue,
+      reason: qoder.reminder.reason,
+    },
+    recommendations: nativeWikiEvalRecommendations(status, sourceCoverage, clusters.length, qoder),
+  };
+}
+
 const ISSUE_CONTEXT_ARTIFACT_PRIORITY: ArtifactType[] = [
   "issue-intake",
   "acceptance-contract",
@@ -549,6 +653,72 @@ function pushPayloadSearchText(values: string[], state: { length: number }, valu
   if (state.length > 4000) return;
   values.push(value);
   state.length += value.length + 1;
+}
+
+function buildNativeWikiSourceCoverage(
+  root: string,
+  docs: string[],
+  index: NativeWikiIndex | null,
+  graph: NativeWikiGraph | null,
+  dimensions: NativeWikiDimensions | null,
+) {
+  const indexedFiles = index?.files.map((file) => file.path) ?? [];
+  const anchored = new Set<string>();
+  let docsWithSourceAnchors = 0;
+  for (const doc of docs) {
+    const cited = extractCitedFiles(safeRead(join(root, doc)));
+    if (cited.length > 0) docsWithSourceAnchors += 1;
+    for (const file of cited) anchored.add(file);
+  }
+  const orphanIndexedFiles = indexedFiles.filter((file) => !anchored.has(file)).sort();
+  return {
+    indexedFiles: indexedFiles.length,
+    dimensionedFiles: dimensions?.files.length ?? 0,
+    graphEdges: graph?.edges.length ?? 0,
+    docsWithSourceAnchors,
+    anchoredFiles: [...anchored].filter((file) => indexedFiles.includes(file)).length,
+    orphanIndexedFiles: orphanIndexedFiles.length,
+    orphanIndexedFileExamples: orphanIndexedFiles.slice(0, 20),
+  };
+}
+
+function qoderTopLevelDirs(root: string, contentRoots: string[]) {
+  const dirs = new Set<string>();
+  for (const contentRoot of contentRoots) {
+    const absoluteRoot = join(root, contentRoot);
+    try {
+      for (const name of readdirSync(absoluteRoot)) {
+        if (isDirectory(join(absoluteRoot, name))) dirs.add(name);
+      }
+    } catch {
+      // Qoder is optional; unreadable comparison details should not fail gxpm eval.
+    }
+  }
+  return [...dirs].sort();
+}
+
+function nativeWikiEvalRecommendations(
+  status: NativeWikiStatus,
+  coverage: NativeWikiEvalReport["native"]["sourceCoverage"],
+  projectTopicClusterCount: number,
+  qoder: QoderWikiStatus,
+) {
+  const recommendations: string[] = [];
+  if (status.state === "absent") recommendations.push("Run gxpm wiki init.");
+  if (status.state === "stale") recommendations.push("Run gxpm wiki update.");
+  if (status.state === "current" && projectTopicClusterCount === 0) {
+    recommendations.push("Review native topic rules; no project topic clusters were inferred.");
+  }
+  if (status.state === "current" && coverage.orphanIndexedFiles > 0) {
+    recommendations.push("Use orphanIndexedFileExamples to choose the next topic coverage improvement.");
+  }
+  if (qoder.detected && qoder.reminder.syncStale) {
+    recommendations.push("Treat Qoder as optional stale comparison evidence; native wiki remains the gxpm truth.");
+  }
+  if (recommendations.length === 0) {
+    recommendations.push("Native wiki eval is current; use report metrics to choose the next wiki improvement.");
+  }
+  return recommendations;
 }
 
 function buildStatus(input: {

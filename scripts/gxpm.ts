@@ -33,6 +33,7 @@ import { initializeLandFindings, reconcileLandFindings } from "../core/land";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { ensureQoderWikiLink } from "../core/qoder";
 import {
+  evaluateNativeWiki,
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
   initializeNativeWiki,
@@ -41,6 +42,7 @@ import {
   markQoderWikiSync,
   queryNativeWiki,
   updateNativeWiki,
+  type NativeWikiEvalReport,
   type NativeWikiBuildResult,
   type NativeWikiIssueContext,
   type NativeWikiQueryResult,
@@ -618,6 +620,16 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
+  if (subcommand === "eval") {
+    const report = evaluateNativeWiki();
+    if (argv.includes("--json")) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatNativeWikiEvalReport(report));
+    }
+    return;
+  }
+
   if (subcommand === "query") {
     const query = wikiQueryText(argv);
     if (!query) {
@@ -672,7 +684,7 @@ function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
-  throw new Error(`Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki query <text> [--limit <n>] [--json] | ${WIKI_CONTEXT_USAGE.replace(/^Usage: /, "")} | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]`);
+  throw new Error(`Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki eval [--json] | gxpm wiki query <text> [--limit <n>] [--json] | ${WIKI_CONTEXT_USAGE.replace(/^Usage: /, "")} | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]`);
 }
 
 function runQoderCommand(argv: string[], subcommand: string | undefined) {
@@ -766,6 +778,32 @@ function formatNativeWikiBuildResult(result: NativeWikiBuildResult) {
     `dimensions: ${result.dimensions.files.length}`,
     `docs: ${result.docs.join(", ")}`,
   ].join("\n");
+}
+
+function formatNativeWikiEvalReport(report: NativeWikiEvalReport) {
+  const lines = [
+    `Native gxpm wiki eval: ${report.native.status.state}`,
+    `generated docs: ${report.native.generatedDocs.count}`,
+    `project topic clusters: ${report.native.projectTopics.clusterCount}`,
+    `indexed files: ${report.native.sourceCoverage.indexedFiles}`,
+    `source-anchored files: ${report.native.sourceCoverage.anchoredFiles}`,
+    `orphan indexed files: ${report.native.sourceCoverage.orphanIndexedFiles}`,
+    `Qoder comparison: ${report.qoder.detected ? `${report.qoder.pageCount} pages` : "not detected"}`,
+  ];
+  if (report.qoder.topLevelDirs.length > 0) {
+    lines.push(`Qoder top-level dirs: ${report.qoder.topLevelDirs.join(", ")}`);
+  }
+  if (report.native.queryScenarios.length > 0) {
+    lines.push("");
+    lines.push("Query scenarios:");
+    for (const scenario of report.native.queryScenarios) {
+      lines.push(`- ${scenario.query}: ${scenario.topFiles.slice(0, 3).join(", ") || "no matches"}`);
+    }
+  }
+  lines.push("");
+  lines.push("Recommendations:");
+  for (const recommendation of report.recommendations) lines.push(`- ${recommendation}`);
+  return lines.join("\n");
 }
 
 function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
