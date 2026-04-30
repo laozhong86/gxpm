@@ -44,6 +44,14 @@ export interface IssueOwnership {
   history: IssueOwnershipHistoryEntry[];
 }
 
+export interface IssueClaim {
+  status: "claimed";
+  actor: string;
+  claimedBySession: string;
+  claimedAt: string;
+  runId?: string;
+}
+
 export interface IssueState {
   schemaVersion: 1;
   issueId: string;
@@ -54,6 +62,7 @@ export interface IssueState {
   stateRoot: string;
   artifactRoot: string;
   ownership?: IssueOwnership;
+  claim?: IssueClaim;
   archived?: boolean;
   archivedAt?: string | null;
   phaseHistory: Array<{
@@ -73,6 +82,7 @@ export interface StateEvent {
     | "checkpoint.written"
     | "gate.blocked"
     | "gate.passed"
+    | "issue.claimed"
     | "cleanup.executed"
     | "gate.brainstorm.skipped"
     | "ownership.changed";
@@ -91,6 +101,7 @@ type RawIssueState = Partial<IssueState> & {
   updatedAt?: unknown;
   stateRoot?: unknown;
   artifactRoot?: unknown;
+  claim?: unknown;
   archived?: unknown;
   archivedAt?: unknown;
   phaseHistory?: unknown;
@@ -320,6 +331,7 @@ function migrateIssueState(raw: RawIssueState): IssueState {
     updatedAt: String(raw.updatedAt),
     stateRoot: String(raw.stateRoot),
     artifactRoot: String(raw.artifactRoot),
+    claim: normalizeClaim(raw.claim),
     archived: typeof raw.archived === "boolean" ? raw.archived : undefined,
     archivedAt:
       typeof raw.archivedAt === "string" || raw.archivedAt === null ? raw.archivedAt : undefined,
@@ -433,6 +445,28 @@ function normalizeOwnership(value: unknown): IssueOwnership | undefined {
     lastTouchedAt: lastTouchedAt ?? ensuredHistory.find((entry) => entry.sessionId === currentSession)?.lastTouch ?? new Date(0).toISOString(),
     history: ensuredHistory,
   };
+}
+
+function normalizeClaim(value: unknown): IssueClaim | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.status !== "claimed") {
+    return undefined;
+  }
+  const actor = typeof record.actor === "string" && record.actor.trim() ? record.actor : "";
+  const claimedBySession =
+    typeof record.claimedBySession === "string" && record.claimedBySession.trim()
+      ? record.claimedBySession
+      : "";
+  const claimedAt =
+    typeof record.claimedAt === "string" && record.claimedAt.trim() ? record.claimedAt : "";
+  if (!actor || !claimedBySession || !claimedAt) {
+    return undefined;
+  }
+  const runId = typeof record.runId === "string" && record.runId.trim() ? record.runId : undefined;
+  return { status: "claimed", actor, claimedBySession, claimedAt, runId };
 }
 
 function normalizeOwnershipHistory(value: unknown): IssueOwnershipHistoryEntry[] {

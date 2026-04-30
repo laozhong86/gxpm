@@ -71,6 +71,7 @@ import {
   planIssueWorkspace,
 } from "../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../core/orchestrator";
+import { claimIssue, listIssueReadiness, listReadyIssues } from "../core/issue-readiness";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -219,6 +220,16 @@ function main(argv: string[]) {
         `${entry.issueId.padEnd(idWidth)}  ${entry.issueType.padEnd(typeWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
       );
     }
+    return;
+  }
+
+  if (command === "issue" && subcommand === "ready") {
+    runIssueReady(argv);
+    return;
+  }
+
+  if (command === "issue" && subcommand === "claim") {
+    runIssueClaim(argv, issueId);
     return;
   }
 
@@ -924,11 +935,54 @@ function formatEventDetail(event: StateEvent): string {
     case "gate.blocked":
       if (p.gate) return `${p.gate}: ${p.reason ?? ""}`;
       return `${p.fromPhase ?? "?"} → ${p.toPhase ?? "?"} blocked: ${p.missingArtifact ?? ""}`;
+    case "issue.claimed":
+      return `${p.actor ?? "?"} by ${p.claimedBySession ?? "?"}`;
     case "ownership.changed":
       return `${p.fromSession ?? "?"} → ${p.toSession ?? "?"}`;
     default:
       return JSON.stringify(p);
   }
+}
+
+function runIssueReady(argv: string[]) {
+  const includeAll = argv.includes("--all");
+  const issues = includeAll ? listIssueReadiness({ includeAll: true }) : listReadyIssues();
+  if (argv.includes("--json")) {
+    console.log(JSON.stringify(issues, null, 2));
+    return;
+  }
+  if (issues.length === 0) {
+    console.log(includeAll ? "no issues tracked" : "no ready issues");
+    return;
+  }
+  console.log("ISSUE       PHASE       DECISION      REASON");
+  for (const issue of issues) {
+    console.log(
+      `${issue.issueId.padEnd(10)}  ${issue.currentPhase.padEnd(10)}  ${issue.decision.padEnd(12)}  ${issue.reason}`,
+    );
+  }
+}
+
+function runIssueClaim(argv: string[], issueId: string | undefined) {
+  const useNext = argv.includes("--next");
+  const targetIssueId = useNext ? listReadyIssues()[0]?.issueId : issueId;
+  if (useNext && !targetIssueId) {
+    throw new Error("No ready issues to claim");
+  }
+  if (!targetIssueId || targetIssueId.startsWith("--")) {
+    throw new Error("Usage: gxpm issue claim <issue-id> [--actor <name>] [--json] | gxpm issue claim --next [--actor <name>] [--json]");
+  }
+  const result = claimIssue({
+    issueId: targetIssueId,
+    actor: optionValue(argv, "--actor") ?? undefined,
+  });
+  if (argv.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`${result.claimed ? "claimed" : "already claimed"} ${result.issueId}`);
+  console.log(`actor: ${result.claim.actor}`);
+  console.log(`session: ${result.claim.claimedBySession}`);
 }
 
 function runIssueOwnership(argv: string[], issueId: string) {
