@@ -163,6 +163,33 @@ export const CAPABILITY_REGISTRY = [
     sourceFiles: ["core/orchestrator.ts", "scripts/commands/runtime.ts"],
   },
   {
+    id: "verification.issue-evidence-store",
+    title: "Issue Evidence Store",
+    summary: "Allocates and writes issue-local command, browser, review, release, and investigation evidence.",
+    runtime: "verification",
+    status: "active",
+    inputContract: "Issue id, evidence kind, safe filename, media type, and JSON/text/binary payload.",
+    outputContract: {
+      description: "Evidence records stored under the target issue evidence directory.",
+      artifacts: [],
+      evidence: [
+        "evidence/command-logs/*",
+        "evidence/browser-snapshots/*",
+        "evidence/browser-screenshots/*",
+        "evidence/investigations/*",
+        "JSON evidence write record",
+      ],
+    },
+    mutationPolicy: {
+      scope: "issue-local-files",
+      description: "May create or overwrite files only under the target issue evidence directory.",
+    },
+    idempotency: "Path allocation is deterministic for the same filename; repeated writes replace only that evidence file.",
+    failureModes: ["Invalid issue id", "Unknown evidence kind", "Unsafe evidence filename", "Filesystem write failure"],
+    commands: ["gxpm-investigate <issue-id> [--label <text>]"],
+    sourceFiles: ["core/evidence.ts", "bin/gxpm-investigate"],
+  },
+  {
     id: "knowledge.wiki-context",
     title: "Native Wiki Context",
     summary: "Generates and selects first-party wiki context for an issue without depending on Qoder runtime.",
