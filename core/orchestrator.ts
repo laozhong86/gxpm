@@ -1,6 +1,6 @@
-import { hasArtifact } from "./artifacts";
 import { listIssues } from "./issues";
-import { readIssueState, type GxpmPhase, type IssueType } from "./state";
+import { classifyIssueReadiness } from "./issue-readiness";
+import { type GxpmPhase, type IssueType } from "./state";
 
 export type DryRunDecision = "dispatchable" | "blocked" | "ignored";
 
@@ -43,28 +43,12 @@ export function dryRunOrchestratorTick(input: { root?: string; includeAll?: bool
 }
 
 function classifyIssue(root: string, issueId: string): OrchestratorDryRunIssue {
-  const state = readIssueState({ root, issueId });
-  const base = {
-    issueId: state.issueId,
-    issueType: state.issueType ?? "feature",
-    currentPhase: state.currentPhase,
+  const readiness = classifyIssueReadiness({ root, issueId });
+  return {
+    issueId: readiness.issueId,
+    issueType: readiness.issueType,
+    currentPhase: readiness.currentPhase,
+    decision: readiness.decision === "ready" ? "dispatchable" : readiness.decision,
+    reason: readiness.reason,
   };
-
-  if (state.archived) {
-    return { ...base, decision: "ignored", reason: "archived" };
-  }
-  if (state.issueType && state.issueType !== "feature") {
-    return { ...base, decision: "ignored", reason: `issue_type_${state.issueType}` };
-  }
-  if (state.currentPhase === "land") {
-    return { ...base, decision: "ignored", reason: "landed" };
-  }
-  if (state.currentPhase !== "implement") {
-    return { ...base, decision: "blocked", reason: `phase_${state.currentPhase}_not_implement` };
-  }
-  if (!hasArtifact({ root, issueId: state.issueId, type: "dispatch-handoff" })) {
-    return { ...base, decision: "blocked", reason: "missing_dispatch_handoff" };
-  }
-
-  return { ...base, decision: "dispatchable", reason: "ready_for_run" };
 }
