@@ -172,6 +172,8 @@ gxpm 用 capability runtime 统一所有能力。V0 可以先用 adapter 接入�
 - idempotency rule
 - 是否允许 mutation
 
+V0 的 first-party capability contract 由 `core/capabilities.ts` 维护，并可通过只读命令 `gxpm capability list` / `gxpm capability show <capability-id>` 检查。registry 只描述合同和证据要求，不负责动态加载、执行插件或绕过 phase/artifact gate。
+
 ## 与 PMC 的关系
 
 PMC 是 gxpm 的上游能力来源和迁移对象，不是长期依赖。
@@ -238,6 +240,8 @@ gxpm issue ready
 gxpm issue claim <issue-id>
 gxpm issue release <issue-id>
 gxpm issue reconcile-claim <issue-id>
+gxpm capability list
+gxpm capability show <capability-id>
 gxpm run start <issue-id> [--claim]
 gxpm run list <issue-id>
 gxpm run status <issue-id> <run-id>

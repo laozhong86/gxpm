@@ -6,6 +6,7 @@ import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
 import { resolveSessionId } from "../core/session";
 import { runArtifactCommand } from "./commands/artifact";
+import { runCapabilityCommand } from "./commands/capability";
 import { runConfigCommand, runWorktreePolicyCommand } from "./commands/config";
 import { runGateCommand } from "./commands/gate";
 import { runIssueCommand } from "./commands/issue";
@@ -37,6 +38,11 @@ function main(argv: string[]) {
 
   if (command === "worktree") {
     runWorktreePolicyCommand(argv, subcommand);
+    return;
+  }
+
+  if (command === "capability") {
+    runCapabilityCommand(argv, subcommand, issueId);
     return;
   }
 
