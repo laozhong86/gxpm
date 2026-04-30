@@ -21,7 +21,7 @@ export function readJsonPayloadFromArgs(argv: string[], usagePrefix: string) {
     if (!file) throw new Error("--from requires a file path");
     raw = readFileSync(file, "utf8");
   } else {
-    raw = readFileSync("/dev/stdin", "utf8");
+    raw = readFileSync(0, "utf8");
   }
 
   try {

@@ -287,7 +287,11 @@ function wikiQueryText(argv: string[]) {
       index++;
       continue;
     }
-    if (arg.startsWith("--")) continue;
+    if (arg.startsWith("--")) {
+      const next = argv[index + 1];
+      if (next && !next.startsWith("--")) index++;
+      continue;
+    }
     values.push(arg);
   }
   return values.join(" ").trim();
