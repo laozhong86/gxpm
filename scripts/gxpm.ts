@@ -955,10 +955,15 @@ function runIssueReady(argv: string[]) {
     console.log(includeAll ? "no issues tracked" : "no ready issues");
     return;
   }
-  console.log("ISSUE       PHASE       DECISION      REASON");
+  const issueWidth = Math.max("ISSUE".length, ...issues.map((issue) => issue.issueId.length));
+  const phaseWidth = Math.max("PHASE".length, ...issues.map((issue) => issue.currentPhase.length));
+  const decisionWidth = Math.max("DECISION".length, ...issues.map((issue) => issue.decision.length));
+  console.log(
+    `${"ISSUE".padEnd(issueWidth)}  ${"PHASE".padEnd(phaseWidth)}  ${"DECISION".padEnd(decisionWidth)}  REASON`,
+  );
   for (const issue of issues) {
     console.log(
-      `${issue.issueId.padEnd(10)}  ${issue.currentPhase.padEnd(10)}  ${issue.decision.padEnd(12)}  ${issue.reason}`,
+      `${issue.issueId.padEnd(issueWidth)}  ${issue.currentPhase.padEnd(phaseWidth)}  ${issue.decision.padEnd(decisionWidth)}  ${issue.reason}`,
     );
   }
 }

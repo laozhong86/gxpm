@@ -32,7 +32,7 @@ export interface ClaimIssueResult {
 }
 
 export function listReadyIssues(input: { root?: string } = {}): IssueReadiness[] {
-  return listIssueReadiness({ root: input.root }).filter((issue) => issue.decision === "ready");
+  return listIssueReadiness({ root: input.root, includeAll: true }).filter((issue) => issue.decision === "ready");
 }
 
 export function listIssueReadiness(input: { root?: string; includeAll?: boolean } = {}): IssueReadiness[] {
