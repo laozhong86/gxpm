@@ -23,6 +23,7 @@ const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
 const NATIVE_WIKI_DIMENSIONS_PATH = ".gxpm/wiki/index/dimensions.json";
 const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
 const NATIVE_WIKI_DOC_MANIFEST_PATH = ".gxpm/wiki/content/generated-docs.json";
+const NATIVE_WIKI_PROJECT_TOPIC_DIR = "project-topics";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
@@ -1190,16 +1191,21 @@ function writeNativeWikiDocs(
   dimensions: NativeWikiDimensions,
 ) {
   const previousGeneratedPaths = readNativeWikiDocManifest(root);
-  const docs = [
+  const projectTopicClusters = buildNativeProjectTopicClusters(index, dimensions);
+  const docs: Array<readonly [string, string]> = [
     ["Overview.md", renderNativeOverview(state, index, graph)],
     ["File-Index.md", renderNativeFileIndex(index)],
     ["Code-Graph.md", renderNativeCodeGraph(graph)],
-    ["Project-Topics.md", renderNativeProjectTopics(index, graph, dimensions)],
+    ["Project-Topics.md", renderNativeProjectTopics(index, graph, dimensions, projectTopicClusters)],
+    ...projectTopicClusters.map(
+      (cluster) => [nativeProjectTopicFileName(cluster.rule), renderNativeProjectTopicPage(cluster, graph)] as const,
+    ),
     ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, renderNativeTopicDoc(topic, index, graph)] as const),
-  ] as const;
+  ];
   const paths: string[] = [];
   for (const [name, content] of docs) {
     const path = join(root, NATIVE_WIKI_CONTENT_ROOT, name);
+    mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
     paths.push(toRepoPath(root, path));
   }
@@ -1464,8 +1470,9 @@ function renderNativeProjectTopics(
   index: NativeWikiIndex,
   graph: NativeWikiGraph,
   dimensions: NativeWikiDimensions,
+  projectTopicClusters?: NativeWikiProjectTopicCluster[],
 ) {
-  const clusters = buildNativeProjectTopicClusters(index, dimensions);
+  const clusters = projectTopicClusters ?? buildNativeProjectTopicClusters(index, dimensions);
   const clusterSections = clusters.flatMap((cluster) => renderNativeProjectTopicCluster(cluster));
   const signalRows = renderNativeDimensionSignalSummary(dimensions);
   const hubRows = renderNativeGraphHubSummary(index, graph);
@@ -1491,6 +1498,23 @@ function renderNativeProjectTopics(
     ...(hubRows.length > 0 ? hubRows : ["| - | 0 | 0 |"]),
     "",
   ].join("\n");
+}
+
+function nativeProjectTopicFileName(rule: NativeWikiProjectTopicRule) {
+  return `${NATIVE_WIKI_PROJECT_TOPIC_DIR}/${nativeProjectTopicSlug(rule.title)}.md`;
+}
+
+function nativeProjectTopicDocPath(rule: NativeWikiProjectTopicRule) {
+  return `${NATIVE_WIKI_CONTENT_ROOT}/${nativeProjectTopicFileName(rule)}`;
+}
+
+function nativeProjectTopicSlug(title: string) {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "topic"
+  );
 }
 
 function buildNativeProjectTopicClusters(index: NativeWikiIndex, dimensions: NativeWikiDimensions) {
@@ -1521,7 +1545,7 @@ function renderNativeProjectTopicCluster(cluster: NativeWikiProjectTopicCluster)
     return `| [${escapeMarkdownCell(entry.file.path)}](${nativeSourceLink(entry.file)}) | ${entry.score} | ${signals || "-"} |`;
   });
   return [
-    `### ${cluster.rule.title}`,
+    `### [${cluster.rule.title}](${nativeFileUrl(nativeProjectTopicDocPath(cluster.rule))})`,
     "",
     cluster.rule.summary,
     "",
@@ -1530,6 +1554,46 @@ function renderNativeProjectTopicCluster(cluster: NativeWikiProjectTopicCluster)
     ...rows,
     "",
   ];
+}
+
+function renderNativeProjectTopicPage(cluster: NativeWikiProjectTopicCluster, graph: NativeWikiGraph) {
+  const sourceLines = cluster.files.map((entry) => `- [${entry.file.path}](${nativeSourceLink(entry.file)})`);
+  const rows = cluster.files.map((entry) => {
+    const signals = entry.signals.slice(0, 12).map(escapeMarkdownCell).join(", ");
+    return `| [${escapeMarkdownCell(entry.file.path)}](${nativeSourceLink(entry.file)}) | ${entry.file.language} | ${entry.score} | ${signals || "-"} |`;
+  });
+  const fileSet = new Set(cluster.files.map((entry) => entry.file.path));
+  const edges = graph.edges
+    .filter((edge) => fileSet.has(edge.from) || fileSet.has(edge.to))
+    .slice(0, 30)
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
+
+  return [
+    `# ${cluster.rule.title}`,
+    "",
+    cluster.rule.summary,
+    "",
+    "## Sources",
+    "",
+    ...(sourceLines.length > 0 ? sourceLines : ["- No matching indexed source files."]),
+    "",
+    "## Matched Files",
+    "",
+    "| File | Language | Score | Matched Signals |",
+    "| --- | --- | ---: | --- |",
+    ...(rows.length > 0 ? rows : ["| - | - | 0 | - |"]),
+    "",
+    "## Related Imports",
+    "",
+    ...(edges.length > 0 ? edges : ["- none"]),
+    "",
+    "## Navigation",
+    "",
+    "- [Project Topics](file://.gxpm/wiki/content/Project-Topics.md)",
+    "- [File Index](file://.gxpm/wiki/content/File-Index.md)",
+    "- [Code Graph](file://.gxpm/wiki/content/Code-Graph.md)",
+    "",
+  ].join("\n");
 }
 
 function scoreNativeProjectTopicFile(rule: NativeWikiProjectTopicRule, entry: NativeWikiFileDimensions) {
@@ -1826,8 +1890,13 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
   const weakTopicDocs = scoredTopicDocs.filter((topic) => topic.score < 20).map((topic) => topic.path);
 
   const projectTopicDoc = `${NATIVE_WIKI_CONTENT_ROOT}/${NATIVE_WIKI_PROJECT_TOPIC_FILE}`;
+  const projectTopicSuggestions = computeNativeProjectTopicSuggestions(
+    readNativeWikiDimensionsIfPresent(root),
+    contextFiles,
+    allDocs,
+  );
   const projectTopicDocs =
-    allDocs.has(projectTopicDoc) && shouldSuggestNativeProjectTopics(root, contextFiles)
+    allDocs.has(projectTopicDoc) && projectTopicSuggestions.hasMatches
       ? [projectTopicDoc]
       : [];
 
@@ -1844,21 +1913,39 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
     ? [`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`]
     : [];
   return dedupeBy(
-    [...strongTopicDocs, ...projectTopicDocs, ...weakTopicDocs, ...genericDocs.sort(), ...overview],
+    [
+      ...strongTopicDocs,
+      ...projectTopicSuggestions.paths,
+      ...projectTopicDocs,
+      ...weakTopicDocs,
+      ...genericDocs.sort(),
+      ...overview,
+    ],
     (path) => path,
   );
 }
 
-function shouldSuggestNativeProjectTopics(root: string, contextFiles: string[]) {
-  if (contextFiles.length === 0) return false;
-  const dimensions = readNativeWikiDimensionsIfPresent(root);
-  if (!dimensions) return false;
+function computeNativeProjectTopicSuggestions(
+  dimensions: NativeWikiDimensions | null,
+  contextFiles: string[],
+  allDocs: Set<string>,
+): { paths: string[]; hasMatches: boolean } {
+  if (!dimensions || contextFiles.length === 0) return { paths: [], hasMatches: false };
   const contextFileSet = new Set(contextFiles);
-  return dimensions.files.some(
-    (entry) =>
-      contextFileSet.has(entry.path) &&
-      NATIVE_WIKI_PROJECT_TOPIC_RULES.some((rule) => scoreNativeProjectTopicFile(rule, entry) > 0),
-  );
+  const scored = NATIVE_WIKI_PROJECT_TOPIC_RULES.map((rule, index) => ({
+    path: nativeProjectTopicDocPath(rule),
+    score: dimensions.files
+      .filter((entry) => contextFileSet.has(entry.path))
+      .reduce((sum, entry) => sum + scoreNativeProjectTopicFile(rule, entry), 0),
+    index,
+  })).filter((entry) => entry.score > 0);
+  return {
+    hasMatches: scored.length > 0,
+    paths: scored
+      .filter((entry) => allDocs.has(entry.path))
+      .sort((a, b) => b.score - a.score || a.index - b.index || a.path.localeCompare(b.path))
+      .map((entry) => entry.path),
+  };
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
