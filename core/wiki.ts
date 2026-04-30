@@ -1890,11 +1890,15 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
   const weakTopicDocs = scoredTopicDocs.filter((topic) => topic.score < 20).map((topic) => topic.path);
 
   const projectTopicDoc = `${NATIVE_WIKI_CONTENT_ROOT}/${NATIVE_WIKI_PROJECT_TOPIC_FILE}`;
+  const projectTopicSuggestions = computeNativeProjectTopicSuggestions(
+    readNativeWikiDimensionsIfPresent(root),
+    contextFiles,
+    allDocs,
+  );
   const projectTopicDocs =
-    allDocs.has(projectTopicDoc) && shouldSuggestNativeProjectTopics(root, contextFiles)
+    allDocs.has(projectTopicDoc) && projectTopicSuggestions.hasMatches
       ? [projectTopicDoc]
       : [];
-  const derivedProjectTopicDocs = suggestedNativeProjectTopicDocs(root, contextFiles, allDocs);
 
   const genericDocs: string[] = [];
   walkFiles(join(root, NATIVE_WIKI_CONTENT_ROOT), (file) => {
@@ -1909,38 +1913,39 @@ function suggestedNativeDocs(root: string, contextFiles: string[], tokens: strin
     ? [`${NATIVE_WIKI_CONTENT_ROOT}/Overview.md`]
     : [];
   return dedupeBy(
-    [...strongTopicDocs, ...derivedProjectTopicDocs, ...projectTopicDocs, ...weakTopicDocs, ...genericDocs.sort(), ...overview],
+    [
+      ...strongTopicDocs,
+      ...projectTopicSuggestions.paths,
+      ...projectTopicDocs,
+      ...weakTopicDocs,
+      ...genericDocs.sort(),
+      ...overview,
+    ],
     (path) => path,
   );
 }
 
-function suggestedNativeProjectTopicDocs(root: string, contextFiles: string[], allDocs: Set<string>) {
-  if (contextFiles.length === 0) return [];
-  const dimensions = readNativeWikiDimensionsIfPresent(root);
-  if (!dimensions) return [];
+function computeNativeProjectTopicSuggestions(
+  dimensions: NativeWikiDimensions | null,
+  contextFiles: string[],
+  allDocs: Set<string>,
+): { paths: string[]; hasMatches: boolean } {
+  if (!dimensions || contextFiles.length === 0) return { paths: [], hasMatches: false };
   const contextFileSet = new Set(contextFiles);
-  return NATIVE_WIKI_PROJECT_TOPIC_RULES.map((rule, index) => ({
+  const scored = NATIVE_WIKI_PROJECT_TOPIC_RULES.map((rule, index) => ({
     path: nativeProjectTopicDocPath(rule),
     score: dimensions.files
       .filter((entry) => contextFileSet.has(entry.path))
       .reduce((sum, entry) => sum + scoreNativeProjectTopicFile(rule, entry), 0),
     index,
-  }))
-    .filter((entry) => entry.score > 0 && allDocs.has(entry.path))
-    .sort((a, b) => b.score - a.score || a.index - b.index || a.path.localeCompare(b.path))
-    .map((entry) => entry.path);
-}
-
-function shouldSuggestNativeProjectTopics(root: string, contextFiles: string[]) {
-  if (contextFiles.length === 0) return false;
-  const dimensions = readNativeWikiDimensionsIfPresent(root);
-  if (!dimensions) return false;
-  const contextFileSet = new Set(contextFiles);
-  return dimensions.files.some(
-    (entry) =>
-      contextFileSet.has(entry.path) &&
-      NATIVE_WIKI_PROJECT_TOPIC_RULES.some((rule) => scoreNativeProjectTopicFile(rule, entry) > 0),
-  );
+  })).filter((entry) => entry.score > 0);
+  return {
+    hasMatches: scored.length > 0,
+    paths: scored
+      .filter((entry) => allDocs.has(entry.path))
+      .sort((a, b) => b.score - a.score || a.index - b.index || a.path.localeCompare(b.path))
+      .map((entry) => entry.path),
+  };
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
