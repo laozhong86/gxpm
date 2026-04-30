@@ -1,4 +1,4 @@
-import { appendRunEvent, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
+import { appendRunEvent, createRunId, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
 import { cleanupIssueWorkspace, ensureIssueWorkspace, planIssueWorkspace } from "../../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
 import { claimIssue } from "../../core/issue-readiness";
@@ -15,20 +15,33 @@ export function runRunCommand(
   }
 
   if (subcommand === "start") {
-    let run = startRun({
-      issueId,
-      attempt: parsePositiveIntegerOption(argv, "--attempt"),
-      status: optionValue(argv, "--status") ?? undefined,
-      workspacePath: optionValue(argv, "--workspace") ?? undefined,
-      message: optionValue(argv, "--message") ?? undefined,
-    });
-    const claim = argv.includes("--claim")
+    const status = optionValue(argv, "--status") ?? undefined;
+    if (status && !RUN_STATUSES.includes(status as (typeof RUN_STATUSES)[number])) {
+      throw new Error(`Invalid run status: ${status}`);
+    }
+    const attempt = parsePositiveIntegerOption(argv, "--attempt");
+    const workspacePath = optionValue(argv, "--workspace") ?? undefined;
+    const message = optionValue(argv, "--message") ?? undefined;
+    const shouldClaim = argv.includes("--claim");
+    const plannedRunId = shouldClaim ? createRunId(new Date().toISOString()) : undefined;
+    const claim = shouldClaim
       ? claimIssue({
           issueId,
           actor: optionValue(argv, "--actor") ?? undefined,
-          runId: run.runId,
+          runId: plannedRunId,
         })
       : null;
+    if (claim && !claim.claimed) {
+      throw new Error(`Issue already claimed: ${issueId}; no run started`);
+    }
+    let run = startRun({
+      issueId,
+      runId: plannedRunId,
+      attempt,
+      status,
+      workspacePath,
+      message,
+    });
     if (claim) {
       run = appendRunEvent({
         issueId,

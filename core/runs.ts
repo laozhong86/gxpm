@@ -60,6 +60,7 @@ export interface RunRecord {
 export interface StartRunInput {
   root?: string;
   issueId: string;
+  runId?: string;
   attempt?: number;
   status?: RunStatus | string;
   workspacePath?: string;
@@ -92,7 +93,7 @@ export function startRun(input: StartRunInput): RunRecord {
   const run: RunRecord = {
     schemaVersion: 1,
     issueId: input.issueId,
-    runId: createRunId(now),
+    runId: input.runId ? assertRunId(input.runId) : createRunId(now),
     attempt: normalizeAttempt(input.attempt),
     status,
     createdAt: now,
@@ -182,7 +183,7 @@ function runPath(root: string, issueId: string, runId: string) {
   return join(runsDir(root, issueId), `${assertRunId(runId)}.json`);
 }
 
-function createRunId(timestamp: string) {
+export function createRunId(timestamp: string) {
   const compact = timestamp.replace(/[-:.TZ]/g, "").slice(0, 14);
   return `run-${compact}-${randomUUID().slice(0, 8)}`;
 }

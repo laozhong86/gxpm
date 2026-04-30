@@ -108,6 +108,53 @@ describe("run ledger", () => {
     });
   });
 
+  test("CLI does not create a run when --claim cannot acquire the issue", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-run-cli-claim-blocked-"));
+    createIssueState({ root, issueId: "GXPM-BLOCKED" });
+
+    const start = runCli(root, [
+      "run",
+      "start",
+      "GXPM-BLOCKED",
+      "--claim",
+      "--actor",
+      "runtime-worker",
+      "--json",
+    ]);
+
+    expect(start.exitCode).toBe(1);
+    expect(output(start)).toContain("Issue not claimable: GXPM-BLOCKED");
+    expect(listRuns({ root, issueId: "GXPM-BLOCKED" })).toEqual([]);
+    expect(existsSync(join(root, ".gxpm", "issues", "GXPM-BLOCKED", "runs"))).toBe(false);
+  });
+
+  test("CLI does not create a second run for an idempotent same-session claim", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-run-cli-claim-idempotent-"));
+    enterPhase(root, "GXPM-IDEMPOTENT", "implement");
+    const env = { CODEX_COMPANION_SESSION_ID: "runtime-claim" };
+
+    const first = runCliWithEnv(
+      root,
+      ["run", "start", "GXPM-IDEMPOTENT", "--claim", "--actor", "runtime-worker", "--json"],
+      env,
+    );
+    const second = runCliWithEnv(
+      root,
+      ["run", "start", "GXPM-IDEMPOTENT", "--claim", "--actor", "runtime-worker", "--json"],
+      env,
+    );
+
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(1);
+    expect(output(second)).toContain("no run started");
+    const firstRunId = JSON.parse(output(first)).run.runId;
+    expect(listRuns({ root, issueId: "GXPM-IDEMPOTENT" }).map((run) => run.runId)).toEqual([firstRunId]);
+    expect(readIssueState({ root, issueId: "GXPM-IDEMPOTENT" }).claim).toMatchObject({
+      status: "claimed",
+      runId: firstRunId,
+    });
+  });
+
   test("rejects invalid statuses", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-run-invalid-"));
     createIssueState({ root, issueId: "GXPM-3" });
