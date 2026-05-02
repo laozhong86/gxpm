@@ -1,6 +1,6 @@
 ---
 name: gxpm
-description: Second-generation project management product designed to replace PMC and gstack with one native state graph, capability runtime, browser evidence layer, and agent delivery workflow.
+description: Second-generation project management runtime for agent-executed delivery. State graph, capability runtime, and gate-enforced phase progression.
 ---
 
 {{PREAMBLE}}
@@ -17,208 +17,16 @@ Read state first, route to the correct phase, call the right gxpm capability,
 and persist artifacts before claiming progress. Treat `.gxpm/issues/<id>/` as
 the single source of truth, not chat memory or Linear comments.
 
-## State First
-
-Before doing phase work, read:
+## Quick Reference
 
 ```bash
-gxpm issue status <issue-id>
+gxpm issue status <issue-id>          # read current phase
+gxpm issue next <issue-id>            # recommended next command(s)
+gxpm issue list                       # active issues
+gxpm issue create --auto-id           # new issue with next free id
+gxpm doctor                           # health check
+gxpm version                          # installed version
 ```
-
-To see all tracked issues at once:
-
-```bash
-gxpm issue list             # active issues (hides land + archived)
-gxpm issue list --all       # everything including landed/archived
-gxpm issue list --archived  # only archived
-gxpm issue list --json      # machine-readable
-```
-
-To stash a finished or abandoned issue out of the active list:
-
-```bash
-gxpm issue archive <issue-id>     # hide from default list
-gxpm issue unarchive <issue-id>   # restore to default list
-```
-
-To check if gxpm is correctly installed in this machine + this repo:
-
-```bash
-gxpm doctor               # human-readable report with ✓ / ✗ + fix commands
-gxpm doctor --json        # machine-readable
-gxpm version              # print installed version (also: --version / -v)
-```
-
-When unsure what to run next on a specific issue:
-
-```bash
-gxpm issue next <issue-id>   # prints recommended next command(s)
-```
-
-To audit an issue's full history (gates, transitions, artifact writes):
-
-```bash
-gxpm issue history <issue-id>           # human timeline
-gxpm issue history <issue-id> --json    # machine-readable
-```
-
-To save and restore a clean handoff checkpoint for a fresh conversation:
-
-```bash
-gxpm issue checkpoint <issue-id> --title "handoff" --stdin
-gxpm issue resume <issue-id>
-```
-
-`checkpoint` expects a JSON object with at least `summary`, and optional
-`decisions`, `remainingWork`, `notes`, `filesModified`, `status`, and
-`sessionDurationSeconds`. It writes append-only markdown under
-`.gxpm/issues/<issue-id>/memory/checkpoints/` and updates
-`.gxpm/issues/<issue-id>/memory/resume-packet.json`. A new session should run
-`gxpm issue resume <issue-id>` before continuing issue work.
-
-To inspect execution-runtime state without relying on chat memory:
-
-```bash
-gxpm issue ready [--all] [--json]
-gxpm issue claim <issue-id> [--actor <name>] [--run <run-id>] [--json]
-gxpm issue claim --next [--actor <name>] [--run <run-id>] [--json]
-gxpm issue release <issue-id> [--reason <text>] [--json]
-gxpm issue reconcile-claim <issue-id> [--stale-after-ms N] [--json]
-gxpm run start <issue-id> [--workspace <path>] [--claim] [--actor <name>] [--json]
-gxpm run list <issue-id> [--json]
-gxpm run status <issue-id> <run-id> [--json]
-gxpm run event <issue-id> <run-id> --type <event> [--status <status>]
-gxpm workspace plan <issue-id> [--root <path>] [--json]
-gxpm workspace ensure <issue-id> [--root <path>] [--json]
-gxpm orchestrator tick --dry-run [--json] [--include-all]
-```
-
-`orchestrator tick --dry-run` is read-only. It reports local `.gxpm` issue
-dispatchability and blocker reasons, but does not claim work, create
-workspaces, launch agents, write artifacts, or transition phases. Run ledger
-records live under `.gxpm/issues/<id>/runs/`; workspace runtime defaults to
-`workspace.root` (`.gxpm/local/workspaces`) unless overridden.
-Claim lifecycle state is local to the issue: `claim` records active execution,
-`release` makes a completed or abandoned claim ready again, and
-`reconcile-claim` marks stale claims or releases claims linked to terminal runs.
-
-If no state exists, create it before phase work:
-
-```bash
-gxpm issue create <issue-id>
-```
-
-## Session Ownership
-
-Issue ownership is soft state, not a write lock. gxpm records the latest writing
-session plus prior owners so hooks can warn a returning session when ownership
-has moved.
-
-```bash
-gxpm session-id
-gxpm issue ownership <issue-id>
-gxpm issue ownership <issue-id> --field currentSession
-gxpm issue ownership <issue-id> --history-contains <session-id>
-```
-
-Host session id precedence is:
-
-1. `CODEX_COMPANION_SESSION_ID`
-2. `CMUX_SURFACE_ID`
-3. generated fallback id
-
-Hooks should only mention ownership transfer when the current prompt names the
-issue and the current session appears in that issue's ownership history.
-
-## Native gxpm Wiki Engine
-
-Use gxpm's first-party wiki engine for local, CLI-driven codebase knowledge.
-It does not require Qoder, an IDE trigger, vector storage, or a paid external
-sync path.
-
-```bash
-gxpm wiki init                         # generate .gxpm/wiki index, graph, docs, and state
-gxpm wiki index                        # alias for local index/doc generation
-gxpm wiki update                       # refresh local wiki after repo changes
-gxpm wiki status                       # report native wiki current/stale plus optional Qoder status
-gxpm wiki eval [--json]                # report native wiki quality metrics plus optional Qoder comparison
-gxpm wiki query <text> [--json]        # return context files and suggested docs
-gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]
-# derive query from issue state/artifacts
-```
-
-Native wiki state is ignored by git and lives under:
-
-- `.gxpm/wiki/index/files.json`
-- `.gxpm/wiki/index/graph.json`
-- `.gxpm/wiki/content/`
-- `.gxpm/wiki/state.json`
-
-Use this native wiki as the preferred gxpm-owned knowledge source when present.
-`gxpm wiki status` should be the first check: if native status is `absent`, run
-`gxpm wiki init`; if it is `stale`, run `gxpm wiki update`. Native indexing is
-git-aware and should only include tracked text files, excluding ignored local
-state such as `.codex/`, `.claude/`, `.gxpm/`, and `.qoder/`.
-Use `gxpm wiki eval --json` when deciding the next wiki improvement slice; it
-summarizes freshness, generated docs, topic clusters, source-anchor coverage,
-query scenarios, and optional Qoder comparison without making Qoder a truth
-source.
-For issue work, prefer `gxpm wiki context <issue-id>` after `gxpm wiki init` or
-`gxpm wiki update`; add `--write-artifact` when the selected context must be
-persisted as the issue's `wiki-context` artifact.
-Qoder RepoWiki remains an optional read-only navigation aid, not a gxpm runtime
-dependency or state truth.
-
-## Optional Qoder Repo Wiki Preflight
-
-When a repo has `.qoder/repowiki`, treat it as an optional navigation aid
-before direct source-code reads. It is not gxpm state truth.
-
-`.qoder/repowiki` is generated by Qoder and should stay outside git tracking.
-Use a local shared store plus symlink when a worktree needs the wiki:
-
-```bash
-gxpm qoder link                         # link current repo to .gxpm/local/qoder/repowiki
-gxpm qoder link --target <worktree>     # link another worktree
-gxpm qoder link --replace               # migrate an existing real directory into the shared store
-```
-
-Use the lightweight status command:
-
-```bash
-gxpm wiki status
-```
-
-If the wiki is present:
-
-1. Read gxpm issue state first.
-2. Run `gxpm wiki status`.
-3. Open the relevant wiki page(s) listed by the command.
-4. Follow cited source anchors from those pages into code.
-5. After code changes, run `gxpm wiki status` again and remind the user to
-   manually update or resync Qoder wiki if gxpm reports stale sync evidence.
-
-The absence of `.qoder/repowiki` is a clean no-op and must not block normal
-gxpm workflow. Do not dump `.qoder/repowiki/*/meta/repowiki-metadata.json` into
-context; prefer content pages and their cited source anchors.
-
-Manual sync/reminder evidence lives under `.gxpm/wiki/qoder.json`:
-
-```bash
-gxpm wiki mark-sync --note <manual-qoder-resync-note>
-gxpm wiki mark-reminder --note <reminder-note>
-```
-
-Inspect artifacts when gate evidence matters:
-
-```bash
-gxpm artifact list <issue-id>
-{{ARTIFACT_READ_COMMANDS}}
-```
-
-{{PHASE_GATE_COMMANDS}}
-
-{{PHASE_TRANSITION_SUMMARY}}
 
 ## Phase Map
 
@@ -244,364 +52,97 @@ gxpm artifact list <issue-id>
 - Treat PMC/gstack as upstream references, not final runtime dependencies.
 - Prefer gxpm native capabilities over hard-coded host assumptions.
 
-## Browser Investigation (cmux session only)
+## Key Rules
 
-Use this only when `CMUX_SURFACE_ID` is set and the user asks you to inspect
-the page already open in their cmux browser session. This is an observer path
-for current user state; automated E2E and QA assertions still use
-`agent-browser`.
+### State First
 
-Native cmux command templates:
+Before doing phase work, read `gxpm issue status <issue-id>`.
+If no state exists, create it: `gxpm issue create --auto-id`.
 
-```bash
-cmux browser "$CMUX_SURFACE_ID" get-url
-cmux browser "$CMUX_SURFACE_ID" snapshot --compact
-cmux browser "$CMUX_SURFACE_ID" get text --selector "<css>"
-cmux browser "$CMUX_SURFACE_ID" screenshot --out /tmp/gxpm-cmux.png
-cmux browser "$CMUX_SURFACE_ID" console list
-cmux browser "$CMUX_SURFACE_ID" errors list
-cmux browser "$CMUX_SURFACE_ID" eval --script "document.title"
-cmux browser "$CMUX_SURFACE_ID" find text --exact "<visible text>"
-cmux browser "$CMUX_SURFACE_ID" wait --text "<text>" --timeout-ms 3000
-cmux browser "$CMUX_SURFACE_ID" scroll --dy 600
-```
+### Canonical State Location
 
-For a disclosure-only click after explicit user confirmation:
+`.gxpm/issues/<id>/` always lives in the **main repository**, never per-worktree.
+When working in a worktree, run gxpm commands from the main repo cwd and edit
+code in the worktree. Do not create per-worktree `.gxpm/` directories.
 
-```bash
-cmux browser "$CMUX_SURFACE_ID" click --selector "<stable disclosure selector>"
-```
+### Artifact Discipline
 
-For a fixed evidence capture into `.gxpm/issues/<id>/evidence/`:
+Any non-trivial proposal MUST be written to an artifact before phase transition.
+The artifact tree is the source of truth; chat history is volatile.
 
-```bash
-gxpm-investigate <issue-id> --label "short context label"
-```
-
-Hard rules:
-
-- Always pass the explicit `CMUX_SURFACE_ID` surface token. Missing the surface
-  can produce the misleading error `Unsupported browser subcommand: <verb>`;
-  cmux does not provide a safe implicit default surface for agents.
-- snapshot refs are ephemeral. Use refs only inside the same immediate
-  round trip. Do not persist them, pass them across processes, or reuse them
-  across surfaces; stable selectors must be role, label, text, or test id.
-- cmux uses WebKit/WKWebView. Network requests, network route, and viewport set
-  can return `not_supported on WKWebView`; use `agent-browser` for network
-  interception, request mocking, viewport-controlled E2E, and QA automation.
-
-Observer contract:
-
-- Start by reading context with `get-url`, `snapshot --compact`, or
-  `gxpm-investigate`; do not assume the page is in the expected state.
-- Do not call navigate, back, forward, reload, cookies/storage writes,
-  tab/dialog/state save, addinitscript, addstyle, addscript, network route, or
-  viewport mutation commands.
-- Clicks require explicit user confirmation and must be limited to
-  disclosure-only UI, such as opening a collapsed panel. Never click submit,
-  destructive, navigation, or payment controls, and never click a bare snapshot
-  ref.
-- If a cmux command fails, surface the failure and keep the partial evidence.
-
-## Task Intake / Brainstorming Gate
-
-For a new non-trivial task or any scope-changing request, do a short
-brainstorming pass before implementation. This is a gate, not a new gxpm phase.
-
-1. Run only read-only discovery first: current issue state, relevant docs,
-   source anchors, and obvious constraints.
-2. Present the proposed goal, in-scope work, out-of-scope work, success
-   criteria, and expected files/commands.
-3. Ask for confirmation before writing artifacts, editing files, or running
-   commands with side effects.
-
-When the host exposes a native form tool such as Codex `request_user_input` in
-the current mode, prefer it for the confirmation. Keep it to one short question
-with 2-3 meaningful choices, recommended option first. If the tool is
-unavailable, ask the same confirmation in concise prose instead of faking a form.
-
-Skip this gate only when the user explicitly says to proceed (for example,
-"directly do it", "continue", "execute the existing plan") or when the request
-is purely read-only/trivial. External tracking ids are not gxpm issue ids; use
-`gxpm issue create --auto-id` for local state.
-
-If you intentionally skip the clarification pause because `issue-intake` is already exhaustive and unambiguous, record that decision:
-
-```bash
-gxpm gate brainstorm-skip <issue-id> --reason "intake already exhaustive"
-```
-
-This is only for the real skip path. Do not add it to normal brainstorming flows.
-
-## Persist Design Before Phase Advance
-
-Any non-trivial proposal (feature design, scope decision, alternative analysis)
-generated during a phase MUST be written to an artifact before you transition.
-Do not leave the proposal only in the chat transcript.
-
-- During `triage`: write `triage-report` artifact capturing user's exact words,
-  your understanding, and the candidate options.
-- During `plan`: write `implementation-plan` artifact with the chosen approach,
-  ordered tasks, alternatives considered.
-- Rule of thumb: if a future agent restarts the session and reads only
-  `.gxpm/issues/<id>/`, can they reconstruct your reasoning? If not, the
-  artifact is incomplete.
-
-This is gxpm's checkpoint discipline: the artifact tree is the source of truth,
-chat history is volatile.
-
-## Artifact command verification
-
-When an artifact payload references concrete CLI commands in fenced code blocks or inline backticks, prefer:
+Use `--probe-cli` when artifact payloads reference concrete CLI commands:
 
 ```bash
 gxpm artifact write <issue-id> <artifact-type> --probe-cli --json '...'
 ```
 
-Use `--probe-cli` when the payload names concrete `gxpm`, `cmux`, `agent-browser`, `git`, `bun`, or `npm` commands. If probing reports an invalid command reference, fix the payload before writing the artifact.
+### Worktree Policy
 
-## Codex `update_plan` vs gxpm Phase
-
-Codex CLI provides a native `update_plan` tool for transient task lists. Use it
-ONLY for sub-tasks WITHIN the current gxpm phase (e.g., "read 3 source files"
-during triage). The gxpm phase tree is the top-level execution contract.
-
-- ❌ Don't mirror gxpm phases as Codex plan items (duplicate truth).
-- ✅ Do use Codex plan for "first read X, then read Y, then write artifact Z"
-  intra-phase steps.
-- Top-level progression always goes through `gxpm issue transition`.
-
-### Concrete examples
-
-✅ **GOOD `update_plan` items** (intra-phase, fine-grained sub-tasks):
-
-```
-- read core/state.ts
-- read core/artifacts.ts
-- compare existing schema with proposed checkpoint payload
-- write triage-report capturing 3 alternatives
-```
-
-❌ **BAD `update_plan` items** (mirror gxpm phases — DON'T do this):
-
-```
-- create gxpm 实现 issue 并推进到 implement
-- 实现 checkpoint/resume packet 命令
-- 补测试、更新生成型 SKILL
-- 推进到 land
-```
-
-The bad example duplicates gxpm phase progression. `gxpm issue history <id>`
-is the canonical timeline; `update_plan` is for the work-of-the-moment.
-
-Codex `update_plan` calls are observability data, not top-level gxpm state. The PreToolUse hook records raw `update_plan` payloads for later self-review linting. Keep `update_plan` items intra-phase and never mirror gxpm phases there.
-
-## Canonical State Location
-
-`.gxpm/issues/<id>/` always lives in the **main repository**, never per-worktree.
-Even when you create a `git worktree` for code isolation, gxpm state stays
-in the main repo's `.gxpm/`. This means:
-
-- All sessions see the same issue tree regardless of which worktree they're in
-- `gxpm issue list` from any worktree returns the same set
-- No state divergence between worktrees
-
-When working in a worktree:
-
-```bash
-# Pattern A (recommended): run gxpm CLI commands in main repo cwd; do code edits in worktree
-cd /Users/x/Desktop/Project/gxpm                  # for gxpm * commands
-cd /Users/x/Desktop/Project/gxpm-worktrees/<name> # for code edits
-
-# Pattern B: symlink .gxpm into the worktree if you must run gxpm from inside
-ln -s /Users/x/Desktop/Project/gxpm/.gxpm <worktree>/.gxpm
-```
-
-Don't create per-worktree `.gxpm/` directories — that fragments the state graph.
-
-## Issue ID Selection
-
-When creating a new issue without a pre-assigned ID (e.g., from Linear):
-
-```bash
-gxpm issue create --auto-id
-```
-
-This picks the next free `GXPM-N` and avoids collisions with existing tracked
-issues. Only specify a literal ID when migrating from an external tracker.
-
-## Issue Types
-
-Use `feature` for normal delivery work, `meta` for long-lived trackers such as
-retro notes or observation logs, and `spike` for bounded investigation work:
-
-```bash
-gxpm issue create --auto-id --type meta
-gxpm issue create --auto-id --type spike
-```
-
-`feature` is the default when `--type` is omitted or an older state file has no
-`issueType`. Issue type is only classification: it must not alter phase gates,
-required artifacts, review/ship governance, or archive behavior. The default
-`gxpm issue list` view shows recent feature work; use `--type`, `--limit`, or
-`--all` when you need a different slice.
-
-## Worktree Policy (resolution chain)
-
-Whether a feature must be developed in a worktree depends on the resolved
-policy. The LLM should query the policy before starting any code change:
+Query the policy before code edits:
 
 ```bash
 gxpm worktree policy
 ```
 
-Output reports the resolved values + source. The resolution chain (highest
-to lowest precedence):
+Resolution chain: `config.json` → user message → `AGENTS.md` → default (optional, ask).
+When `enforcement = required`: always create a worktree. When `forbidden`: never.
 
-1. **`config.json`** (repo-level `.gxpm/config.json` first, then global
-   `~/.gxpm/config.json`) — set by maintainer; **wins everything**, even
-   user message and AGENTS.md.
-2. **User message in current conversation** — if user explicitly says
-   "use a worktree" or "stay on main", honor that when no config override
-   exists.
-3. **AGENTS.md `## gxpm Config` block** — repo-level convention via
-   `worktree.enforcement: required|optional|forbidden` and
-   `worktree.default: use|skip|ask`.
-4. **Default**: `enforcement: optional`, `default: ask`.
+### Checkpoint / Resume
 
-When `enforcement = required`: always create a worktree before code edits.
-When `enforcement = forbidden`: never use a worktree.
-When `enforcement = optional`: follow `default` (use / skip / ask).
-
-To set/inspect:
+Save handoff state:
 
 ```bash
-gxpm config get worktree.enforcement
-gxpm config set worktree.enforcement required           # repo
-gxpm config set worktree.enforcement required --global  # ~/.gxpm/
-gxpm config list
+gxpm issue checkpoint <issue-id> --title "handoff" --stdin
 ```
 
-## Populating Artifact Content
-
-`gxpm <phase> init` writes an empty draft. Use `gxpm artifact write` (CLI)
-or `gxpm artifact edit` ($EDITOR) to put real content in:
+Resume in a new session:
 
 ```bash
-# CLI input (scripts / agents)
-gxpm artifact write <issue-id> acceptance-contract --json '{"criteria":[...]}'
-gxpm artifact write <issue-id> implementation-plan --from ./plan.json
-cat payload.json | gxpm artifact write <issue-id> verify-findings --stdin
-
-# Interactive editor (humans)
-EDITOR=vim gxpm artifact edit <issue-id> acceptance-contract
+gxpm issue resume <issue-id>
 ```
 
-JSON-only on purpose — the artifact contract is machine-readable.
+### Codex `update_plan` vs gxpm Phase
 
-## Codex Runtime Hooks (Layer 4, optional)
+Use Codex `update_plan` ONLY for sub-tasks WITHIN the current gxpm phase.
+Top-level progression always goes through `gxpm issue transition`.
 
-Codex CLI v0.117.0+ supports lifecycle hooks. gxpm ships two:
+### Hook Defense
 
-- `SessionStart` — injects a short gxpm capability hint; it does not list
-  active issues by design. Run `gxpm issue list` explicitly when active work is
-  relevant.
-- `UserPromptSubmit` — when the user mentions a `GXPM-N` / `GXG-N` issue id
-  in their prompt, gxpm injects that issue's current phase + next-step
-  guidance.
-
-Set `GXPM_SESSION_START_DISABLE=1` to silence the `SessionStart` hint for a
-session. This is an env-var kill switch; config CLI bridging can be added later.
-
-Install (defaults to repo scope — only fires when Codex opens that repo):
-
-```bash
-gxpm-init --install-codex-hooks                   # <cwd>/.codex/hooks/  (default, recommended)
-gxpm-init --install-codex-hooks --target <repo>   # <repo>/.codex/hooks/
-gxpm-init --install-codex-hooks --scope user      # ~/.codex/hooks/  (broader, more invasive)
-```
-
-The installer automatically writes `[features] codex_hooks = true` into `~/.codex/config.toml` (with backup) per Codex official requirement. Pass `--no-feature-flag` to skip.
-
-Repo-scope hooks also require trusting the `.codex/` layer when Codex prompts. Restart Codex to activate.
-
-## Hook Defense (Layer 3)
-
-When skill content is unloaded by progressive disclosure, the `gxpm gate` CLI
-plus git hooks still enforce phase gates physically.
-
-One-shot install in target repo (skill globally + hooks in repo):
+When skill content is unloaded, `gxpm gate` CLI plus git hooks still enforce
+phase gates physically. One-shot install:
 
 ```bash
 gxpm-init --install --target /path/to/repo
 ```
 
-Or install separately:
+Escape hatch: `GXPM_GATE_DISABLE=1 git commit ...`
 
-```bash
-gxpm-init --install-skill --host all              # SKILL.md to ~/.codex/.claude/...
-gxpm-init --install-hooks --target /path/to/repo  # git hooks in target repo
-```
+### Cleanup After Land
 
-This copies four hook templates to `<repo>/.githooks/`:
-
-- `gxpm-pre-commit` — blocks commits to protected paths (`apps/`, `server/`, `packages/`, `scripts/`, `tests/`, `supabase/`, `e2e/`) when `currentPhase` is not in `{dispatch, implement, local-verify, ac-check, self-review, ship, pr-check, verify}`.
-- `gxpm-commit-msg` — requires every commit message to reference a `GXG-NNN` or `GXPM-NNN` issue.
-- `gxpm-pre-push` — refuses to push when the current phase's required artifact is missing.
-- `gxpm-post-merge` — auto-initializes `land-findings` and transitions `qa → land` when a feature branch merges.
-
-Manual gate check (the hooks call these under the hood):
-
-```bash
-gxpm gate pre-commit <issue-id> --staged "<file1> <file2> ..."
-gxpm gate commit-msg <msg-file> --issue <issue-id>
-gxpm gate pre-push <issue-id>
-gxpm gate post-merge <issue-id>
-```
-
-Exit code 0 = allowed; exit 1 = blocked with stderr explanation.
-
-Escape hatch for legitimate exceptions:
-
-```bash
-GXPM_GATE_DISABLE=1 git commit ...
-```
-
-All four gate commands respect this env var. Use sparingly and document why.
-
-## Cleanup After Land
-
-After an issue reaches `land`, clean up local execution resources unless there is an explicit reason to keep them.
-
-- Default path: `gxpm cleanup land <issue-id> --execute`
-- Cleanup stays explicit because removing a worktree or local branch is destructive
-- If you keep the worktree for follow-up work, write `retainWorktreeReason` into `land-findings`
-- Do not delete remote branches through gxpm cleanup
+Default: `gxpm cleanup land <issue-id> --execute`.
+If retaining the worktree, write `retainWorktreeReason` into `land-findings`.
 
 ## Related Skills
 
- gxpm skills are split by responsibility. Load the appropriate skill when the task requires it:
+Load the appropriate skill when the task requires it:
 
-- `/gxpm-diagnose` — disciplined debugging loop (feedback loop → fix → post-mortem)
-- `/gxpm-grill` — alignment session with terminology sharpening and inline CONTEXT.md/ADR updates
-- `/gxpm-tdd` — test-driven development with vertical slices and red-green-refactor
-- `/gxpm-architecture` — architectural friction analysis and deepening opportunities
-- `/gxpm-planning` — PRD synthesis and vertical-slice issue breakdown
-- `/gxpm-triage` — issue state-machine management and agent brief writing
+- `/gxpm-diagnose` — disciplined debugging loop
+- `/gxpm-grill` — alignment session with terminology sharpening
+- `/gxpm-tdd` — test-driven development with vertical slices
+- `/gxpm-architecture` — architectural friction analysis
+- `/gxpm-planning` — PRD synthesis and vertical-slice breakdown
+- `/gxpm-triage` — issue state-machine management
 - `/gxpm-debug-issue` — graph-powered code navigation for debugging
 - `/gxpm-explore-codebase` — graph-powered architecture exploration
 - `/gxpm-refactor-safely` — graph-powered safe refactoring
 - `/gxpm-review-changes` — graph-powered change review
 
+For wiki operations, load `/gxpm-wiki`.
+For browser evidence, load `/gxpm-browser`.
+
 ## Read Next
 
 - `docs/architecture/gxpm-replacement-architecture.md`
 - `docs/architecture/gxpm-v0-contract.md`
-- `docs/architecture/scaffold-northstar.md`
 - `docs/governance/development-contract.md`
-- `docs/governance/template-authoring.md`
-- `docs/governance/host-adapter.md`
-- `docs/governance/skill-authoring.md`
-- `docs/research/pmc-gstack-skill-study.md`
-- `docs/roadmap/initial-roadmap.md`
 - `CONTEXT.md`

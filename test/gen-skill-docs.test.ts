@@ -45,28 +45,28 @@ describe("generateSkillDocs", () => {
     expect(generated).not.toContain("{{");
   });
 
-  test("generated gxpm skill keeps the task intake brainstorming gate", () => {
+  test("generated gxpm skill keeps the phase map and required habits", () => {
     const root = join(import.meta.dir, "..");
     const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
 
-    expect(generated).toContain("## Task Intake / Brainstorming Gate");
-    expect(generated).toContain("Codex `request_user_input`");
-    expect(generated).toContain("External tracking ids are not gxpm issue ids");
-    expect(generated).toContain("`gxpm issue create --auto-id`");
-    expect(generated).toContain("## Issue Types");
-    expect(generated).toContain("gxpm issue create --auto-id --type meta");
+    expect(generated).toContain("## Phase Map");
+    expect(generated).toContain("`triage`: clarify issue");
+    expect(generated).toContain("`land`: merge/deploy handoff gate");
+    expect(generated).toContain("## Required Habit");
+    expect(generated).toContain("Never infer phase from chat memory");
+    expect(generated).toContain("Never skip artifact writeback");
   });
 
-  test("generated gxpm skill documents cmux browser investigation rules", () => {
+  test("generated gxpm skill keeps key rules and related skills", () => {
     const root = join(import.meta.dir, "..");
     const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
 
-    expect(generated).toContain("## Browser Investigation (cmux session only)");
-    expect(generated).toContain("CMUX_SURFACE_ID");
-    expect(generated).toContain("snapshot refs are ephemeral");
-    expect(generated).toContain("Unsupported browser subcommand");
-    expect(generated).toContain("not_supported on WKWebView");
-    expect(generated).toContain("agent-browser");
-    expect(generated).toContain("disclosure-only click after explicit user confirmation");
+    expect(generated).toContain("## Key Rules");
+    expect(generated).toContain("### State First");
+    expect(generated).toContain("### Artifact Discipline");
+    expect(generated).toContain("## Related Skills");
+    expect(generated).toContain("`/gxpm-diagnose`");
+    expect(generated).toContain("`/gxpm-grill`");
+    expect(generated).toContain("`/gxpm-tdd`");
   });
 });
