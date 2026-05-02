@@ -62,6 +62,7 @@ export interface NativeWikiFileEntry {
   exports: string[];
   imports: string[];
   headings: string[];
+  contentHash: string;
 }
 
 export interface NativeWikiIndex {
@@ -237,7 +238,7 @@ export function initializeNativeWiki(input: { root?: string; now?: Date } = {}):
 }
 
 export function updateNativeWiki(input: { root?: string; now?: Date } = {}): NativeWikiBuildResult {
-  return writeNativeWiki({ root: input.root, now: input.now, mode: "update" });
+  return updateNativeWikiIncremental({ root: input.root, now: input.now });
 }
 
 export function ensureNativeWikiCurrent(input: { root?: string; autoUpdate?: boolean } = {}): void {
@@ -641,6 +642,12 @@ function isDirectory(path: string) {
   }
 }
 
+function sha256Hex(content: string): string {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(content);
+  return hasher.digest("hex");
+}
+
 function writeNativeWiki(input: {
   root?: string;
   now?: Date;
@@ -672,6 +679,122 @@ function writeNativeWiki(input: {
   writeJson(join(root, NATIVE_WIKI_STATE_PATH), state);
   const docs = writeNativeWikiDocs(root, state, index, graph, dimensions);
   return { provider: "gxpm", mode: input.mode, state, index, graph, dimensions, docs };
+}
+
+function updateNativeWikiIncremental(input: { root?: string; now?: Date }): NativeWikiBuildResult {
+  const root = input.root ?? process.cwd();
+  const now = input.now ?? new Date();
+
+  // Read existing artifacts
+  const existingIndex = readNativeWikiIndex(root);
+  const existingGraph = readNativeWikiGraphIfPresent(root) ?? { schemaVersion: 1 as const, provider: "gxpm" as const, generatedAt: "", nodes: [], edges: [], unresolvedImports: [] };
+  const existingState = readNativeWikiStateIfPresent(root);
+
+  // Determine changed files via git diff against baseCommit
+  const changedFiles = getChangedFilesViaGitDiff(root, existingState?.baseCommit ?? null);
+
+  // Find downstream dependents (files that import changed files)
+  const dependentFiles = findDependents(existingGraph, changedFiles);
+
+  // Combine files that need re-processing
+  const filesToProcess = new Set([...changedFiles, ...dependentFiles]);
+
+  // Current tracked files on disk
+  const trackedPaths = listNativeRepoFiles(root).map((file) => toRepoPath(root, file));
+  const trackedSet = new Set(trackedPaths);
+
+  // Build updated index: keep unchanged files, re-parse changed/dependent/new
+  const contents = new Map<string, string>();
+  const updatedFiles: NativeWikiFileEntry[] = [];
+  const existingByPath = new Map(existingIndex.files.map((f) => [f.path, f]));
+
+  for (const file of existingIndex.files) {
+    if (!trackedSet.has(file.path)) {
+      // File was deleted — skip it
+      continue;
+    }
+    if (filesToProcess.has(file.path)) {
+      // Changed or dependent — re-parse
+      updatedFiles.push(summarizeNativeFile(root, join(root, file.path), contents));
+    } else {
+      // Unchanged — keep existing entry (including hash)
+      updatedFiles.push(file);
+    }
+  }
+
+  // Add newly created files
+  for (const path of trackedPaths) {
+    if (!existingByPath.has(path)) {
+      updatedFiles.push(summarizeNativeFile(root, join(root, path), contents));
+    }
+  }
+
+  updatedFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+  const index: NativeWikiIndex = {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: now.toISOString(),
+    files: updatedFiles,
+  };
+
+  const graph = buildNativeWikiGraph(index);
+  const dimensions = buildNativeWikiDimensions({ index, graph, contents });
+
+  const state: NativeWikiState = {
+    schemaVersion: 1,
+    provider: "gxpm",
+    status: "idle",
+    baseCommit: currentGitCommit(root),
+    generatedAt: now.toISOString(),
+    indexPath: NATIVE_WIKI_INDEX_PATH,
+    graphPath: NATIVE_WIKI_GRAPH_PATH,
+    dimensionsPath: NATIVE_WIKI_DIMENSIONS_PATH,
+    contentRoot: NATIVE_WIKI_CONTENT_ROOT,
+    queuedCommit: null,
+  };
+
+  mkdirSync(join(root, NATIVE_WIKI_ROOT, "index"), { recursive: true });
+  mkdirSync(join(root, NATIVE_WIKI_CONTENT_ROOT), { recursive: true });
+  writeJson(join(root, NATIVE_WIKI_INDEX_PATH), index);
+  writeJson(join(root, NATIVE_WIKI_GRAPH_PATH), graph);
+  writeJson(join(root, NATIVE_WIKI_DIMENSIONS_PATH), dimensions);
+  writeJson(join(root, NATIVE_WIKI_STATE_PATH), state);
+  const docs = writeNativeWikiDocs(root, state, index, graph, dimensions);
+  return { provider: "gxpm", mode: "update", state, index, graph, dimensions, docs };
+}
+
+function getChangedFilesViaGitDiff(root: string, baseCommit: string | null): string[] {
+  if (!baseCommit) {
+    // No base commit known — fallback: treat all tracked files as changed
+    return listNativeRepoFiles(root).map((file) => toRepoPath(root, file));
+  }
+  const result = Bun.spawnSync({
+    cmd: ["git", "diff", "--name-only", `${baseCommit}..HEAD`, "--"],
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    // Fallback to filesystem scan if git diff fails
+    return listNativeRepoFiles(root).map((file) => toRepoPath(root, file));
+  }
+  return result.stdout
+    .toString()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function findDependents(graph: NativeWikiGraph, changedFiles: string[]): string[] {
+  const changedSet = new Set(changedFiles);
+  const dependents = new Set<string>();
+  for (const edge of graph.edges) {
+    if (edge.kind === "imports" && changedSet.has(edge.to)) {
+      dependents.add(edge.from);
+    }
+  }
+  return [...dependents];
 }
 
 function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
@@ -905,6 +1028,7 @@ function summarizeNativeFile(root: string, file: string, contents?: Map<string, 
     exports: extractExports(content),
     imports: extractImports(content),
     headings: extractMarkdownHeadings(content),
+    contentHash: sha256Hex(content),
   };
 }
 
@@ -1544,6 +1668,7 @@ function normalizeNativeWikiIndex(index: NativeWikiIndex): NativeWikiIndex {
     files: index.files.map((file) => ({
       ...file,
       lineCount: typeof file.lineCount === "number" ? file.lineCount : 0,
+      contentHash: typeof file.contentHash === "string" ? file.contentHash : "",
     })),
   };
 }
@@ -1571,6 +1696,15 @@ function changedNativeFiles(root: string, index: NativeWikiIndex) {
       const stat = statSync(join(root, path));
       if (stat.size !== indexedFile.sizeBytes || Math.abs(stat.mtimeMs - indexedFile.mtimeMs) > 1) {
         changed.add(path);
+        continue;
+      }
+      // If mtime/size match but contentHash is present, verify hash to catch
+      // cases where mtime was preserved (e.g. git checkout, patch -p0)
+      if (indexedFile.contentHash) {
+        const content = safeRead(join(root, path));
+        if (sha256Hex(content) !== indexedFile.contentHash) {
+          changed.add(path);
+        }
       }
     } catch {
       changed.add(path);

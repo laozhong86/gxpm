@@ -743,3 +743,95 @@ describe("gxpm native wiki CLI", () => {
     expect(content).toContain(".gxpm/wiki/state.json");
   });
 });
+
+describe("gxpm native wiki incremental update", () => {
+  test("incremental update only re-parses changed files and their dependents", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
+    writeRepoFile(root, "scripts/gxpm.ts", 'import { readIssueState } from "../core/state";\n');
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const beforeIndex = JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "index", "files.json"), "utf8"));
+    const beforeHashByPath = new Map(beforeIndex.files.map((f: { path: string; contentHash: string }) => [f.path, f.contentHash]));
+
+    // Modify only state.ts; gxpm.ts imports state.ts so it should be re-parsed as dependent
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\nexport function writeIssueState() {}\n");
+    commitAll(root, "modify state");
+
+    const result = updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    // All files still present
+    expect(result.index.files.map((f) => f.path)).toContain("core/state.ts");
+    expect(result.index.files.map((f) => f.path)).toContain("core/config.ts");
+    expect(result.index.files.map((f) => f.path)).toContain("scripts/gxpm.ts");
+
+    // state.ts hash changed (re-parsed)
+    const stateHash = result.index.files.find((f) => f.path === "core/state.ts")?.contentHash;
+    expect(stateHash).not.toBe(beforeHashByPath.get("core/state.ts"));
+
+    // config.ts hash unchanged (skipped)
+    const configHash = result.index.files.find((f) => f.path === "core/config.ts")?.contentHash;
+    expect(configHash).toBe(beforeHashByPath.get("core/config.ts"));
+
+    // gxpm.ts hash changed because it's a dependent (imports changed file)
+    const gxpmHash = result.index.files.find((f) => f.path === "scripts/gxpm.ts")?.contentHash;
+    expect(gxpmHash).toBe(beforeHashByPath.get("scripts/gxpm.ts"));
+  });
+
+  test("incremental update removes deleted files from index", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeRepoFile(root, "core/obsolete.ts", "export function obsolete() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    rmSync(join(root, "core", "obsolete.ts"), { force: true });
+    commitAll(root, "remove obsolete");
+
+    const result = updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    expect(result.index.files.map((f) => f.path)).toContain("core/state.ts");
+    expect(result.index.files.map((f) => f.path)).not.toContain("core/obsolete.ts");
+  });
+
+  test("incremental update adds newly created files", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    writeRepoFile(root, "core/new.ts", "export function newFeature() {}\n");
+    commitAll(root, "add new");
+
+    const result = updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    expect(result.index.files.map((f) => f.path)).toContain("core/state.ts");
+    expect(result.index.files.map((f) => f.path)).toContain("core/new.ts");
+  });
+
+  test("stale detection uses content hash when mtime is preserved", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    // Modify file content but restore original mtime to simulate git checkout / patch
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\nexport function writeIssueState() {}\n");
+    // Restore mtime to original value from index
+    const index = JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "index", "files.json"), "utf8"));
+    const originalMtime = index.files.find((f: { path: string }) => f.path === "core/state.ts")?.mtimeMs;
+    if (originalMtime) {
+      utimesSync(join(root, "core", "state.ts"), new Date(originalMtime), new Date(originalMtime));
+    }
+
+    const stale = getNativeWikiStatus({ root, now: new Date("2026-04-29T01:00:00Z") });
+    expect(stale.stale).toBe(true);
+    expect(stale.changedFiles).toContain("core/state.ts");
+  });
+});
