@@ -1,0 +1,10 @@
+#!/bin/bash
+# code-review-graph pre-commit hook
+# Migrated from .git/hooks/pre-commit because gxpm sets core.hooksPath=.githooks.
+# Installed by gxpm-init --install-hooks (detected and merged from .git/hooks/).
+# Best-effort: failures are swallowed so they never block a commit.
+
+if command -v code-review-graph >/dev/null 2>&1; then
+  code-review-graph update || true
+  code-review-graph detect-changes --brief || true
+fi

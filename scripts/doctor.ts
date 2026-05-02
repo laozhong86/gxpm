@@ -186,10 +186,11 @@ export function formatDoctorReport(report: DoctorReport): string {
   } else {
     lines.push("  ✓ git repository");
     const cph = report.repo.coreHooksPath;
-    if (cph === ".githooks") {
-      lines.push("  ✓ git core.hooksPath = .githooks");
+    const expectedHooksPath = join(resolve(cwd), ".githooks");
+    if (cph === expectedHooksPath) {
+      lines.push(`  ✓ git core.hooksPath = ${expectedHooksPath}`);
     } else {
-      lines.push(`  ✗ git core.hooksPath = ${cph ?? "<unset>"}`);
+      lines.push(`  ✗ git core.hooksPath = ${cph ?? "<unset>"} (expected ${expectedHooksPath})`);
     }
     if (report.repo.gxpmHooksInstalled) {
       lines.push(`  ✓ all 4 gxpm hooks installed (${report.repo.installedHooks.join(", ")})`);

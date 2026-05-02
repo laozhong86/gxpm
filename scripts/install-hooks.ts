@@ -79,17 +79,18 @@ function main(argv: string[]) {
     }
   }
 
+  const absoluteHooksPath = join(resolve(target), ".githooks");
   let currentHooksPath = "";
   try {
     currentHooksPath = execSync("git config core.hooksPath", { cwd: target }).toString().trim();
   } catch {
     // unset
   }
-  if (currentHooksPath !== ".githooks") {
-    execSync("git config core.hooksPath .githooks", { cwd: target });
-    console.log("set git config core.hooksPath = .githooks");
+  if (currentHooksPath !== absoluteHooksPath) {
+    execSync(`git config core.hooksPath "${absoluteHooksPath}"`, { cwd: target });
+    console.log(`set git config core.hooksPath = ${absoluteHooksPath}`);
   } else {
-    console.log("core.hooksPath already = .githooks");
+    console.log(`core.hooksPath already = ${absoluteHooksPath}`);
   }
 
   if (skipped.length > 0) {

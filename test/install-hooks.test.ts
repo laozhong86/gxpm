@@ -40,14 +40,14 @@ describe("install-hooks", () => {
     expect(postMerge).toContain("post-merge-error.log");
   });
 
-  test("sets git core.hooksPath to .githooks", () => {
+  test("sets git core.hooksPath to absolute .githooks path", () => {
     const repo = mkdtempSync(join(tmpdir(), "gxpm-install-hookspath-"));
     execSync("git init -q", { cwd: repo });
 
     bunRun(["--target", repo], repo);
 
     const hooksPath = execSync("git config core.hooksPath", { cwd: repo }).toString().trim();
-    expect(hooksPath).toBe(".githooks");
+    expect(hooksPath).toBe(join(resolve(repo), ".githooks"));
   });
 
   test("does not overwrite existing .githooks/pre-commit", () => {
