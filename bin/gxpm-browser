@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Prefer local bun, fall back to system bun
+BUN_CMD="${ROOT_DIR}/node_modules/.bin/bun"
+if [ ! -x "$BUN_CMD" ]; then
+  BUN_CMD="$(which bun 2>/dev/null || echo "")"
+fi
+
+if [ -z "$BUN_CMD" ] || [ ! -x "$BUN_CMD" ]; then
+  echo "Error: bun is required but not found." >&2
+  exit 1
+fi
+
+exec "$BUN_CMD" run "$ROOT_DIR/scripts/browser.ts" "$@"
