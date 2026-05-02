@@ -74,6 +74,12 @@ If no state exists, create it: `gxpm issue create --auto-id`.
 When working in a worktree, run gxpm commands from the main repo cwd and edit
 code in the worktree. Do not create per-worktree `.gxpm/` directories.
 
+### CONTEXT.md Discipline
+
+`CONTEXT.md` is the single source of truth for domain terminology. Update it
+inline during `/gxpm-grill` sessions when terms are resolved or sharpened.
+Create it lazily — only when the first term needs recording.
+
 ### Artifact Discipline
 
 Any non-trivial proposal MUST be written to an artifact before phase transition.
