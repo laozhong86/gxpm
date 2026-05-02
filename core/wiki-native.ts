@@ -27,18 +27,12 @@ const NATIVE_WIKI_PROJECT_TOPIC_DIR = "project-topics";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
+const NATIVE_IMPORT_RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".md"];
 const NATIVE_TEXT_EXTENSIONS = new Set([
   "",
-  ".cjs",
-  ".js",
-  ".json",
-  ".jsx",
-  ".md",
-  ".mjs",
+  ...NATIVE_IMPORT_RESOLVABLE_EXTENSIONS,
   ".sh",
   ".toml",
-  ".ts",
-  ".tsx",
   ".txt",
   ".yaml",
   ".yml",
@@ -2031,15 +2025,8 @@ function resolveNativeImport(from: string, specifier: string, filePaths: Set<str
   const base = normalizeRepoPath(join(dirname(from), specifier));
   const candidates = [
     base,
-    `${base}.ts`,
-    `${base}.tsx`,
-    `${base}.js`,
-    `${base}.jsx`,
-    `${base}.json`,
-    `${base}.md`,
-    `${base}/index.ts`,
-    `${base}/index.tsx`,
-    `${base}/index.js`,
+    ...NATIVE_IMPORT_RESOLVABLE_EXTENSIONS.map((extension) => `${base}${extension}`),
+    ...NATIVE_IMPORT_RESOLVABLE_EXTENSIONS.map((extension) => `${base}/index${extension}`),
   ];
   return candidates.find((candidate) => filePaths.has(candidate)) ?? null;
 }
