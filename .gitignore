@@ -10,8 +10,8 @@ coverage/
 .agents/
 .claude/
 .codex/
-.qoder/repowiki
 .gxpm/
+.qoder/
 .gstack/
 .omc/
 *.log

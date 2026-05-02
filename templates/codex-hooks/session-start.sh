@@ -75,17 +75,14 @@ except Exception:
     wiki = {}
 if not isinstance(wiki, dict):
     wiki = {}
-nested_qoder = wiki.get("qoder")
-qoder = {**wiki, **nested_qoder} if isinstance(nested_qoder, dict) else wiki
-if qoder.get("detected"):
-    wiki_parts = ["Qoder repo wiki detected (.qoder/repowiki). Run `gxpm wiki status` before direct source reads."]
-    top_pages = qoder.get("topPages") or []
-    page_paths = [page.get("path") for page in top_pages[:3] if page.get("path")]
-    if page_paths:
-        wiki_parts.append("Start with: {}".format(", ".join(page_paths)))
-    reminder = qoder.get("reminder") or {}
-    if reminder.get("reminderDue"):
-        wiki_parts.append("Weekly Qoder wiki sync reminder: {}".format(reminder.get("reason", "manual sync evidence is stale")))
+native = wiki.get("native", wiki)
+if native.get("detected"):
+    wiki_parts = ["gxpm native wiki detected ({}.gxpm/wiki{}).".format(native.get("repoWikiRoot", ""), " stale" if native.get("stale") else "")]
+    if native.get("stale"):
+        wiki_parts.append("Run `gxpm wiki update` before direct source reads.")
+    docs = native.get("docs", [])
+    if docs:
+        wiki_parts.append("Docs: {}".format(", ".join(docs[:3])))
     parts.append("\n".join(wiki_parts))
 if not parts:
     sys.exit(0)

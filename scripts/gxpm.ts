@@ -11,7 +11,7 @@ import { runConfigCommand, runWorktreePolicyCommand } from "./commands/config";
 import { runGateCommand } from "./commands/gate";
 import { runIssueCommand } from "./commands/issue";
 import { runOrchestratorCommand, runRunCommand, runWorkspaceCommand } from "./commands/runtime";
-import { runQoderCommand, runWikiCommand } from "./commands/wiki";
+import { runWikiCommand } from "./commands/wiki";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -48,11 +48,6 @@ function main(argv: string[]) {
 
   if (command === "wiki") {
     runWikiCommand(argv, subcommand);
-    return;
-  }
-
-  if (command === "qoder") {
-    runQoderCommand(argv, subcommand);
     return;
   }
 

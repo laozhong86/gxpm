@@ -377,60 +377,6 @@ describe("gxpm artifact edit CLI", () => {
 });
 
 describe("gxpm wiki CLI", () => {
-  test("reports absent Qoder wiki as optional", () => {
-    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-absent-"));
-
-    const r = runCli(root, ["wiki", "status"]);
-
-    expect(r.exitCode).toBe(0);
-    expect(output(r)).toContain("Qoder wiki: not detected");
-    expect(output(r)).toContain("Normal gxpm workflow continues");
-  });
-
-  test("prints native and Qoder wiki status as JSON when present", () => {
-    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-present-"));
-    const page = join(root, ".qoder", "repowiki", "en", "content", "Overview.md");
-    mkdirSync(dirname(page), { recursive: true });
-    writeFileSync(page, "# Overview\n\n[state](file://core/state.ts#L1)\n");
-    const source = join(root, "core", "state.ts");
-    mkdirSync(dirname(source), { recursive: true });
-    writeFileSync(source, "export function readIssueState() {}\n");
-    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
-
-    const r = runCli(root, ["wiki", "status", "--json"]);
-
-    expect(r.exitCode).toBe(0);
-    const parsed = JSON.parse(output(r));
-    expect(parsed.native.detected).toBe(true);
-    expect(parsed.native.state).toBe("current");
-    expect(parsed.native.indexedFiles).toBe(1);
-    expect(parsed.native.docs).toContain(".gxpm/wiki/content/Phase-Lifecycle.md");
-    expect(parsed.native.docs).toContain(".gxpm/wiki/content/Native-Wiki.md");
-    expect(parsed.qoder.detected).toBe(true);
-    expect(parsed.qoder.pageCount).toBe(1);
-    expect(parsed.qoder.topPages[0].citedFiles).toContain("core/state.ts");
-    expect(parsed.provider).toBe("qoder");
-    expect(parsed.detected).toBe(true);
-    expect(parsed.topPages[0].citedFiles).toContain("core/state.ts");
-  });
-
-  test("records manual sync and reminder evidence", () => {
-    const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-mark-"));
-
-    const sync = runCli(root, ["wiki", "mark-sync", "--note", "manual sync"]);
-    expect(sync.exitCode).toBe(0);
-    expect(output(sync)).toContain("recorded Qoder wiki manual sync");
-
-    const reminder = runCli(root, ["wiki", "mark-reminder", "--note", "session reminder"]);
-    expect(reminder.exitCode).toBe(0);
-    expect(output(reminder)).toContain("recorded Qoder wiki reminder");
-
-    const stored = JSON.parse(readFileSync(join(root, ".gxpm", "wiki", "qoder.json"), "utf8"));
-    expect(stored.lastSyncAt).toBeTruthy();
-    expect(stored.lastReminderAt).toBeTruthy();
-    expect(stored.note).toBe("session reminder");
-  });
-
   test("prints native wiki context for an issue and can persist it as an artifact", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-"));
     const source = join(root, "core", "phase-gates.ts");

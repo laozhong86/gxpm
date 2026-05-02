@@ -1,13 +1,9 @@
 import { writeArtifact } from "../../core/artifacts";
-import { ensureQoderWikiLink } from "../../core/qoder";
 import {
   evaluateNativeWiki,
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
-  getQoderWikiStatus,
   initializeNativeWiki,
-  markQoderWikiReminder,
-  markQoderWikiSync,
   queryNativeWiki,
   updateNativeWiki,
   type NativeWikiBuildResult,
@@ -15,20 +11,18 @@ import {
   type NativeWikiIssueContext,
   type NativeWikiQueryResult,
   type NativeWikiStatus,
-  type QoderWikiStatus,
 } from "../../core/wiki";
-import { optionRequiredValue, optionValue, parsePositiveIntegerOption } from "./helpers";
+import { optionRequiredValue, parsePositiveIntegerOption } from "./helpers";
 
 const WIKI_CONTEXT_USAGE = "Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]";
 
 export function runWikiCommand(argv: string[], subcommand: string | undefined) {
   if (!subcommand || subcommand === "status") {
     const native = getNativeWikiStatus();
-    const qoder = getQoderWikiStatus();
     if (argv.includes("--json")) {
-      console.log(JSON.stringify({ ...qoder, native, qoder }, null, 2));
+      console.log(JSON.stringify({ native }, null, 2));
     } else {
-      console.log(`${formatNativeWikiStatus(native)}\n\n${formatQoderWikiStatus(qoder)}`);
+      console.log(formatNativeWikiStatus(native));
     }
     return;
   }
@@ -103,77 +97,7 @@ export function runWikiCommand(argv: string[], subcommand: string | undefined) {
     return;
   }
 
-  if (subcommand === "mark-sync") {
-    const record = markQoderWikiSync({ note: optionValue(argv, "--note") ?? undefined });
-    console.log(`recorded Qoder wiki manual sync at ${record.lastSyncAt}`);
-    console.log("state: .gxpm/wiki/qoder.json");
-    return;
-  }
-
-  if (subcommand === "mark-reminder") {
-    const record = markQoderWikiReminder({ note: optionValue(argv, "--note") ?? undefined });
-    console.log(`recorded Qoder wiki reminder at ${record.lastReminderAt}`);
-    console.log("state: .gxpm/wiki/qoder.json");
-    return;
-  }
-
-  throw new Error(`Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki eval [--json] | gxpm wiki query <text> [--limit <n>] [--json] | ${WIKI_CONTEXT_USAGE.replace(/^Usage: /, "")} | gxpm wiki mark-sync [--note <text>] | gxpm wiki mark-reminder [--note <text>]`);
-}
-
-export function runQoderCommand(argv: string[], subcommand: string | undefined) {
-  if (subcommand === "link") {
-    const result = ensureQoderWikiLink({
-      target: argv.includes("--target") ? optionRequiredValue(argv, "--target") : undefined,
-      sharedRoot: argv.includes("--shared-root") ? optionRequiredValue(argv, "--shared-root") : undefined,
-      replace: argv.includes("--replace"),
-    });
-    if (argv.includes("--json")) {
-      console.log(JSON.stringify(result, null, 2));
-      return;
-    }
-    console.log(`linked .qoder/repowiki -> ${result.sharedRoot}`);
-    console.log(`target: ${result.targetRoot}`);
-    console.log(`action: ${result.action}`);
-    return;
-  }
-
-  throw new Error("Usage: gxpm qoder link [--target <repo-or-worktree>] [--shared-root <path>] [--replace] [--json]");
-}
-
-function formatQoderWikiStatus(status: QoderWikiStatus) {
-  const lines: string[] = [];
-  if (!status.detected) {
-    lines.push(`Qoder wiki: not detected (${status.repoWikiRoot})`);
-    lines.push("Normal gxpm workflow continues.");
-    return lines.join("\n");
-  }
-
-  lines.push(`Qoder wiki: detected (${status.repoWikiRoot})`);
-  lines.push(`state: ${status.state}`);
-  lines.push(`pages: ${status.pageCount}`);
-  if (status.contentRoots.length > 0) {
-    lines.push(`content roots: ${status.contentRoots.join(", ")}`);
-  }
-  lines.push("");
-  lines.push("Progressive read before source:");
-  status.progressiveRead.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
-  if (status.topPages.length > 0) {
-    lines.push("");
-    lines.push("Top wiki pages:");
-    for (const page of status.topPages.slice(0, 5)) {
-      const cited = page.citedFiles.length > 0 ? ` -> ${page.citedFiles.slice(0, 3).join(", ")}` : "";
-      lines.push(`- ${page.path}${cited}`);
-    }
-  }
-  lines.push("");
-  lines.push(`Weekly sync: ${status.reminder.syncStale ? "stale" : "current"}`);
-  lines.push(`Reminder due: ${status.reminder.reminderDue ? "yes" : "no"}`);
-  lines.push(`Reason: ${status.reminder.reason}`);
-  if (status.reminder.reminderDue) {
-    lines.push(`After reminding, run: ${status.commands.markReminder}`);
-  }
-  lines.push(`After manual Qoder resync, run: ${status.commands.markSync}`);
-  return lines.join("\n");
+  throw new Error(`Usage: gxpm wiki status [--json] | gxpm wiki init [--json] | gxpm wiki index [--json] | gxpm wiki update [--json] | gxpm wiki eval [--json] | gxpm wiki query <text> [--limit <n>] [--json] | ${WIKI_CONTEXT_USAGE.replace(/^Usage: /, "")}`);
 }
 
 function formatNativeWikiStatus(status: NativeWikiStatus) {
@@ -221,11 +145,7 @@ function formatNativeWikiEvalReport(report: NativeWikiEvalReport) {
     `indexed files: ${report.native.sourceCoverage.indexedFiles}`,
     `source-anchored files: ${report.native.sourceCoverage.anchoredFiles}`,
     `orphan indexed files: ${report.native.sourceCoverage.orphanIndexedFiles}`,
-    `Qoder comparison: ${report.qoder.detected ? `${report.qoder.pageCount} pages` : "not detected"}`,
   ];
-  if (report.qoder.topLevelDirs.length > 0) {
-    lines.push(`Qoder top-level dirs: ${report.qoder.topLevelDirs.join(", ")}`);
-  }
   if (report.native.queryScenarios.length > 0) {
     lines.push("");
     lines.push("Query scenarios:");

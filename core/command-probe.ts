@@ -62,7 +62,6 @@ function validateCandidateCommand(command: string): CommandProbeFinding[] {
       "land",
       "doctor",
       "wiki",
-      "qoder",
       "gate",
       "config",
       "worktree",

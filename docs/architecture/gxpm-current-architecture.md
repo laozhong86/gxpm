@@ -11,7 +11,6 @@
 graph TB
     subgraph "External Systems"
         LINEAR["Linear<br/>Issue Tracker"]
-        QODER["Qoder<br/>RepoWiki"]
         GRAPH["code-review-graph<br/>MCP Server"]
         GIT["Git Repository"]
     end
@@ -86,7 +85,6 @@ graph TB
         subgraph "Knowledge & Wiki"
             WIKI["wiki.ts"]
             WIKI_NATIVE["wiki-native.ts<br/>first-party"]
-            QODER_MOD["qoder.ts"]
         end
 
         subgraph "Config & Capabilities"
@@ -173,5 +171,4 @@ graph TB
 ### 2.4 外部系统集成是"可选依赖"模式
 
 - Linear：协作前门，同步 issue，但不替代本地 state
-- Qoder：可选 wiki 导航，本地有 `gxpm qoder link`
 - code-review-graph：MCP 工具，Claude Code 专用，Codex 不用

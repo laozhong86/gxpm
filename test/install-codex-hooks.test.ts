@@ -283,7 +283,7 @@ describe("hook script behavior", () => {
     expect(parsed.hookSpecificOutput.additionalContext).toContain("gxpm update available: 0.1.0.0 -> 0.1.0.1.");
   });
 
-  test("session-start.sh includes Qoder wiki preflight when repowiki exists", async () => {
+  test("session-start.sh includes native wiki preflight when wiki is stale", async () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wiki-"));
     installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
     const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
@@ -291,9 +291,7 @@ describe("hook script behavior", () => {
     const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wikicwd-"));
     const gxpmBin = join(repoRoot, "bin", "gxpm");
     Bun.spawnSync({ cmd: [gxpmBin, "issue", "create", "GXPM-88"], cwd: repoCwd });
-    const wikiPage = join(repoCwd, ".qoder", "repowiki", "en", "content", "Overview.md");
-    execSync(`mkdir -p "${dirname(wikiPage)}"`);
-    writeFileSync(wikiPage, "# Overview\n\n[state](file://core/state.ts)\n");
+    Bun.spawnSync({ cmd: [gxpmBin, "wiki", "init"], cwd: repoCwd });
 
     const result = Bun.spawnSync({
       cmd: ["bash", script],
@@ -307,9 +305,7 @@ describe("hook script behavior", () => {
     expect(result.exitCode).toBe(0);
     const parsed = JSON.parse(result.stdout.toString());
     const context = parsed.hookSpecificOutput.additionalContext;
-    expect(context).toContain("Qoder repo wiki detected");
-    expect(context).toContain("gxpm wiki status");
-    expect(context).toContain(".qoder/repowiki/en/content/Overview.md");
+    expect(context).toContain("gxpm native wiki detected");
   });
 
   test("session-start.sh ignores non-object wiki status JSON", () => {
@@ -336,34 +332,6 @@ exit 1
     expect(result.exitCode).toBe(0);
     const context = readAdditionalContext(result.stdout.toString());
     expect(context).toContain("This repo uses gxpm");
-    expect(context).not.toContain("Qoder repo wiki detected");
-  });
-
-  test("session-start.sh preserves legacy top-level Qoder fields", () => {
-    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wiki-legacy-"));
-    installCodexHooks({ scope: "user", home: fakeHome, gxpmRoot: repoRoot });
-    const script = join(fakeHome, ".codex", "hooks", "gxpm-session-start.sh");
-    const repoCwd = mkdtempSync(join(tmpdir(), "gxpm-codex-ss-wiki-legacy-cwd-"));
-    createGxpmRepo(repoCwd);
-    const gxpmStub = join(fakeHome, "gxpm");
-    writeFileSync(
-      gxpmStub,
-      `#!/bin/bash
-if [ "$1" = "wiki" ] && [ "$2" = "status" ] && [ "$3" = "--json" ]; then
-  echo '{"detected":true,"topPages":[{"path":"legacy/Overview.md"}],"qoder":{}}'
-  exit 0
-fi
-exit 1
-`,
-    );
-    chmodSync(gxpmStub, 0o755);
-
-    const result = runSessionStart(script, repoCwd, { PATH: `${fakeHome}:${process.env.PATH ?? ""}` });
-
-    expect(result.exitCode).toBe(0);
-    const context = readAdditionalContext(result.stdout.toString());
-    expect(context).toContain("Qoder repo wiki detected");
-    expect(context).toContain("legacy/Overview.md");
   });
 
   test("pre-tool-use.sh records update_plan arguments to the active issue", () => {

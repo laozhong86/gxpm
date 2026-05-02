@@ -14,8 +14,6 @@ import { dirname, extname, join, relative, sep } from "node:path";
 import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
 import { GXPM_PHASES, isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
-const QODER_REPOWIKI_ROOT = ".qoder/repowiki";
-const QODER_STATE_PATH = ".gxpm/wiki/qoder.json";
 const NATIVE_WIKI_ROOT = ".gxpm/wiki";
 const NATIVE_WIKI_STATE_PATH = ".gxpm/wiki/state.json";
 const NATIVE_WIKI_INDEX_PATH = ".gxpm/wiki/index/files.json";
@@ -53,43 +51,6 @@ export interface WikiPageSummary {
   path: string;
   title: string;
   citedFiles: string[];
-}
-
-export interface QoderWikiReminder {
-  syncStale: boolean;
-  reminderDue: boolean;
-  reason: string;
-  lastSyncAt?: string;
-  lastReminderAt?: string;
-  observedWikiUpdatedAt?: string;
-}
-
-export interface QoderWikiStatus {
-  schemaVersion: 1;
-  provider: "qoder";
-  repoWikiRoot: string;
-  detected: boolean;
-  state: "absent" | "empty" | "present";
-  contentRoots: string[];
-  pageCount: number;
-  topPages: WikiPageSummary[];
-  observedWikiUpdatedAt?: string;
-  progressiveRead: string[];
-  reminder: QoderWikiReminder;
-  commands: {
-    status: string;
-    markSync: string;
-    markReminder: string;
-  };
-}
-
-interface QoderWikiRecord {
-  schemaVersion: 1;
-  provider: "qoder";
-  repoWikiRoot: string;
-  lastSyncAt?: string;
-  lastReminderAt?: string;
-  note?: string;
 }
 
 export interface NativeWikiFileEntry {
@@ -263,70 +224,13 @@ export interface NativeWikiEvalReport {
       suggestedDocs: string[];
     }>;
   };
-  qoder: {
-    detected: boolean;
-    state: QoderWikiStatus["state"];
-    pageCount: number;
-    contentRoots: string[];
-    topLevelDirs: string[];
-    syncStale: boolean;
-    reminderDue: boolean;
-    reason: string;
-  };
   recommendations: string[];
 }
 
 const DEFAULT_NATIVE_WIKI_EVAL_QUERIES = [
   "phase gate artifact lifecycle",
   "host adapter codex",
-  "qoder sync reminder",
 ];
-
-export function getQoderWikiStatus(input: { root?: string; now?: Date } = {}): QoderWikiStatus {
-  const root = input.root ?? process.cwd();
-  const now = input.now ?? new Date();
-  const repoWikiRoot = join(root, QODER_REPOWIKI_ROOT);
-  const record = readQoderWikiRecord(root);
-
-  if (!isDirectory(repoWikiRoot)) {
-    return buildStatus({
-      detected: false,
-      state: "absent",
-      contentRoots: [],
-      pages: [],
-      record,
-      observedWikiUpdatedAt: undefined,
-      now,
-    });
-  }
-
-  const observedWikiUpdatedAt = newestKnownWikiTimestamp(root);
-  const contentRoots = findContentRoots(root, repoWikiRoot);
-  const pages = contentRoots.flatMap((contentRoot) => listMarkdownPages(root, contentRoot));
-  return buildStatus({
-    detected: true,
-    state: pages.length === 0 ? "empty" : "present",
-    contentRoots: contentRoots.map((path) => toRepoPath(root, path)),
-    pages,
-    record,
-    observedWikiUpdatedAt,
-    now,
-  });
-}
-
-export function markQoderWikiSync(input: { root?: string; now?: Date; note?: string } = {}) {
-  return writeQoderWikiRecord(input.root ?? process.cwd(), {
-    lastSyncAt: (input.now ?? new Date()).toISOString(),
-    note: input.note,
-  });
-}
-
-export function markQoderWikiReminder(input: { root?: string; now?: Date; note?: string } = {}) {
-  return writeQoderWikiRecord(input.root ?? process.cwd(), {
-    lastReminderAt: (input.now ?? new Date()).toISOString(),
-    note: input.note,
-  });
-}
 
 export function initializeNativeWiki(input: { root?: string; now?: Date } = {}): NativeWikiBuildResult {
   return writeNativeWiki({ root: input.root, now: input.now, mode: "init" });
@@ -496,7 +400,6 @@ export function evaluateNativeWiki(input: {
   const root = input.root ?? process.cwd();
   const now = input.now ?? new Date();
   const status = getNativeWikiStatus({ root, now });
-  const qoder = getQoderWikiStatus({ root, now });
   const index = readNativeWikiIndexIfPresent(root);
   const graph = readNativeWikiGraphIfPresent(root);
   const dimensions = readNativeWikiDimensionsIfPresent(root);
@@ -530,17 +433,7 @@ export function evaluateNativeWiki(input: {
       sourceCoverage,
       queryScenarios,
     },
-    qoder: {
-      detected: qoder.detected,
-      state: qoder.state,
-      pageCount: qoder.pageCount,
-      contentRoots: qoder.contentRoots,
-      topLevelDirs: qoderTopLevelDirs(root, qoder.contentRoots),
-      syncStale: qoder.reminder.syncStale,
-      reminderDue: qoder.reminder.reminderDue,
-      reason: qoder.reminder.reason,
-    },
-    recommendations: nativeWikiEvalRecommendations(status, sourceCoverage, clusters.length, qoder),
+    recommendations: nativeWikiEvalRecommendations(status, sourceCoverage, clusters.length),
   };
 }
 
@@ -677,26 +570,10 @@ function buildNativeWikiSourceCoverage(
   };
 }
 
-function qoderTopLevelDirs(root: string, contentRoots: string[]) {
-  const dirs = new Set<string>();
-  for (const contentRoot of contentRoots) {
-    const absoluteRoot = join(root, contentRoot);
-    try {
-      for (const name of readdirSync(absoluteRoot)) {
-        if (isDirectory(join(absoluteRoot, name))) dirs.add(name);
-      }
-    } catch {
-      // Qoder is optional; unreadable comparison details should not fail gxpm eval.
-    }
-  }
-  return [...dirs].sort();
-}
-
 function nativeWikiEvalRecommendations(
   status: NativeWikiStatus,
   coverage: NativeWikiEvalReport["native"]["sourceCoverage"],
   projectTopicClusterCount: number,
-  qoder: QoderWikiStatus,
 ) {
   const recommendations: string[] = [];
   if (status.state === "absent") recommendations.push("Run gxpm wiki init.");
@@ -707,74 +584,10 @@ function nativeWikiEvalRecommendations(
   if (status.state === "current" && coverage.orphanIndexedFiles > 0) {
     recommendations.push("Use orphanIndexedFileExamples to choose the next topic coverage improvement.");
   }
-  if (qoder.detected && qoder.reminder.syncStale) {
-    recommendations.push("Treat Qoder as optional stale comparison evidence; native wiki remains the gxpm truth.");
-  }
   if (recommendations.length === 0) {
     recommendations.push("Native wiki eval is current; use report metrics to choose the next wiki improvement.");
   }
   return recommendations;
-}
-
-function buildStatus(input: {
-  detected: boolean;
-  state: QoderWikiStatus["state"];
-  contentRoots: string[];
-  pages: WikiPageSummary[];
-  record: QoderWikiRecord | null;
-  observedWikiUpdatedAt?: string;
-  now: Date;
-}): QoderWikiStatus {
-  const topPages = input.pages.sort(comparePages).slice(0, MAX_TOP_PAGES);
-  return {
-    schemaVersion: 1,
-    provider: "qoder",
-    repoWikiRoot: QODER_REPOWIKI_ROOT,
-    detected: input.detected,
-    state: input.state,
-    contentRoots: input.contentRoots,
-    pageCount: input.pages.length,
-    topPages,
-    observedWikiUpdatedAt: input.observedWikiUpdatedAt,
-    progressiveRead: progressiveReadSteps(input.detected, topPages),
-    reminder: computeReminder(input.record, input.now, input.observedWikiUpdatedAt, input.detected),
-    commands: {
-      status: "gxpm wiki status",
-      markSync: "gxpm wiki mark-sync --note <manual-qoder-resync-note>",
-      markReminder: "gxpm wiki mark-reminder --note <reminder-note>",
-    },
-  };
-}
-
-function findContentRoots(root: string, repoWikiRoot: string): string[] {
-  const roots: string[] = [];
-  walkDirs(repoWikiRoot, (dir) => {
-    if (dir.endsWith(`${sep}content`) || dir === join(repoWikiRoot, "content")) {
-      roots.push(dir);
-    }
-  });
-  const sortedRoots = roots.sort((a, b) => toRepoPath(root, a).localeCompare(toRepoPath(root, b)));
-  return sortedRoots.filter(
-    (candidate) => !sortedRoots.some((other) => other !== candidate && isDescendant(candidate, other)),
-  );
-}
-
-function listMarkdownPages(root: string, contentRoot: string): WikiPageSummary[] {
-  const files: string[] = [];
-  walkFiles(contentRoot, (file) => {
-    if (file.endsWith(".md")) files.push(file);
-  });
-  return files.sort().map((file) => summarizePage(root, file));
-}
-
-function summarizePage(root: string, file: string): WikiPageSummary {
-  const content = safeRead(file);
-  const firstHeading = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  return {
-    path: toRepoPath(root, file),
-    title: firstHeading || file.split(sep).pop()?.replace(/\.md$/, "") || toRepoPath(root, file),
-    citedFiles: extractCitedFiles(content).slice(0, 8),
-  };
 }
 
 export function extractCitedFiles(markdown: string): string[] {
@@ -785,77 +598,6 @@ export function extractCitedFiles(markdown: string): string[] {
     files.add(decodeFileUrlPath(match[1]));
   }
   return [...files].sort();
-}
-
-function comparePages(a: WikiPageSummary, b: WikiPageSummary) {
-  const score = (page: WikiPageSummary) => {
-    const depth = page.path.split("/").length;
-    const hasCitations = page.citedFiles.length > 0 ? -5 : 0;
-    const name = page.path.toLowerCase();
-    const keyword =
-      ["overview", "architecture", "hook", "config", "template", "guide", "quick"].some((k) =>
-        name.includes(k),
-      )
-        ? -10
-        : 0;
-    return depth + hasCitations + keyword;
-  };
-  const delta = score(a) - score(b);
-  return delta === 0 ? a.path.localeCompare(b.path) : delta;
-}
-
-function progressiveReadSteps(detected: boolean, topPages: WikiPageSummary[]) {
-  if (!detected) {
-    return ["No .qoder/repowiki directory detected; continue normal gxpm workflow."];
-  }
-  const pages = topPages.slice(0, 3).map((page) => `Read ${page.path}`);
-  return [
-    "Check gxpm issue state first, then use Qoder wiki before direct source reads.",
-    ...pages,
-    "Follow cited file anchors from the selected wiki pages into source code.",
-    "After code changes, run gxpm wiki status and update or resync Qoder wiki if drift is reported.",
-  ];
-}
-
-function computeReminder(
-  record: QoderWikiRecord | null,
-  now: Date,
-  observedWikiUpdatedAt: string | undefined,
-  detected: boolean,
-): QoderWikiReminder {
-  const lastSyncAt = record?.lastSyncAt;
-  const lastReminderAt = record?.lastReminderAt;
-  if (!detected) {
-    return {
-      syncStale: false,
-      reminderDue: false,
-      reason: "Qoder repo wiki is not present.",
-      lastSyncAt,
-      lastReminderAt,
-      observedWikiUpdatedAt,
-    };
-  }
-
-  const syncOlderThanWeek = isOlderThanWeek(lastSyncAt, now);
-  const wikiUpdatedAfterSync = isAfter(observedWikiUpdatedAt, lastSyncAt);
-  const wikiUpdatedAfterReminder = isAfter(observedWikiUpdatedAt, lastReminderAt);
-  const syncStale = !lastSyncAt || syncOlderThanWeek || wikiUpdatedAfterSync;
-  const reminderDue = syncStale && (isOlderThanWeek(lastReminderAt, now) || wikiUpdatedAfterReminder);
-  let reason = "Qoder repo wiki sync evidence is current.";
-  if (!lastSyncAt) {
-    reason = "No manual Qoder wiki sync has been recorded in gxpm.";
-  } else if (wikiUpdatedAfterSync) {
-    reason = "Observed Qoder repo wiki updated since the last manual sync.";
-  } else if (syncOlderThanWeek) {
-    reason = "Manual Qoder wiki sync evidence is older than seven days.";
-  }
-  if (syncStale && !reminderDue) {
-    reason = wikiUpdatedAfterSync
-      ? "Observed Qoder repo wiki updated since the last manual sync, but gxpm has reminded within the last seven days."
-      : "Manual Qoder wiki sync is stale, but gxpm has reminded within the last seven days.";
-  }
-
-  return { syncStale, reminderDue, reason, lastSyncAt, lastReminderAt, observedWikiUpdatedAt };
 }
 
 function isOlderThanWeek(value: string | undefined, now: Date) {
@@ -883,31 +625,6 @@ function isDirectory(path: string) {
   } catch {
     return false;
   }
-}
-
-function readQoderWikiRecord(root: string): QoderWikiRecord | null {
-  const path = join(root, QODER_STATE_PATH);
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as QoderWikiRecord;
-  } catch {
-    return null;
-  }
-}
-
-function writeQoderWikiRecord(root: string, patch: Partial<QoderWikiRecord>) {
-  const path = join(root, QODER_STATE_PATH);
-  const current = readQoderWikiRecord(root);
-  const next: QoderWikiRecord = {
-    ...(current ?? {}),
-    ...definedOnly(patch),
-    schemaVersion: 1,
-    provider: "qoder",
-    repoWikiRoot: QODER_REPOWIKI_ROOT,
-  };
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
-  return next;
 }
 
 function writeNativeWiki(input: {
@@ -1441,14 +1158,12 @@ const NATIVE_WIKI_TOPICS: NativeWikiTopic[] = [
   {
     fileName: "Native-Wiki.md",
     title: "Native Wiki",
-    summary: "How gxpm initializes, updates, queries, and compares its first-party wiki with optional Qoder output.",
-    keywords: ["wiki", "native", "qoder", "repowiki", "index", "query", "context", "knowledge"],
+    summary: "How gxpm initializes, updates, queries, and evaluates its first-party wiki.",
+    keywords: ["wiki", "native", "index", "query", "context", "knowledge"],
     sourcePaths: [
       "core/wiki.ts",
       "core/wiki-native.ts",
-      "core/qoder.ts",
       "test/wiki.test.ts",
-      "test/qoder-link.test.ts",
       "docs/governance/development-contract.md",
     ],
   },
@@ -1475,7 +1190,7 @@ function renderNativeProjectTopics(
   return [
     "# Project Topics",
     "",
-    "Project-derived navigation generated from gxpm native dimensions. Qoder content is not read or copied for this page.",
+    "Project-derived navigation generated from gxpm native dimensions. External wiki content is not read or copied for this page.",
     "",
     "## Inferred Topic Clusters",
     "",
@@ -2078,24 +1793,6 @@ function writeJson(path: string, value: unknown) {
 
 function definedOnly<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
-}
-
-function newestKnownWikiTimestamp(root: string) {
-  const repoWikiRoot = join(root, QODER_REPOWIKI_ROOT);
-  const metadataFiles: string[] = [];
-  walkFiles(repoWikiRoot, (file) => {
-    if (file.endsWith(`${sep}repowiki-metadata.json`)) metadataFiles.push(file);
-  });
-  const timestamps: number[] = [];
-  for (const file of metadataFiles) {
-    try {
-      timestamps.push(statSync(file).mtime.getTime());
-    } catch {
-      // Metadata files are only freshness hints; skip them if they drift mid-scan.
-    }
-  }
-  const newest = timestamps.sort((a, b) => b - a)[0];
-  return newest !== undefined ? new Date(newest).toISOString() : undefined;
 }
 
 function dedupeBy<T>(values: T[], key: (value: T) => string) {

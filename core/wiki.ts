@@ -4,10 +4,7 @@ export {
   extractCitedFiles,
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
-  getQoderWikiStatus,
   initializeNativeWiki,
-  markQoderWikiReminder,
-  markQoderWikiSync,
   queryNativeWiki,
   updateNativeWiki,
 } from "./wiki-native";
@@ -25,7 +22,5 @@ export type {
   NativeWikiQueryResult,
   NativeWikiState,
   NativeWikiStatus,
-  QoderWikiReminder,
-  QoderWikiStatus,
   WikiPageSummary,
 } from "./wiki-native";

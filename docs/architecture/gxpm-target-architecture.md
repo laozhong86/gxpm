@@ -21,7 +21,6 @@
 graph TB
     subgraph "External Systems"
         LINEAR["Linear<br/>Issue Tracker"]
-        QODER["Qoder<br/>RepoWiki"]
         GRAPH["code-review-graph<br/>MCP Server"]
         GIT["Git Repository"]
     end
@@ -117,7 +116,6 @@ graph TB
         subgraph "Knowledge & Wiki"
             WIKI["wiki.ts"]
             WIKI_NATIVE["wiki-native.ts"]
-            QODER_MOD["qoder.ts"]
         end
 
         subgraph "Config & Capabilities"

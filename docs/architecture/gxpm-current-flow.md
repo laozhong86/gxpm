@@ -250,7 +250,6 @@ flowchart LR
 
     subgraph "External Systems"
         LINEAR["Linear"]
-        QODER["Qoder RepoWiki"]
         GRAPH["code-review-graph<br/>MCP"]
         GIT["Git"]
         BROWSER["cmux / agent-browser"]
@@ -261,7 +260,6 @@ flowchart LR
     CLAUDE --> |"load skill"| SKILL_CLAUDE[".claude/skills/<br/>*.md"]
 
     ISSUE_DIR -.-> |"sync<br/>(Linear 是协作前门)"| LINEAR
-    ISSUE_DIR -.-> |"read-only<br/>(optional nav aid)"| QODER
     ISSUE_DIR --> |"evidence capture"| BROWSER
 
     GIT --> |"hook events"| ISSUE_DIR
