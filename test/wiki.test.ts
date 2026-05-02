@@ -277,7 +277,18 @@ describe("gxpm-native wiki engine", () => {
   test("initializes a local wiki index, graph, docs, and state without Qoder", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/state.ts", "export function transitionIssuePhase() {}\n");
-    writeRepoFile(root, "scripts/gxpm.ts", 'import { transitionIssuePhase } from "../core/state";\n');
+    writeRepoFile(root, "core/native-helper.mjs", "export function nativeHelper() {}\n");
+    writeRepoFile(root, "core/native-loader/index.cjs", "exports.nativeLoader = () => {};\n");
+    writeRepoFile(
+      root,
+      "scripts/gxpm.ts",
+      [
+        'import { transitionIssuePhase } from "../core/state";',
+        'import { nativeHelper } from "../core/native-helper";',
+        'import { nativeLoader } from "../core/native-loader";',
+        "",
+      ].join("\n"),
+    );
     writeRepoFile(root, "README.md", "# GXPM\n\nLocal project manager.\n");
 
     const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
@@ -290,6 +301,16 @@ describe("gxpm-native wiki engine", () => {
     expect(result.graph.edges).toContainEqual({
       from: "scripts/gxpm.ts",
       to: "core/state.ts",
+      kind: "imports",
+    });
+    expect(result.graph.edges).toContainEqual({
+      from: "scripts/gxpm.ts",
+      to: "core/native-helper.mjs",
+      kind: "imports",
+    });
+    expect(result.graph.edges).toContainEqual({
+      from: "scripts/gxpm.ts",
+      to: "core/native-loader/index.cjs",
       kind: "imports",
     });
     expect(result.dimensions.files.map((file) => file.path)).toContain("core/state.ts");
@@ -347,6 +368,7 @@ describe("gxpm-native wiki engine", () => {
     writeRepoFile(root, "core/artifacts.ts", "export function writeArtifact() {}\n");
     writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
     writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "core/wiki-native.ts", "export function queryNativeWiki() {}\n");
     writeRepoFile(root, "scripts/gxpm.ts", 'import { initializeNativeWiki } from "../core/wiki";\n');
     writeRepoFile(root, ".githooks/pre-commit", "#!/bin/sh\n");
 
@@ -370,6 +392,7 @@ describe("gxpm-native wiki engine", () => {
 
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(wikiDoc).toContain("file://core/wiki.ts#L");
+    expect(wikiDoc).toContain("file://core/wiki-native.ts#L");
 
     const overviewDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
     expect(overviewDoc).toContain("[Project Topics](file://.gxpm/wiki/content/Project-Topics.md)");
