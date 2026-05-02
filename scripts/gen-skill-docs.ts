@@ -16,7 +16,14 @@ const GENERATED_MARK = "<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit dir
 
 export function renderSkillContentForHost(root: string, host: HostConfig, templateRelative: string): string {
   const templatePath = join(root, templateRelative);
-  const rendered = renderTemplate(readFileSync(templatePath, "utf8"), {
+  const source = readFileSync(templatePath, "utf8");
+
+  // Static files (non-.tmpl) are read as-is without template rendering
+  if (!templateRelative.endsWith(".tmpl")) {
+    return source;
+  }
+
+  const rendered = renderTemplate(source, {
     artifactReadCommands: buildArtifactReadCommands(),
     phaseGateCommands: buildPhaseGateCommands(),
     phaseTransitionSummary: buildPhaseTransitionSummary(),
