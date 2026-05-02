@@ -20,6 +20,7 @@ export interface RepoCheck {
   installedHooks: string[];
   gxpmDirExists: boolean;
   issueCount: number;
+  contextMdExists: boolean;
 }
 
 export interface RuntimeCheck {
@@ -201,6 +202,11 @@ export function formatDoctorReport(report: DoctorReport): string {
       lines.push(`  ✓ .gxpm/issues/ exists (${report.repo.issueCount} issue${report.repo.issueCount === 1 ? "" : "s"} tracked)`);
     } else {
       lines.push("  · no .gxpm/issues/ yet (run 'gxpm issue create <id>' to start)");
+    }
+    if (report.repo.contextMdExists) {
+      lines.push("  ✓ CONTEXT.md exists");
+    } else {
+      lines.push("  · CONTEXT.md missing (create when first domain term is resolved)");
     }
   }
 
