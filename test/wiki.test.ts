@@ -347,6 +347,7 @@ describe("gxpm-native wiki engine", () => {
     writeRepoFile(root, "core/artifacts.ts", "export function writeArtifact() {}\n");
     writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
     writeRepoFile(root, "core/wiki.ts", "export function initializeNativeWiki() {}\n");
+    writeRepoFile(root, "core/wiki-native.ts", "export function queryNativeWiki() {}\n");
     writeRepoFile(root, "scripts/gxpm.ts", 'import { initializeNativeWiki } from "../core/wiki";\n');
     writeRepoFile(root, ".githooks/pre-commit", "#!/bin/sh\n");
 
@@ -370,6 +371,7 @@ describe("gxpm-native wiki engine", () => {
 
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(wikiDoc).toContain("file://core/wiki.ts#L");
+    expect(wikiDoc).toContain("file://core/wiki-native.ts#L");
 
     const overviewDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
     expect(overviewDoc).toContain("[Project Topics](file://.gxpm/wiki/content/Project-Topics.md)");

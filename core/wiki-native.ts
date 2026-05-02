@@ -1451,6 +1451,7 @@ const NATIVE_WIKI_TOPICS: NativeWikiTopic[] = [
     keywords: ["wiki", "native", "qoder", "repowiki", "index", "query", "context", "knowledge"],
     sourcePaths: [
       "core/wiki.ts",
+      "core/wiki-native.ts",
       "core/qoder.ts",
       "test/wiki.test.ts",
       "test/qoder-link.test.ts",
