@@ -1,7 +1,8 @@
 import { claudeHostConfig } from "./claude";
 import { codexHostConfig } from "./codex";
+import { cursorHostConfig } from "./cursor";
 
-export const ALL_HOST_CONFIGS = [claudeHostConfig, codexHostConfig] as const;
+export const ALL_HOST_CONFIGS = [claudeHostConfig, codexHostConfig, cursorHostConfig] as const;
 export const ALL_HOST_NAMES = ALL_HOST_CONFIGS.map((host) => host.name);
 
 export type HostName = (typeof ALL_HOST_NAMES)[number];

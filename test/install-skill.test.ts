@@ -46,6 +46,7 @@ describe("installSkill", () => {
     expect(installed.length).toBeGreaterThanOrEqual(2);
     expect(installed.some((p) => p.includes(".codex/skills/gxpm"))).toBe(true);
     expect(installed.some((p) => p.includes(".claude/skills/gxpm"))).toBe(true);
+    expect(installed.some((p) => p.includes(".cursor/skills/gxpm"))).toBe(true);
   });
 
   test("default hostName installs to all hosts", () => {
