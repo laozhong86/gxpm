@@ -760,7 +760,7 @@ function updateNativeWikiIncremental(input: { root?: string; now?: Date }): Nati
   writeJson(join(root, NATIVE_WIKI_GRAPH_PATH), graph);
   writeJson(join(root, NATIVE_WIKI_DIMENSIONS_PATH), dimensions);
   writeJson(join(root, NATIVE_WIKI_STATE_PATH), state);
-  const docs = writeNativeWikiDocs(root, state, index, graph, dimensions);
+  const docs = writeNativeWikiDocs(root, state, index, graph, dimensions, changedFiles);
   return { provider: "gxpm", mode: "update", state, index, graph, dimensions, docs };
 }
 
@@ -1038,19 +1038,32 @@ function writeNativeWikiDocs(
   index: NativeWikiIndex,
   graph: NativeWikiGraph,
   dimensions: NativeWikiDimensions,
+  changedFiles?: string[],
 ) {
   const previousGeneratedPaths = readNativeWikiDocManifest(root);
   const projectTopicClusters = buildNativeProjectTopicClusters(index, dimensions);
-  const docs: Array<readonly [string, string]> = [
-    ["Overview.md", renderNativeOverview(state, index, graph)],
-    ["File-Index.md", renderNativeFileIndex(index)],
-    ["Code-Graph.md", renderNativeCodeGraph(graph)],
-    ["Project-Topics.md", renderNativeProjectTopics(index, graph, dimensions, projectTopicClusters)],
+  const changedSet = changedFiles ? new Set(changedFiles) : null;
+
+  const docEntries: Array<readonly [string, () => string]> = [
+    ["Overview.md", () => renderNativeOverview(state, index, graph)],
+    ["File-Index.md", () => renderNativeFileIndex(index)],
+    ["Code-Graph.md", () => renderNativeCodeGraph(graph)],
+    ["Project-Topics.md", () => renderNativeProjectTopics(index, graph, dimensions, projectTopicClusters)],
     ...projectTopicClusters.map(
-      (cluster) => [nativeProjectTopicFileName(cluster.rule), renderNativeProjectTopicPage(cluster, graph)] as const,
+      (cluster) => [nativeProjectTopicFileName(cluster.rule), () => renderNativeProjectTopicPage(cluster, graph)] as const,
     ),
-    ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, renderNativeTopicDoc(topic, index, graph)] as const),
+    ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, () => renderNativeTopicDoc(topic, index, graph)] as const),
   ];
+
+  const docs: Array<readonly [string, string]> = docEntries.map(([name, renderer]) => {
+    if (changedSet && !isDocAffected(name, changedSet, projectTopicClusters)) {
+      const existingPath = join(root, NATIVE_WIKI_CONTENT_ROOT, name);
+      const existing = safeRead(existingPath);
+      if (existing) return [name, existing] as const;
+    }
+    return [name, renderer()] as const;
+  });
+
   const paths: string[] = [];
   for (const [name, content] of docs) {
     const path = join(root, NATIVE_WIKI_CONTENT_ROOT, name);
@@ -1061,6 +1074,39 @@ function writeNativeWikiDocs(
   pruneStaleNativeWikiDocs(root, previousGeneratedPaths, paths);
   writeNativeWikiDocManifest(root, state, paths);
   return paths;
+}
+
+function isDocAffected(
+  docName: string,
+  changedSet: Set<string>,
+  projectTopicClusters: NativeWikiProjectTopicCluster[],
+): boolean {
+  // Global docs are always affected
+  if (["Overview.md", "File-Index.md", "Code-Graph.md", "Project-Topics.md"].includes(docName)) {
+    return true;
+  }
+
+  // Project topic pages: affected if any matched file changed
+  const topicCluster = projectTopicClusters.find((c) => nativeProjectTopicFileName(c.rule) === docName);
+  if (topicCluster) {
+    return topicCluster.files.some((entry) => changedSet.has(entry.file.path));
+  }
+
+  // Fixed topic docs: affected if sourcePaths or sourcePrefixes intersect changed files
+  const fixedTopic = NATIVE_WIKI_TOPICS.find((t) => t.fileName === docName);
+  if (fixedTopic) {
+    return changedSetHasTopicMatch(changedSet, fixedTopic);
+  }
+
+  return true;
+}
+
+function changedSetHasTopicMatch(changedSet: Set<string>, topic: NativeWikiTopic): boolean {
+  for (const path of changedSet) {
+    if (topic.sourcePaths.includes(path)) return true;
+    if (topic.sourcePrefixes?.some((prefix) => path.startsWith(prefix))) return true;
+  }
+  return false;
 }
 
 function readNativeWikiDocManifest(root: string) {

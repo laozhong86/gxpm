@@ -834,4 +834,81 @@ describe("gxpm native wiki incremental update", () => {
     expect(stale.stale).toBe(true);
     expect(stale.changedFiles).toContain("core/state.ts");
   });
+
+  test("incremental update reuses unaffected topic docs from disk", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    // Mark Config-Worktree.md with a unique sentinel so we can detect reuse
+    const configDocPath = join(root, ".gxpm", "wiki", "content", "Config-Worktree.md");
+    const originalConfigDoc = readFileSync(configDocPath, "utf8");
+    const markedConfigDoc = originalConfigDoc + "\n<!-- SENTINEL-REUSE -->\n";
+    writeFileSync(configDocPath, markedConfigDoc);
+
+    // Modify only state.ts (not config-related)
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\nexport function writeIssueState() {}\n");
+    commitAll(root, "modify state");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    const afterConfigDoc = readFileSync(configDocPath, "utf8");
+    // Config-Worktree.md sourcePaths do not include core/state.ts, so it should be reused
+    expect(afterConfigDoc).toContain("<!-- SENTINEL-REUSE -->");
+  });
+
+  test("incremental update re-renders affected fixed topic docs", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    // Phase-Lifecycle.md sourcePaths include core/state.ts
+    const phaseDocPath = join(root, ".gxpm", "wiki", "content", "Phase-Lifecycle.md");
+    const originalPhaseDoc = readFileSync(phaseDocPath, "utf8");
+    writeFileSync(phaseDocPath, originalPhaseDoc + "\n<!-- SENTINEL-REUSE -->\n");
+
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\nexport function writeIssueState() {}\n");
+    commitAll(root, "modify state");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    const afterPhaseDoc = readFileSync(phaseDocPath, "utf8");
+    expect(afterPhaseDoc).not.toContain("<!-- SENTINEL-REUSE -->");
+  });
+
+  test("incremental update re-renders affected project topic docs", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const phaseTopicPath = join(root, ".gxpm", "wiki", "content", "project-topics", "phase-and-gate-system.md");
+    const originalTopicDoc = readFileSync(phaseTopicPath, "utf8");
+    writeFileSync(phaseTopicPath, originalTopicDoc + "\n<!-- SENTINEL-REUSE -->\n");
+
+    // Modify config.ts only — phase topic should be unaffected
+    writeRepoFile(root, "core/config.ts", "export function readGxpmConfig() {}\nexport function newConfig() {}\n");
+    commitAll(root, "modify config");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T01:00:00Z") });
+
+    const afterPhaseTopic = readFileSync(phaseTopicPath, "utf8");
+    expect(afterPhaseTopic).toContain("<!-- SENTINEL-REUSE -->");
+
+    // Now modify phase-gates.ts — phase topic should be re-rendered
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [1];\n");
+    commitAll(root, "modify phase gates");
+
+    updateNativeWiki({ root, now: new Date("2026-04-29T02:00:00Z") });
+
+    const afterPhaseTopic2 = readFileSync(phaseTopicPath, "utf8");
+    expect(afterPhaseTopic2).not.toContain("<!-- SENTINEL-REUSE -->");
+  });
 });
