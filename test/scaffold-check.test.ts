@@ -9,7 +9,7 @@ const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
 
 describe("scaffold check", () => {
   test("reports the shared scaffold check result", () => {
-    expect(runScaffoldCheck()).toBe("gxpm scaffold check passed (2 hosts)");
+    expect(runScaffoldCheck()).toBe("gxpm scaffold check passed (3 hosts)");
   });
 
   test("keeps gxpm check and gxpm-check entrypoints aligned", () => {
@@ -19,7 +19,7 @@ describe("scaffold check", () => {
     expect(cliCheck.exitCode).toBe(0);
     expect(configCheck.exitCode).toBe(0);
     expect(output(cliCheck)).toBe(output(configCheck));
-    expect(output(cliCheck)).toContain("gxpm scaffold check passed (2 hosts)");
+    expect(output(cliCheck)).toContain("gxpm scaffold check passed (3 hosts)");
   });
 
   test("passes when CLI is invoked from outside the gxpm repo", () => {
@@ -29,6 +29,6 @@ describe("scaffold check", () => {
     const externalCwd = mkdtempSync(join(tmpdir(), "gxpm-check-extern-"));
     const result = runScript([cliPath, "check"], externalCwd);
     expect(result.exitCode).toBe(0);
-    expect(output(result)).toContain("gxpm scaffold check passed (2 hosts)");
+    expect(output(result)).toContain("gxpm scaffold check passed (3 hosts)");
   });
 });
