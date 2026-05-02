@@ -11,15 +11,32 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 ## Truth Sources
 
 1. 用户本轮明确指令。
-2. `docs/architecture/gxpm-replacement-architecture.md`
-3. `docs/architecture/gxpm-v0-contract.md`
-4. `docs/architecture/scaffold-northstar.md`
-5. `docs/governance/development-contract.md`
-6. `docs/governance/template-authoring.md`
-7. `docs/governance/host-adapter.md`
-8. `docs/research/pmc-gstack-skill-study.md`
+2. `CONTEXT.md` — 共享语言/术语表（领域词汇的单一真相源）
+3. `docs/architecture/gxpm-replacement-architecture.md`
+4. `docs/architecture/gxpm-v0-contract.md`
+5. `docs/architecture/scaffold-northstar.md`
+6. `docs/governance/development-contract.md`
+7. `docs/governance/template-authoring.md`
+8. `docs/governance/host-adapter.md`
+9. `docs/governance/skill-authoring.md`
+10. `docs/research/pmc-gstack-skill-study.md`
 
 如果来源冲突，先指出冲突和建议的最小安全路径。
+
+## Reference Projects（工程实践优先参考）
+
+以下项目作为 gxpm 工程实践与 skill 设计的参考借鉴对象，本地路径如下：
+
+- **obra/superpowers** — 代理能力编排与权限管理参考  
+  路径：`/Users/x/Desktop/Project/github/superpowers`
+- **garrytan/gstack** — 全栈 Agent 工具链与部署实践参考  
+  路径：`/Users/x/Desktop/Project/github/gstack`
+- **affaan-m/everything-claude-code** — Claude Code 扩展生态与 skill 模式参考  
+  路径：`/Users/x/Desktop/Project/github/everything-claude-code`
+- **Yeachan-Heo/oh-my-codex** — Codex CLI 工作流与 hook 设计参考  
+  路径：`/Users/x/Desktop/Project/github/oh-my-codex`
+- **mattpocock/skills** — Skill 结构与类型驱动开发实践参考  
+  路径：`/Users/x/Desktop/Project/github/mattpocock-skills`
 
 ## Always
 

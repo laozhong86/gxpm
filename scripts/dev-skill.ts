@@ -4,7 +4,9 @@ import { discoverTemplates } from "./discover-skills";
 import { generateSkillDocs } from "./gen-skill-docs";
 
 const ROOT = resolve(import.meta.dir, "..");
-const templates = discoverTemplates(ROOT).filter((template) => template.tmpl === "skills/gxpm/SKILL.md.tmpl");
+const templates = discoverTemplates(ROOT).filter(
+  (template) => template.tmpl.startsWith("skills/") && template.tmpl.endsWith(".tmpl")
+);
 
 if (templates.length === 0) {
   console.error("[dev:skill] no gxpm skill template found");

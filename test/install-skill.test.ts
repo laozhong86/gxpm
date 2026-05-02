@@ -11,9 +11,10 @@ describe("installSkill", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-codex-"));
     const installed = installSkill({ hostName: "codex", root: repoRoot, home: fakeHome });
 
-    expect(installed.length).toBe(1);
+    // Batch install: gxpm main skill + graph skills
+    expect(installed.length).toBeGreaterThanOrEqual(1);
     const expectedPath = join(fakeHome, ".codex", "skills", "gxpm", "SKILL.md");
-    expect(installed[0]).toBe(expectedPath);
+    expect(installed).toContain(expectedPath);
     expect(existsSync(expectedPath)).toBe(true);
 
     const content = readFileSync(expectedPath, "utf8");
@@ -26,9 +27,10 @@ describe("installSkill", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-claude-"));
     const installed = installSkill({ hostName: "claude", root: repoRoot, home: fakeHome });
 
-    expect(installed.length).toBe(1);
+    // Batch install: gxpm main skill + graph skills
+    expect(installed.length).toBeGreaterThanOrEqual(1);
     const expectedPath = join(fakeHome, ".claude", "skills", "gxpm", "SKILL.md");
-    expect(installed[0]).toBe(expectedPath);
+    expect(installed).toContain(expectedPath);
     expect(existsSync(expectedPath)).toBe(true);
 
     const content = readFileSync(expectedPath, "utf8");

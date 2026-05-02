@@ -5,20 +5,22 @@ import { join } from "node:path";
 import { discoverTemplates } from "../scripts/discover-skills";
 
 describe("discoverTemplates", () => {
-  test("finds root and one-level skill templates while skipping hidden and build dirs", () => {
+  test("finds skill templates under skills/ while skipping hidden and build dirs", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-discover-"));
-    writeFileSync(join(root, "SKILL.md.tmpl"), "root");
     mkdirSync(join(root, "skills"));
     mkdirSync(join(root, "skills", "gxpm"), { recursive: true });
     writeFileSync(join(root, "skills", "gxpm", "SKILL.md.tmpl"), "gxpm");
+    mkdirSync(join(root, "skills", ".agents"), { recursive: true });
+    writeFileSync(join(root, "skills", ".agents", "SKILL.md.tmpl"), "hidden");
+    mkdirSync(join(root, "skills", "dist"), { recursive: true });
+    writeFileSync(join(root, "skills", "dist", "SKILL.md.tmpl"), "dist");
+    // Files outside skills/ should be ignored
+    writeFileSync(join(root, "SKILL.md.tmpl"), "root");
     mkdirSync(join(root, ".agents"), { recursive: true });
     writeFileSync(join(root, ".agents", "SKILL.md.tmpl"), "hidden");
-    mkdirSync(join(root, "dist"), { recursive: true });
-    writeFileSync(join(root, "dist", "SKILL.md.tmpl"), "dist");
 
     expect(discoverTemplates(root)).toEqual([
-      { tmpl: "SKILL.md.tmpl", output: "SKILL.md" },
-      { tmpl: "skills/gxpm/SKILL.md.tmpl", output: "skills/gxpm/SKILL.md" },
+      { tmpl: "skills/gxpm/SKILL.md.tmpl", output: "skills/gxpm/SKILL.md", name: "gxpm" },
     ]);
   });
 });

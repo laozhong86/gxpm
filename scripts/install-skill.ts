@@ -1,7 +1,8 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS, getHostConfig } from "../hosts";
+import { discoverTemplates } from "./discover-skills";
 import { renderSkillContentForHost } from "./gen-skill-docs";
 import type { HostConfig } from "./host-config";
 
@@ -11,11 +12,33 @@ interface InstallSkillOptions {
   home?: string; // override for testing (default: homedir())
 }
 
-const SKILL_TEMPLATE_RELATIVE = "skills/gxpm/SKILL.md.tmpl";
-
 // Default root is the gxpm repo itself (the parent of scripts/), not cwd —
 // install-skill must read templates from gxpm regardless of where it's invoked.
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
+
+function resolveSkillInstallPath(skillName: string, host: HostConfig, home: string): string {
+  // For gxpm main skill, preserve backward-compatible path using host.globalRoot
+  if (skillName === "gxpm") {
+    return join(home, host.globalRoot, "SKILL.md");
+  }
+  // For other skills, install into host-specific skill directory
+  if (host.name === "codex") {
+    return join(home, ".codex", "skills", skillName, "SKILL.md");
+  }
+  if (host.name === "claude") {
+    return join(home, ".claude", "skills", skillName, "SKILL.md");
+  }
+  // Fallback to host.globalRoot parent + skill name
+  return join(home, dirname(host.globalRoot), skillName, "SKILL.md");
+}
+
+function renderOrReadSkill(root: string, host: HostConfig, tmplPath: string): string {
+  if (tmplPath.endsWith(".tmpl")) {
+    return renderSkillContentForHost(root, host, tmplPath);
+  }
+  // Static file: read as-is, no template rendering
+  return readFileSync(join(root, tmplPath), "utf8");
+}
 
 export function installSkill(options: InstallSkillOptions = {}): string[] {
   const root = options.root ?? DEFAULT_GXPM_ROOT;
@@ -24,14 +47,15 @@ export function installSkill(options: InstallSkillOptions = {}): string[] {
 
   const installed: string[] = [];
 
-  for (const host of targets) {
-    const content = renderSkillContentForHost(root, host, SKILL_TEMPLATE_RELATIVE);
-    const transformed = applyFrontmatter(content, host);
-
-    const installPath = join(home, host.globalRoot, "SKILL.md");
-    mkdirSync(dirname(installPath), { recursive: true });
-    writeFileSync(installPath, transformed);
-    installed.push(installPath);
+  for (const template of discoverTemplates(root)) {
+    for (const host of targets) {
+      const content = renderOrReadSkill(root, host, template.tmpl);
+      const transformed = applyFrontmatter(content, host);
+      const installPath = resolveSkillInstallPath(template.name, host, home);
+      mkdirSync(dirname(installPath), { recursive: true });
+      writeFileSync(installPath, transformed);
+      installed.push(installPath);
+    }
   }
 
   return installed;
