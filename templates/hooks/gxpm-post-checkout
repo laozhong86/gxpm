@@ -12,4 +12,9 @@ else
   exit 0
 fi
 
-exec "$GXPM_BIN" gate branch-policy
+"$GXPM_BIN" gate branch-policy
+
+# Update wiki after branch switch so context stays current
+if [ -f ".gxpm/wiki/state.json" ]; then
+  "$GXPM_BIN" wiki update >/dev/null 2>&1 || true
+fi

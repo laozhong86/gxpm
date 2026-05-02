@@ -240,6 +240,16 @@ export function updateNativeWiki(input: { root?: string; now?: Date } = {}): Nat
   return writeNativeWiki({ root: input.root, now: input.now, mode: "update" });
 }
 
+export function ensureNativeWikiCurrent(input: { root?: string; autoUpdate?: boolean } = {}): void {
+  if (input.autoUpdate === false) return;
+  if (process.env.GXPM_WIKI_AUTO_UPDATE === "0") return;
+  const root = input.root ?? process.cwd();
+  const status = getNativeWikiStatus({ root });
+  if (status.stale) {
+    updateNativeWiki({ root });
+  }
+}
+
 export function getNativeWikiStatus(input: { root?: string; now?: Date } = {}): NativeWikiStatus {
   const root = input.root ?? process.cwd();
   const currentCommit = currentGitCommit(root);
@@ -330,8 +340,10 @@ export function queryNativeWiki(input: {
   root?: string;
   query: string;
   limit?: number;
+  autoUpdate?: boolean;
 }): NativeWikiQueryResult {
   const root = input.root ?? process.cwd();
+  ensureNativeWikiCurrent({ root, autoUpdate: input.autoUpdate });
   const index = readNativeWikiIndex(root);
   const tokens = tokenizeQuery(input.query);
   const scored = index.files
@@ -362,8 +374,10 @@ export function getNativeWikiContextForIssue(input: {
   issueId: string;
   phase?: GxpmPhase | string;
   limit?: number;
+  autoUpdate?: boolean;
 }): NativeWikiIssueContext {
   const root = input.root ?? process.cwd();
+  ensureNativeWikiCurrent({ root, autoUpdate: input.autoUpdate });
   const state = readIssueState({ root, issueId: input.issueId });
   const phase = resolveIssueContextPhase(input.phase ?? state.currentPhase);
   const artifacts = readIssueContextArtifacts(root, input.issueId);

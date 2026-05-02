@@ -66,6 +66,11 @@ if [ -n "$CWD" ] && [ -d "$CWD" ] && command -v gxpm >/dev/null 2>&1; then
   WIKI_JSON=$(cd "$CWD" && gxpm wiki status --json 2>/dev/null || echo "{}")
 fi
 
+# Trigger background wiki update if stale
+if [ -n "$CWD" ] && [ -d "$CWD" ] && command -v gxpm >/dev/null 2>&1; then
+  (cd "$CWD" && gxpm wiki update >/dev/null 2>&1 &) || true
+fi
+
 export STATIC_CONTEXT UPDATE_CONTEXT WIKI_JSON
 python3 -c 'import json, os, sys
 parts = [p for p in [os.environ.get("STATIC_CONTEXT", ""), os.environ.get("UPDATE_CONTEXT", "")] if p]
@@ -79,7 +84,7 @@ native = wiki.get("native", wiki)
 if native.get("detected"):
     wiki_parts = ["gxpm native wiki detected ({}.gxpm/wiki{}).".format(native.get("repoWikiRoot", ""), " stale" if native.get("stale") else "")]
     if native.get("stale"):
-        wiki_parts.append("Run `gxpm wiki update` before direct source reads.")
+        wiki_parts.append("Auto-updating wiki in background. Results may be stale for the first query.")
     docs = native.get("docs", [])
     if docs:
         wiki_parts.append("Docs: {}".format(", ".join(docs[:3])))

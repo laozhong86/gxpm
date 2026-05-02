@@ -1,5 +1,6 @@
 import { writeArtifact } from "../../core/artifacts";
 import {
+  ensureNativeWikiCurrent,
   evaluateNativeWiki,
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
@@ -14,7 +15,7 @@ import {
 } from "../../core/wiki";
 import { optionRequiredValue, parsePositiveIntegerOption } from "./helpers";
 
-const WIKI_CONTEXT_USAGE = "Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json]";
+const WIKI_CONTEXT_USAGE = "Usage: gxpm wiki context <issue-id> [--phase <phase>] [--limit <n>] [--write-artifact] [--json] [--no-auto-update]";
 
 export function runWikiCommand(argv: string[], subcommand: string | undefined) {
   if (!subcommand || subcommand === "status") {
@@ -60,11 +61,12 @@ export function runWikiCommand(argv: string[], subcommand: string | undefined) {
   if (subcommand === "query") {
     const query = wikiQueryText(argv);
     if (!query) {
-      throw new Error("Usage: gxpm wiki query <text> [--limit <n>] [--json]");
+      throw new Error("Usage: gxpm wiki query <text> [--limit <n>] [--json] [--no-auto-update]");
     }
     const result = queryNativeWiki({
       query,
       limit: parsePositiveIntegerOption(argv, "--limit"),
+      autoUpdate: !argv.includes("--no-auto-update"),
     });
     if (argv.includes("--json")) {
       console.log(JSON.stringify(result, null, 2));
@@ -84,6 +86,7 @@ export function runWikiCommand(argv: string[], subcommand: string | undefined) {
       issueId: contextIssueId,
       phase: argv.includes("--phase") ? optionRequiredValue(argv, "--phase") : undefined,
       limit: parsePositiveIntegerOption(argv, "--limit"),
+      autoUpdate: !argv.includes("--no-auto-update"),
     });
     const artifactWritten = argv.includes("--write-artifact");
     if (artifactWritten) {

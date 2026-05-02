@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 import { writeArtifact } from "../core/artifacts";
 import { createIssueState } from "../core/state";
 import {
+  ensureNativeWikiCurrent,
   getNativeWikiContextForIssue,
   getNativeWikiStatus,
   initializeNativeWiki,
@@ -595,6 +596,83 @@ describe("gxpm-native wiki engine", () => {
     expect(report.native.queryScenarios).toEqual([]);
     expect(report.recommendations).toContain("Run gxpm wiki init.");
   });
+
+  test("auto-updates stale wiki before query when autoUpdate is enabled", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    writeRepoFile(root, "core/wiki.ts", "export function updateNativeWiki() {}\n");
+    commitAll(root, "add wiki module");
+
+    const before = getNativeWikiStatus({ root });
+    expect(before.stale).toBe(true);
+
+    const result = queryNativeWiki({ root, query: "update native wiki", autoUpdate: true });
+    expect(result.contextFiles).toContain("core/wiki.ts");
+
+    const after = getNativeWikiStatus({ root });
+    expect(after.stale).toBe(false);
+  });
+
+  test("does not auto-update stale wiki when autoUpdate is disabled", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    writeRepoFile(root, "core/wiki.ts", "export function updateNativeWiki() {}\n");
+    commitAll(root, "add wiki module");
+
+    const result = queryNativeWiki({ root, query: "update native wiki", autoUpdate: false });
+    expect(result.contextFiles).not.toContain("core/wiki.ts");
+
+    const after = getNativeWikiStatus({ root });
+    expect(after.stale).toBe(true);
+  });
+
+  test("does not auto-update when GXPM_WIKI_AUTO_UPDATE env is 0", () => {
+    const previous = process.env.GXPM_WIKI_AUTO_UPDATE;
+    process.env.GXPM_WIKI_AUTO_UPDATE = "0";
+    try {
+      const root = tempRoot();
+      initGitRepo(root);
+      writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+      commitAll(root, "initial state");
+      initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+      writeRepoFile(root, "core/wiki.ts", "export function updateNativeWiki() {}\n");
+      commitAll(root, "add wiki module");
+
+      queryNativeWiki({ root, query: "update native wiki" });
+
+      const after = getNativeWikiStatus({ root });
+      expect(after.stale).toBe(true);
+    } finally {
+      process.env.GXPM_WIKI_AUTO_UPDATE = previous;
+    }
+  });
+
+  test("auto-updates stale wiki before context query", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");
+    commitAll(root, "initial state");
+    createIssueState({ root, issueId: "GXPM-52" });
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    writeRepoFile(root, "core/new-module.ts", "export function newFeature() {}\n");
+    commitAll(root, "add new module");
+
+    const result = getNativeWikiContextForIssue({ root, issueId: "GXPM-52", autoUpdate: true });
+    expect(result.contextFiles).toContain("core/new-module.ts");
+
+    const after = getNativeWikiStatus({ root });
+    expect(after.stale).toBe(false);
+  });
 });
 
 describe("gxpm native wiki CLI", () => {
@@ -639,5 +717,29 @@ describe("gxpm native wiki CLI", () => {
     expect(human.exitCode).toBe(0);
     expect(output(human)).toContain("Native gxpm wiki eval: current");
     expect(output(human)).toContain("Query scenarios:");
+  });
+
+  test("supports --no-auto-update flag for query", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/state.ts", "export function readIssueState() {}\n");
+    commitAll(root, "initial state");
+    expect(runCli(root, ["wiki", "init"]).exitCode).toBe(0);
+
+    writeRepoFile(root, "core/wiki.ts", "export function updateNativeWiki() {}\n");
+    commitAll(root, "add wiki module");
+
+    const query = runCli(root, ["wiki", "query", "update native wiki", "--json", "--no-auto-update"]);
+    expect(query.exitCode).toBe(0);
+    expect(JSON.parse(output(query)).contextFiles).not.toContain("core/wiki.ts");
+  });
+
+  test("post-commit hook template contains wiki update", () => {
+    const hookPath = join(process.cwd(), "templates", "hooks", "gxpm-post-commit");
+    expect(existsSync(hookPath)).toBe(true);
+    const content = readFileSync(hookPath, "utf8");
+    expect(content).toContain("wiki update");
+    expect(content).toContain("set +e");
+    expect(content).toContain(".gxpm/wiki/state.json");
   });
 });

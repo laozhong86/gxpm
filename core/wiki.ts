@@ -1,5 +1,6 @@
 export {
   buildNativeWikiIndex,
+  ensureNativeWikiCurrent,
   evaluateNativeWiki,
   extractCitedFiles,
   getNativeWikiContextForIssue,
