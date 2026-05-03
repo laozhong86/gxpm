@@ -19,6 +19,19 @@ export function resolveSessionId(env: NodeJS.ProcessEnv = process.env): string {
   return `gen:${readOrCreateGeneratedSessionId(env)}`;
 }
 
+export interface AgentIdentity {
+  host: string;
+  sessionId: string;
+  actor: string;
+}
+
+export function resolveAgentIdentity(env: NodeJS.ProcessEnv = process.env): AgentIdentity {
+  const sessionId = resolveSessionId(env);
+  const host = sessionId.split(":")[0] ?? "gen";
+  const actor = env.GXPM_AGENT_NAME?.trim() || host;
+  return { host, sessionId, actor };
+}
+
 function readOrCreateGeneratedSessionId(env: NodeJS.ProcessEnv): string {
   for (const cachePath of candidateCachePaths(env)) {
     try {

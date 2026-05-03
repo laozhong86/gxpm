@@ -47,6 +47,12 @@ export function runIssueCommand(argv: string[], subcommand: string | undefined, 
     console.log(`currentPhase: ${state.currentPhase}`);
     console.log(`updatedAt: ${state.updatedAt}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), issueId).statePath}`);
+    if (state.creator) {
+      console.log(`creator: ${state.creator.actor} (${state.creator.host})`);
+    }
+    if (state.claim?.status === "claimed") {
+      console.log(`assignee: ${state.claim.actor} (${state.claim.claimedBySession.split(":")[0] ?? "unknown"})`);
+    }
     const syncState = readSyncState({ issueId });
     if (syncState.targets.length > 0) {
       for (const target of syncState.targets) {

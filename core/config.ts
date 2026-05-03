@@ -112,6 +112,16 @@ const CONFIG_REGISTRY = {
     description: "Sync artifact summaries to the issue tracker description.",
     normalize: normalizeBoolean,
   },
+  "sync.linearAssigneeId": {
+    defaultValue: "",
+    description: "Linear user ID to assign as default assignee for synced issues.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
+  "agent.name": {
+    defaultValue: "",
+    description: "Human-readable agent identity used as issue creator/assignee name. Falls back to host name if empty.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
 } as const;
 
 export type KnownConfigKey = keyof typeof CONFIG_REGISTRY;

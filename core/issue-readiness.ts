@@ -12,7 +12,7 @@ import {
   type IssueType,
   type StateEvent,
 } from "./state";
-import { resolveSessionId } from "./session";
+import { resolveAgentIdentity, resolveSessionId } from "./session";
 import { isTerminalRunStatus, readRun } from "./runs";
 
 export type IssueReadinessDecision = "ready" | "blocked" | "ignored";
@@ -112,7 +112,7 @@ export function claimIssue(input: {
 }): ClaimIssueResult {
   const root = input.root ?? process.cwd();
   const sessionId = input.sessionId ?? resolveSessionId();
-  const actor = input.actor ?? sessionId;
+  const actor = input.actor ?? resolveAgentIdentity().actor;
   return withClaimLock(root, input.issueId, (paths) => {
     const state = readIssueState({ root, issueId: input.issueId });
 

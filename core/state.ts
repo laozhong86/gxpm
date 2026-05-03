@@ -7,7 +7,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
-import { resolveSessionId } from "./session";
+import { resolveAgentIdentity, resolveSessionId } from "./session";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -42,6 +42,13 @@ export interface IssueOwnership {
   currentSession: string;
   lastTouchedAt: string;
   history: IssueOwnershipHistoryEntry[];
+}
+
+export interface IssueCreator {
+  host: string;
+  sessionId: string;
+  actor: string;
+  createdAt: string;
 }
 
 interface BaseIssueClaim {
@@ -79,6 +86,7 @@ export interface IssueState {
   updatedAt: string;
   stateRoot: string;
   artifactRoot: string;
+  creator?: IssueCreator;
   ownership?: IssueOwnership;
   claim?: IssueClaim;
   archived?: boolean;
@@ -171,6 +179,7 @@ export function createIssueState(input: IssueInput): IssueState {
 
   const now = new Date().toISOString();
   const sessionId = resolveSessionId();
+  const agent = resolveAgentIdentity();
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
@@ -180,6 +189,12 @@ export function createIssueState(input: IssueInput): IssueState {
     updatedAt: now,
     stateRoot: paths.issueRoot,
     artifactRoot: paths.artifactRoot,
+    creator: {
+      host: agent.host,
+      sessionId: agent.sessionId,
+      actor: agent.actor,
+      createdAt: now,
+    },
     ownership: {
       currentSession: sessionId,
       lastTouchedAt: now,
@@ -394,6 +409,7 @@ function migrateIssueState(raw: RawIssueState): IssueState {
     updatedAt: String(raw.updatedAt),
     stateRoot: String(raw.stateRoot),
     artifactRoot: String(raw.artifactRoot),
+    creator: normalizeCreator(raw.creator),
     claim: normalizeClaim(raw.claim),
     archived: typeof raw.archived === "boolean" ? raw.archived : undefined,
     archivedAt:
@@ -508,6 +524,23 @@ function normalizeOwnership(value: unknown): IssueOwnership | undefined {
     lastTouchedAt: lastTouchedAt ?? ensuredHistory.find((entry) => entry.sessionId === currentSession)?.lastTouch ?? new Date(0).toISOString(),
     history: ensuredHistory,
   };
+}
+
+function normalizeCreator(value: unknown): IssueCreator | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const host = typeof record.host === "string" && record.host.trim() ? record.host : "";
+  const sessionId =
+    typeof record.sessionId === "string" && record.sessionId.trim() ? record.sessionId : "";
+  const actor = typeof record.actor === "string" && record.actor.trim() ? record.actor : "";
+  const createdAt =
+    typeof record.createdAt === "string" && record.createdAt.trim() ? record.createdAt : "";
+  if (!host || !sessionId || !actor || !createdAt) {
+    return undefined;
+  }
+  return { host, sessionId, actor, createdAt };
 }
 
 function normalizeClaim(value: unknown): IssueClaim | undefined {

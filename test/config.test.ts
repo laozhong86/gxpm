@@ -84,6 +84,8 @@ describe("setConfigValue + getConfigValue", () => {
       "sync.linearTeamKey",
       "sync.autoSync",
       "sync.syncArtifacts",
+      "sync.linearAssigneeId",
+      "agent.name",
     ]);
     expect(entries.find((entry) => entry.key === "update_check")).toMatchObject({
       value: false,

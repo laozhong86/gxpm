@@ -139,6 +139,7 @@ function createLinearProvider(root?: string): SyncProvider | null {
 
   const teamId = String(getConfigValue({ root, key: "sync.linearTeamId" }).value ?? "");
   const teamKey = String(getConfigValue({ root, key: "sync.linearTeamKey" }).value ?? "");
+  const assigneeId = String(getConfigValue({ root, key: "sync.linearAssigneeId" }).value ?? "");
 
   const graphQL = async (query: string, variables?: Record<string, unknown>) => {
     const res = await fetch("https://api.linear.app/graphql", {
@@ -250,6 +251,7 @@ function createLinearProvider(root?: string): SyncProvider | null {
           description: buildLinearDescription({ issueId, issueType, phase: "triage", artifacts: [], repoName, root }),
           ...(stateId ? { stateId } : {}),
           ...(repoLabelId ? { labelIds: [repoLabelId] } : {}),
+          ...(assigneeId ? { assigneeId } : {}),
         },
       });
       const issue = (data?.issueCreate as Record<string, unknown>)?.issue as Record<string, unknown>;
