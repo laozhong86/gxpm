@@ -40,6 +40,8 @@ export interface ResolveWorktreePolicyInput {
   agentsMdContent?: string;
 }
 
+export type SyncProvider = "linear" | "github" | "none";
+
 interface ConfigDoc {
   worktree?: {
     enforcement?: WorktreeEnforcement;
@@ -49,12 +51,20 @@ interface ConfigDoc {
     root?: string;
   };
   update_check?: boolean;
+  sync?: {
+    provider?: SyncProvider;
+    linearTeamId?: string;
+    linearTeamKey?: string;
+    autoSync?: boolean;
+    syncArtifacts?: boolean;
+  };
   [k: string]: unknown;
 }
 
 const CONFIG_FILENAME = "config.json";
 const WORKTREE_ENFORCEMENT_VALUES = ["required", "forbidden", "optional", "unset"] as const;
 const WORKTREE_DEFAULT_VALUES = ["use", "skip", "ask"] as const;
+const SYNC_PROVIDER_VALUES = ["linear", "github", "none"] as const;
 
 const CONFIG_REGISTRY = {
   "worktree.enforcement": {
@@ -75,6 +85,31 @@ const CONFIG_REGISTRY = {
   update_check: {
     defaultValue: true,
     description: "Whether gxpm-update-check should check the remote VERSION.",
+    normalize: normalizeBoolean,
+  },
+  "sync.provider": {
+    defaultValue: "none" satisfies SyncProvider,
+    description: "Issue tracker sync provider: linear, github, or none.",
+    normalize: (value: unknown) => normalizeEnum("sync.provider", value, SYNC_PROVIDER_VALUES),
+  },
+  "sync.linearTeamId": {
+    defaultValue: "",
+    description: "Linear team ID (UUID) for issue creation.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
+  "sync.linearTeamKey": {
+    defaultValue: "",
+    description: "Linear team key (e.g., ENG) used in issue identifiers.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
+  "sync.autoSync": {
+    defaultValue: true,
+    description: "Automatically sync local state to the configured issue tracker.",
+    normalize: normalizeBoolean,
+  },
+  "sync.syncArtifacts": {
+    defaultValue: true,
+    description: "Sync artifact summaries to the issue tracker description.",
     normalize: normalizeBoolean,
   },
 } as const;

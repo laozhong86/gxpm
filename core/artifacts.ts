@@ -114,6 +114,20 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
     event: artifactWrittenEvent(input.issueId, type, now, relativePath, sessionId),
   });
 
+  // Fire-and-forget sync to external issue tracker
+  import("./issue-sync")
+    .then(({ maybeSyncIssue }) =>
+      maybeSyncIssue({
+        root,
+        issueId: input.issueId,
+        action: "artifact-written",
+        meta: { artifactType: type },
+      }),
+    )
+    .catch(() => {
+      // Silently fail — local state is truth
+    });
+
   return record;
 }
 

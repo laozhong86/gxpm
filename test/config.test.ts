@@ -79,6 +79,11 @@ describe("setConfigValue + getConfigValue", () => {
       "worktree.default",
       "workspace.root",
       "update_check",
+      "sync.provider",
+      "sync.linearTeamId",
+      "sync.linearTeamKey",
+      "sync.autoSync",
+      "sync.syncArtifacts",
     ]);
     expect(entries.find((entry) => entry.key === "update_check")).toMatchObject({
       value: false,

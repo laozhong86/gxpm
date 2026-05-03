@@ -1,4 +1,5 @@
-import { getResolvedConfigValue, listConfigEntries, resolveWorktreePolicy, setConfigValue } from "../../core/config";
+import { getConfigValue, getResolvedConfigValue, listConfigEntries, resolveWorktreePolicy, setConfigValue } from "../../core/config";
+import { readSyncState, resolveSyncProvider } from "../../core/issue-sync";
 
 export function runWorktreePolicyCommand(argv: string[], subcommand: string | undefined) {
   if (subcommand !== "policy") {

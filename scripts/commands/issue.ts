@@ -10,6 +10,7 @@ import {
   type IssueType,
   type StateEvent,
 } from "../../core/state";
+import { readSyncState } from "../../core/issue-sync";
 import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
@@ -46,6 +47,13 @@ export function runIssueCommand(argv: string[], subcommand: string | undefined, 
     console.log(`currentPhase: ${state.currentPhase}`);
     console.log(`updatedAt: ${state.updatedAt}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), issueId).statePath}`);
+    const syncState = readSyncState({ issueId });
+    if (syncState.targets.length > 0) {
+      for (const target of syncState.targets) {
+        const syncStatus = target.lastError ? `error: ${target.lastError.message}` : `synced at ${target.syncedAt ?? "unknown"}`;
+        console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
+      }
+    }
     return;
   }
 

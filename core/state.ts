@@ -213,6 +213,20 @@ export function createIssueState(input: IssueInput): IssueState {
     },
   });
 
+  // Fire-and-forget sync to external issue tracker
+  import("./issue-sync")
+    .then(({ maybeSyncIssue }) =>
+      maybeSyncIssue({
+        root,
+        issueId: input.issueId,
+        action: "created",
+        meta: { issueType: state.issueType },
+      }),
+    )
+    .catch(() => {
+      // Silently fail — local state is truth
+    });
+
   return state;
 }
 
@@ -297,6 +311,20 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
     },
   });
 
+  // Fire-and-forget sync to external issue tracker
+  import("./issue-sync")
+    .then(({ maybeSyncIssue }) =>
+      maybeSyncIssue({
+        root,
+        issueId: input.issueId,
+        action: "transitioned",
+        meta: { fromPhase: state.currentPhase, toPhase: nextPhase },
+      }),
+    )
+    .catch(() => {
+      // Silently fail — local state is truth
+    });
+
   return updated;
 }
 
@@ -317,6 +345,21 @@ export function setIssueArchived(input: IssueInput & { archived: boolean }): Iss
     updatedAt: now,
   };
   writeJson(paths.statePath, updated);
+
+  // Fire-and-forget sync to external issue tracker
+  import("./issue-sync")
+    .then(({ maybeSyncIssue }) =>
+      maybeSyncIssue({
+        root,
+        issueId: input.issueId,
+        action: "archived",
+        meta: { archived: input.archived },
+      }),
+    )
+    .catch(() => {
+      // Silently fail — local state is truth
+    });
+
   return updated;
 }
 
