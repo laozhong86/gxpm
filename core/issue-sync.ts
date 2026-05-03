@@ -1,5 +1,6 @@
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { getIssuePaths, type GxpmPhase, type IssueState } from "./state";
 import { type ArtifactRecord } from "./artifacts";
 import { getConfigValue } from "./config";
@@ -116,6 +117,22 @@ export function resolveSyncProvider(root?: string): SyncProvider | null {
   return null;
 }
 
+function getRepoName(root?: string): string {
+  const cwd = root ?? process.cwd();
+  try {
+    const remoteUrl = execSync("git remote get-url origin", {
+      cwd,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim();
+    const match = remoteUrl.match(/[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+    if (match) return match[2];
+  } catch {
+    // not a git repo or no remote
+  }
+  return basename(cwd);
+}
+
 function createLinearProvider(root?: string): SyncProvider | null {
   const apiKey = process.env.GXPM_LINEAR_API_KEY ?? "";
   if (!apiKey) return null;
@@ -143,6 +160,7 @@ function createLinearProvider(root?: string): SyncProvider | null {
   };
 
   const workflowStatesCache = new Map<string, Array<{ id: string; name: string; type: string }>>();
+  const labelCache = new Map<string, string>();
 
   const getWorkflowStates = async (): Promise<Array<{ id: string; name: string; type: string }>> => {
     if (!teamId) return [];
@@ -172,11 +190,47 @@ function createLinearProvider(root?: string): SyncProvider | null {
     return match?.id ?? null;
   };
 
+  async function getLabelId(name: string): Promise<string | undefined> {
+    if (labelCache.has(name)) return labelCache.get(name);
+    try {
+      const data = await graphQL(`
+        query IssueLabels($filter: IssueLabelFilter) {
+          issueLabels(filter: $filter) { nodes { id name } }
+        }
+      `, { filter: { name: { eq: name } } });
+      const labels = (data?.issueLabels as Record<string, unknown>)?.nodes as
+        | Array<{ id: string; name: string }>
+        | undefined;
+      const id = labels?.[0]?.id;
+      if (id) labelCache.set(name, id);
+      return id;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function ensureLabelExists(name: string) {
+    try {
+      await graphQL(`
+        mutation LabelCreate($input: IssueLabelCreateInput!) {
+          issueLabelCreate(input: $input) { success }
+        }
+      `, { input: { name, color: "#6B7280" } });
+    } catch {
+      // Label may already exist; ignore error
+    }
+  }
+
   return {
     name: "linear",
 
     async createIssue(issueId: string, issueType: string, title: string): Promise<SyncTarget> {
       const stateId = teamId ? await resolveStateId("triage") : undefined;
+      const repoName = getRepoName(root);
+      const repoLabelName = `repo:${repoName}`;
+      await ensureLabelExists(repoLabelName);
+      const repoLabelId = await getLabelId(repoLabelName);
+
       const data = await graphQL(`
         mutation IssueCreate($input: IssueCreateInput!) {
           issueCreate(input: $input) {
@@ -193,8 +247,9 @@ function createLinearProvider(root?: string): SyncProvider | null {
         input: {
           teamId: teamId || undefined,
           title: title || `[${issueId}] ${issueType} issue`,
-          description: buildLinearDescription({ issueId, issueType, phase: "triage", artifacts: [] }),
+          description: buildLinearDescription({ issueId, issueType, phase: "triage", artifacts: [], repoName, root }),
           ...(stateId ? { stateId } : {}),
+          ...(repoLabelId ? { labelIds: [repoLabelId] } : {}),
         },
       });
       const issue = (data?.issueCreate as Record<string, unknown>)?.issue as Record<string, unknown>;
@@ -209,7 +264,7 @@ function createLinearProvider(root?: string): SyncProvider | null {
 
     async updatePhase(target: SyncTarget, phase: GxpmPhase): Promise<void> {
       const stateId = await resolveStateId(phase);
-      const label = GXPM_PHASE_TO_LINEAR_LABEL[phase];
+      const labelName = GXPM_PHASE_TO_LINEAR_LABEL[phase];
 
       // Update state
       if (stateId) {
@@ -223,19 +278,22 @@ function createLinearProvider(root?: string): SyncProvider | null {
       }
 
       // Manage phase label
-      if (label) {
-        const labelName = label.replace("gxpm:phase/", "");
-        await ensureLabelExists(labelName);
-        await graphQL(`
-          mutation IssueLabel($id: String!, $labelIds: [String!]!) {
-            issueUpdate(id: $id, input: { labelIds: $labelIds }) {
-              success
+      if (labelName) {
+        const shortName = labelName.replace("gxpm:phase/", "");
+        await ensureLabelExists(shortName);
+        const labelId = await getLabelId(shortName);
+        if (labelId) {
+          await graphQL(`
+            mutation IssueLabel($id: String!, $labelIds: [String!]!) {
+              issueUpdate(id: $id, input: { labelIds: $labelIds }) {
+                success
+              }
             }
-          }
-        `, {
-          id: target.externalId,
-          labelIds: [labelName],
-        });
+          `, {
+            id: target.externalId,
+            labelIds: [labelId],
+          });
+        }
       }
     },
 
@@ -264,18 +322,6 @@ function createLinearProvider(root?: string): SyncProvider | null {
       }
     },
   };
-
-  async function ensureLabelExists(name: string) {
-    try {
-      await graphQL(`
-        mutation LabelCreate($input: IssueLabelCreateInput!) {
-          issueLabelCreate(input: $input) { success }
-        }
-      `, { input: { name, color: "#6B7280" } });
-    } catch {
-      // Label may already exist; ignore error
-    }
-  }
 }
 
 export async function maybeSyncIssue(input: {
@@ -337,6 +383,8 @@ export async function maybeSyncIssue(input: {
         issueType: state.issueType ?? "feature",
         phase: state.currentPhase,
         artifacts,
+        repoName: getRepoName(root),
+        root,
       });
       await provider.updateDescription(target, description);
       target.syncedAt = new Date().toISOString();
@@ -396,15 +444,20 @@ function buildLinearDescription(input: {
   issueType: string;
   phase: GxpmPhase;
   artifacts: ArtifactRecord[];
+  repoName?: string;
+  root?: string;
 }): string {
   const artifactList = input.artifacts
     .map((a) => `- \`${a.type}\` — written at ${a.writtenAt}`)
     .join("\n") || "- none yet";
 
+  const repoLine = input.repoName ? `**Repository:** \`${input.repoName}\`\n` : "";
+  const pathLine = input.root ? `**Local Path:** \`${input.root}\`\n` : "";
+
   return `## 🎯 gxpm Tracking Issue
 
 **Local ID:** ${input.issueId}
-**Type:** ${input.issueType}
+${repoLine}${pathLine}**Type:** ${input.issueType}
 **Phase:** ${input.phase}
 
 ---

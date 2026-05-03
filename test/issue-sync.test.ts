@@ -227,4 +227,54 @@ describe("issue sync", () => {
     // Since creation failed, no target should be linked yet
     expect(syncState.targets).toHaveLength(0);
   });
+
+  test("createIssue includes repo label and description with repo info", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-repo-"));
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(root, ".gxpm", "config.json"),
+      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1", linearTeamKey: "ENG" } }),
+    );
+    process.env.GXPM_LINEAR_API_KEY = "lin_test";
+
+    mockFetch([
+      {
+        matcher: (_url, body) => body.includes("WorkflowStates"),
+        data: { data: { team: { states: { nodes: [{ id: "st-triage", name: "Triage", type: "triage" }] } } } },
+      },
+      {
+        matcher: (_url, body) => body.includes("issueLabelCreate"),
+        data: { data: { issueLabelCreate: { success: true } } },
+      },
+      {
+        matcher: (_url, body) => body.includes("issueLabels"),
+        data: { data: { issueLabels: { nodes: [{ id: "lbl-repo", name: "repo:gxpm-sync-repo-" }] } } },
+      },
+      {
+        matcher: (_url, body) => body.includes("IssueCreate"),
+        data: { data: { issueCreate: { success: true, issue: { id: "lin-7", identifier: "ENG-7", url: "https://linear.app/ENG-7" } } } },
+      },
+    ]);
+
+    createIssueState({ root, issueId: "GXPM-SYNC-7" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const createCall = fetchCalls.find((c) => String(c.init.body).includes("IssueCreate"));
+    expect(createCall).toBeDefined();
+    const createBody = JSON.parse(String(createCall!.init.body));
+    const input = createBody.variables.input;
+
+    // Repo label is attached
+    expect(input.labelIds).toBeDefined();
+    expect(input.labelIds).toContain("lbl-repo");
+
+    // Description contains repo info (fallback to directory basename since no git remote)
+    expect(input.description).toContain("Repository:");
+    expect(input.description).toContain("Local Path:");
+    expect(input.description).toContain(root);
+
+    const syncState = readSyncState({ root, issueId: "GXPM-SYNC-7" });
+    expect(syncState.targets).toHaveLength(1);
+    expect(syncState.targets[0].displayId).toBe("ENG-7");
+  });
 });
