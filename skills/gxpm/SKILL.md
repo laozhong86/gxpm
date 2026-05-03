@@ -31,6 +31,7 @@ the single source of truth, not chat memory or Linear comments.
 ```bash
 gxpm issue status <issue-id>          # read current phase
 gxpm issue next <issue-id>            # recommended next command(s)
+gxpm issue context <issue-id>         # full context + resume freshness + required reads + agent instructions (preferred for fresh-session continuation)
 gxpm issue list                       # active issues
 gxpm issue create --auto-id           # new issue with next free id
 gxpm doctor                           # health check
@@ -110,11 +111,27 @@ Save handoff state:
 gxpm issue checkpoint <issue-id> --title "handoff" --stdin
 ```
 
-Resume in a new session:
+Resume in a new session (reads the latest checkpoint packet):
 
 ```bash
 gxpm issue resume <issue-id>
 ```
+
+Fresh-session continuation with full context + freshness check (preferred):
+
+```bash
+gxpm issue context <issue-id>
+```
+
+This command returns:
+- `confidence`: `fresh`, `stale_resume`, `missing_resume`, or `invalid_resume`
+- `confidenceReasons`: why the resume packet is or is not trustworthy
+- `requiredReads`: ordered list of files to read before acting
+- `agentInstructions`: safe next-step guidance based on confidence
+- `next`: the recommended phase transition command
+
+When a prompt mentions an issue id (e.g. "继续 GXPM-42"), the Codex hook
+automatically injects `gxpm issue context` output as additional context.
 
 ### Codex `update_plan` vs gxpm Phase
 

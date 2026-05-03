@@ -47,7 +47,8 @@ else
   WAS_OWNER=0
 fi
 
-# Print status + next-step guidance to stdout (becomes additional context)
+# Print context to stdout (becomes additional developer context)
+# Prefer gxpm issue context when available; fall back to status + next.
 {
   echo "gxpm context for $ISSUE_ID (referenced in prompt):"
   if [ "$WAS_OWNER" = "1" ] && [ -n "$CURRENT_OWNER" ] && [ "$CURRENT_OWNER" != "$SESSION_ID" ]; then
@@ -55,7 +56,12 @@ fi
     echo "ownership transferred: current owner is $CURRENT_OWNER"
   fi
   echo ""
-  cd "$CWD" && gxpm issue status "$ISSUE_ID" 2>/dev/null
-  echo ""
-  cd "$CWD" && gxpm issue next "$ISSUE_ID" 2>/dev/null
+  CONTEXT_OUTPUT=$(cd "$CWD" && gxpm issue context "$ISSUE_ID" 2>/dev/null || true)
+  if [ -n "$CONTEXT_OUTPUT" ]; then
+    echo "$CONTEXT_OUTPUT"
+  else
+    cd "$CWD" && gxpm issue status "$ISSUE_ID" 2>/dev/null
+    echo ""
+    cd "$CWD" && gxpm issue next "$ISSUE_ID" 2>/dev/null
+  fi
 } 2>/dev/null || exit 0

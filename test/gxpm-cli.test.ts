@@ -51,6 +51,32 @@ describe("gxpm CLI", () => {
     expect(output(invalid)).toContain("Invalid phase transition");
     expect(output(invalid)).toContain("allowed next phase: plan");
   });
+
+  test("issue context returns missing_resume for new issue", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-context-"));
+    expect(runCli(root, ["issue", "create", "GXPM-12"]).exitCode).toBe(0);
+
+    const result = runCli(root, ["issue", "context", "GXPM-12"]);
+    expect(result.exitCode).toBe(0);
+    expect(output(result)).toContain("issueId: GXPM-12");
+    expect(output(result)).toContain("currentPhase: triage");
+    expect(output(result)).toContain("confidence: missing_resume");
+    expect(output(result)).toContain("memory/resume-packet.json is absent");
+  });
+
+  test("issue context --json returns structured output", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-context-json-"));
+    expect(runCli(root, ["issue", "create", "GXPM-13"]).exitCode).toBe(0);
+
+    const result = runCli(root, ["issue", "context", "GXPM-13", "--json"]);
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(output(result));
+    expect(json.issueId).toBe("GXPM-13");
+    expect(json.currentPhase).toBe("triage");
+    expect(json.confidence).toBe("missing_resume");
+    expect(Array.isArray(json.requiredReads)).toBe(true);
+    expect(Array.isArray(json.agentInstructions)).toBe(true);
+  });
 });
 
 describe("gxpm issue ownership CLI", () => {

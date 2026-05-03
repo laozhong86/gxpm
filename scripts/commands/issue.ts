@@ -12,6 +12,7 @@ import {
 } from "../../core/state";
 import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
+import { buildIssueContext } from "../../core/issue-context";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
 import { PHASE_GATE_RULES } from "../../core/phase-gates";
 import {
@@ -145,6 +146,12 @@ export function runIssueCommand(argv: string[], subcommand: string | undefined, 
   if (subcommand === "ownership") {
     if (!issueId) throw new Error("Usage: gxpm issue ownership <issue-id> [--field <name>] [--history-contains <session-id>]");
     runIssueOwnership(argv, issueId);
+    return;
+  }
+
+  if (subcommand === "context") {
+    if (!issueId) throw new Error("Usage: gxpm issue context <issue-id> [--json]");
+    runIssueContext(issueId, argv.includes("--json"));
     return;
   }
 
@@ -411,6 +418,45 @@ function runIssueResume(issueId: string) {
   }
   console.log("");
   console.log(`Next: gxpm issue next ${issueId}`);
+}
+
+function runIssueContext(issueId: string, asJson: boolean) {
+  const context = buildIssueContext({ issueId });
+
+  if (asJson) {
+    console.log(JSON.stringify(context, null, 2));
+    return;
+  }
+
+  console.log(`issueId: ${context.issueId}`);
+  console.log(`currentPhase: ${context.currentPhase}`);
+  if (context.title) {
+    console.log(`title: ${context.title}`);
+  }
+  console.log(`confidence: ${context.confidence}`);
+  console.log("");
+  console.log("Confidence reasons:");
+  for (const reason of context.confidenceReasons) {
+    console.log(`- ${reason}`);
+  }
+  if (context.resumePhase) {
+    console.log("");
+    console.log(`resumePhase: ${context.resumePhase}`);
+    console.log(`resumeWrittenAt: ${context.resumeWrittenAt ?? "n/a"}`);
+    console.log(`checkpointExists: ${context.checkpointExists}`);
+  }
+  console.log("");
+  console.log("Required reads:");
+  for (const path of context.requiredReads) {
+    console.log(`- ${path}`);
+  }
+  console.log("");
+  console.log("Agent instructions:");
+  for (const instruction of context.agentInstructions) {
+    console.log(`- ${instruction}`);
+  }
+  console.log("");
+  console.log(`Next: ${context.next}`);
 }
 
 function resolveIssueCreateId(argv: string[]) {

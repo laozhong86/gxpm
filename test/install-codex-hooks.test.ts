@@ -416,7 +416,8 @@ exit 1
     expect(result.exitCode).toBe(0);
     expect(out).toContain("gxpm context for GXPM-1");
     expect(out).toContain("currentPhase: triage");
-    expect(out).toContain("Next: gxpm triage init GXPM-1");
+    expect(out).toContain("confidence: missing_resume");
+    expect(out).toContain("Next phase: plan. Run gxpm issue transition GXPM-1 plan when ready.");
   });
 
   test("user-prompt-submit.sh warns a prior owner after ownership transfer", () => {
