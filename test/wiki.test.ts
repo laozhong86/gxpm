@@ -268,8 +268,8 @@ describe("gxpm-native wiki engine", () => {
     const codeGraph = readFileSync(join(root, ".gxpm", "wiki", "content", "Code-Graph.md"), "utf8");
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(overview).toContain(`[core/source (draft).ts](${encoded})`);
-    expect(fileIndex).toContain(`[core/source (draft).ts](${encoded})`);
-    expect(codeGraph).toContain(`[core/source (draft).ts](${encoded})`);
+    expect(fileIndex).toContain(`[core/source (draft).ts](${encoded}#L1)`);
+    expect(codeGraph).toContain(`[core/source (draft).ts](${encoded}#L1)`);
     expect(wikiDoc).toContain(`[core/source (draft).ts](${encoded})`);
   });
 

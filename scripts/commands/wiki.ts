@@ -169,7 +169,9 @@ function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
     return lines.join("\n");
   }
   lines.push("Context files:");
-  for (const file of result.contextFiles) lines.push(`- ${file}`);
+  for (const r of result.results) {
+    lines.push(`- ${r.path}${r.line ? ` #L${r.line}` : ""}`);
+  }
   if (result.suggestedDocs.length > 0) {
     lines.push("Suggested docs:");
     for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
@@ -187,11 +189,13 @@ function formatNativeWikiIssueContext(result: NativeWikiIssueContext, artifactWr
     lines.push("Artifacts used:");
     for (const artifact of result.artifactsUsed) lines.push(`- ${artifact.type}`);
   }
-  if (result.contextFiles.length === 0) {
+  if (result.results.length === 0) {
     lines.push("No context files matched. Try `gxpm wiki update` if the index is stale.");
   } else {
     lines.push("Context files:");
-    for (const file of result.contextFiles) lines.push(`- ${file}`);
+    for (const r of result.results) {
+      lines.push(`- ${r.path}${r.line ? ` #L${r.line}` : ""}`);
+    }
   }
   if (result.suggestedDocs.length > 0) {
     lines.push("Suggested docs:");

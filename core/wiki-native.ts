@@ -179,6 +179,7 @@ export interface NativeWikiQueryResult {
     source: "file-index";
     score: number;
     matches: string[];
+    line?: number;
   }>;
   contextFiles: string[];
   suggestedDocs: string[];
@@ -385,6 +386,7 @@ export function queryNativeWiki(input: {
         source: "file-index" as const,
         score: matches.reduce((sum, match) => sum + match.score, 0),
         matches: matches.map((match) => match.label),
+        line: matches.find((m) => m.line)?.line,
       };
     })
     .filter((result) => result.score > 0);
@@ -1415,7 +1417,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
 function renderNativeFileIndex(index: NativeWikiIndex) {
   const rows = index.files
     .slice(0, 200)
-    .map((file) => `| [${file.path}](${nativeFileUrl(file.path)}) | ${file.language} | ${file.exports.join(", ")} |`);
+    .map((file) => `| [${file.path}](${nativeFileUrl(file.path, 1)}) | ${file.language} | ${file.exports.join(", ")} |`);
   return [
     "# File Index",
     "",
@@ -1429,7 +1431,7 @@ function renderNativeFileIndex(index: NativeWikiIndex) {
 function renderNativeCodeGraph(graph: NativeWikiGraph) {
   const edges = graph.edges
     .slice(0, 200)
-    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
+    .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from, 1)}) -> [${edge.to}](${nativeFileUrl(edge.to, 1)})`);
   return ["# Code Graph", "", ...edges, ""].join("\n");
 }
 
@@ -1892,8 +1894,8 @@ function nativeSourceLink(file: NativeWikiFileEntry) {
   return `${nativeFileUrl(file.path)}#L1-L${endLine}`;
 }
 
-function nativeFileUrl(path: string) {
-  return `file://${encodeFileUrlPath(path)}`;
+function nativeFileUrl(path: string, line?: number) {
+  return `file://${encodeFileUrlPath(path)}${line ? `#L${line}` : ""}`;
 }
 
 function encodeFileUrlPath(path: string) {
@@ -2124,17 +2126,21 @@ function computeNativeProjectTopicSuggestions(
 }
 
 function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
-  const matches: Array<{ label: string; score: number }> = [];
+  const matches: Array<{ label: string; score: number; line?: number }> = [];
   const path = file.path.toLowerCase();
   const exports = file.exports.join(" ").toLowerCase();
   const imports = file.imports.join(" ").toLowerCase();
   const headings = file.headings.join(" ").toLowerCase();
-  const symbolNames = file.symbols.map((s) => s.name.toLowerCase()).join(" ");
+  const symbols = file.symbols;
+  const symbolNames = symbols.map((s) => s.name.toLowerCase()).join(" ");
   for (const token of tokens) {
     if (path.includes(token)) matches.push({ label: `path:${token}`, score: 5 });
     if (exports.includes(token)) matches.push({ label: `export:${token}`, score: 4 });
     if (headings.includes(token)) matches.push({ label: `heading:${token}`, score: 3 });
-    if (symbolNames.includes(token)) matches.push({ label: `symbol:${token}`, score: 4 });
+    if (symbolNames.includes(token)) {
+      const match = symbols.find((s) => s.name.toLowerCase().includes(token));
+      matches.push({ label: `symbol:${token}`, score: 4, line: match?.line });
+    }
     if (imports.includes(token)) matches.push({ label: `import:${token}`, score: 1 });
   }
   return matches;
