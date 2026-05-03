@@ -21,7 +21,9 @@ const NATIVE_WIKI_GRAPH_PATH = ".gxpm/wiki/index/graph.json";
 const NATIVE_WIKI_DIMENSIONS_PATH = ".gxpm/wiki/index/dimensions.json";
 const NATIVE_WIKI_CONTENT_ROOT = ".gxpm/wiki/content";
 const NATIVE_WIKI_DOC_MANIFEST_PATH = ".gxpm/wiki/content/generated-docs.json";
+const NATIVE_WIKI_MODULE_TREE_PATH = ".gxpm/wiki/index/module_tree.json";
 const NATIVE_WIKI_PROJECT_TOPIC_DIR = "project-topics";
+const NATIVE_WIKI_CONFIG_PATH = ".gxpm/wiki.json";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOP_PAGES = 8;
 const NATIVE_MAX_FILE_BYTES = 1_000_000;
@@ -194,6 +196,29 @@ export interface NativeWikiIssueContext {
   results: NativeWikiQueryResult["results"];
   contextFiles: string[];
   suggestedDocs: string[];
+}
+
+export interface NativeWikiConfig {
+  repo_notes?: string[];
+  priority_dirs?: string[];
+  exclude_from_map?: string[];
+}
+
+export interface NativeWikiModuleTree {
+  schemaVersion: 1;
+  provider: "gxpm";
+  generatedAt: string;
+  root: {
+    name: string;
+    children: NativeWikiModuleTreeNode[];
+  };
+}
+
+export interface NativeWikiModuleTreeNode {
+  name: string;
+  type: "file" | "directory";
+  children?: NativeWikiModuleTreeNode[];
+  fileCount?: number;
 }
 
 export interface NativeWikiEvalReport {
@@ -1032,6 +1057,29 @@ function summarizeNativeFile(root: string, file: string, contents?: Map<string, 
   };
 }
 
+function readWikiConfig(root: string): NativeWikiConfig {
+  const path = join(root, NATIVE_WIKI_CONFIG_PATH);
+  if (!existsSync(path)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    if (!raw || typeof raw !== "object") return {};
+    const candidate = raw as Record<string, unknown>;
+    const config: NativeWikiConfig = {};
+    if (Array.isArray(candidate.repo_notes)) {
+      config.repo_notes = candidate.repo_notes.filter((v): v is string => typeof v === "string");
+    }
+    if (Array.isArray(candidate.priority_dirs)) {
+      config.priority_dirs = candidate.priority_dirs.filter((v): v is string => typeof v === "string");
+    }
+    if (Array.isArray(candidate.exclude_from_map)) {
+      config.exclude_from_map = candidate.exclude_from_map.filter((v): v is string => typeof v === "string");
+    }
+    return config;
+  } catch {
+    return {};
+  }
+}
+
 function writeNativeWikiDocs(
   root: string,
   state: NativeWikiState,
@@ -1040,20 +1088,29 @@ function writeNativeWikiDocs(
   dimensions: NativeWikiDimensions,
   changedFiles?: string[],
 ) {
+  const config = readWikiConfig(root);
   const previousGeneratedPaths = readNativeWikiDocManifest(root);
-  const projectTopicClusters = buildNativeProjectTopicClusters(index, dimensions);
+  const projectTopicClusters = buildNativeProjectTopicClusters(index, dimensions, config.priority_dirs);
   const changedSet = changedFiles ? new Set(changedFiles) : null;
 
+  const excludeSet = new Set(config.exclude_from_map ?? []);
+
   const docEntries: Array<readonly [string, () => string]> = [
-    ["Overview.md", () => renderNativeOverview(state, index, graph)],
+    ["Overview.md", () => renderNativeOverview(state, index, graph, config)],
     ["File-Index.md", () => renderNativeFileIndex(index)],
     ["Code-Graph.md", () => renderNativeCodeGraph(graph)],
     ["Project-Topics.md", () => renderNativeProjectTopics(index, graph, dimensions, projectTopicClusters)],
+    ["Architecture-Diagram.md", () => renderNativeArchitectureDiagram(graph)],
     ...projectTopicClusters.map(
       (cluster) => [nativeProjectTopicFileName(cluster.rule), () => renderNativeProjectTopicPage(cluster, graph)] as const,
     ),
     ...NATIVE_WIKI_TOPICS.map((topic) => [topic.fileName, () => renderNativeTopicDoc(topic, index, graph)] as const),
-  ];
+  ].filter(([name]) => {
+    for (const pattern of excludeSet) {
+      if (name === pattern || name.startsWith(pattern.replace(/\/$/, "") + "/")) return false;
+    }
+    return true;
+  });
 
   const docs: Array<readonly [string, string]> = docEntries.map(([name, renderer]) => {
     if (changedSet && !isDocAffected(name, changedSet, projectTopicClusters)) {
@@ -1071,8 +1128,9 @@ function writeNativeWikiDocs(
     writeFileSync(path, content);
     paths.push(toRepoPath(root, path));
   }
+  writeModuleTreeJson(root, state, index);
   pruneStaleNativeWikiDocs(root, previousGeneratedPaths, paths);
-  writeNativeWikiDocManifest(root, state, paths);
+  writeNativeWikiDocManifest(root, state, index, graph, dimensions, paths);
   return paths;
 }
 
@@ -1120,11 +1178,53 @@ function readNativeWikiDocManifest(root: string) {
   }
 }
 
-function writeNativeWikiDocManifest(root: string, state: NativeWikiState, generatedDocPaths: string[]) {
+function writeModuleTreeJson(root: string, state: NativeWikiState, index: NativeWikiIndex) {
+  const rootNode: NativeWikiModuleTreeNode = { name: ".", type: "directory", children: [], fileCount: 0 };
+  for (const file of index.files) {
+    const parts = file.path.split("/");
+    let current = rootNode;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        current.children = current.children ?? [];
+        current.children.push({ name: part, type: "file" });
+        current.fileCount = (current.fileCount ?? 0) + 1;
+      } else {
+        current.children = current.children ?? [];
+        let next = current.children.find((c) => c.name === part && c.type === "directory");
+        if (!next) {
+          next = { name: part, type: "directory", children: [], fileCount: 0 };
+          current.children.push(next);
+        }
+        current.fileCount = (current.fileCount ?? 0) + 1;
+        current = next;
+      }
+    }
+  }
+  const tree: NativeWikiModuleTree = {
+    schemaVersion: 1,
+    provider: "gxpm",
+    generatedAt: state.generatedAt,
+    root: rootNode,
+  };
+  writeJson(join(root, NATIVE_WIKI_MODULE_TREE_PATH), tree);
+}
+
+function writeNativeWikiDocManifest(
+  root: string,
+  state: NativeWikiState,
+  index: NativeWikiIndex,
+  graph: NativeWikiGraph,
+  dimensions: NativeWikiDimensions,
+  generatedDocPaths: string[],
+) {
   writeJson(join(root, NATIVE_WIKI_DOC_MANIFEST_PATH), {
     schemaVersion: 1,
     provider: "gxpm",
     generatedAt: state.generatedAt,
+    indexedFiles: index.files.length,
+    graphEdges: graph.edges.length,
+    dimensionedFiles: dimensions.files.length,
     docs: generatedDocPaths,
   });
 }
@@ -1139,7 +1239,7 @@ function pruneStaleNativeWikiDocs(root: string, previousGeneratedPaths: string[]
   });
 }
 
-function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, graph: NativeWikiGraph) {
+function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, graph: NativeWikiGraph, config?: NativeWikiConfig) {
   const languages = countBy(index.files, (file) => file.language)
     .map(([language, count]) => `- ${language}: ${count}`)
     .join("\n");
@@ -1148,6 +1248,10 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
     .slice(0, 20)
     .map((file) => `- [${file.path}](${nativeFileUrl(file.path)})`)
     .join("\n");
+  const repoNotesSection =
+    config?.repo_notes && config.repo_notes.length > 0
+      ? ["## Repo Notes", "", ...config.repo_notes.map((note) => `> ${note.replace(/\n/g, "\n> ")}`), ""]
+      : [];
   return [
     "# GXPM Wiki Overview",
     "",
@@ -1156,6 +1260,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
     `Indexed files: ${index.files.length}`,
     `Import edges: ${graph.edges.length}`,
     "",
+    ...repoNotesSection,
     "## Languages",
     "",
     languages || "- none",
@@ -1165,6 +1270,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
     "- [Project Topics](file://.gxpm/wiki/content/Project-Topics.md)",
     "- [File Index](file://.gxpm/wiki/content/File-Index.md)",
     "- [Code Graph](file://.gxpm/wiki/content/Code-Graph.md)",
+    "- [Architecture Diagram](file://.gxpm/wiki/content/Architecture-Diagram.md)",
     "",
     "## High Signal Files",
     "",
@@ -1192,6 +1298,27 @@ function renderNativeCodeGraph(graph: NativeWikiGraph) {
     .slice(0, 200)
     .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from)}) -> [${edge.to}](${nativeFileUrl(edge.to)})`);
   return ["# Code Graph", "", ...edges, ""].join("\n");
+}
+
+function renderNativeArchitectureDiagram(graph: NativeWikiGraph) {
+  const fileSet = new Set(graph.nodes.map((n) => n.path));
+  const mermaidEdges = graph.edges
+    .filter((edge) => fileSet.has(edge.from) && fileSet.has(edge.to))
+    .slice(0, 150)
+    .map((edge) => {
+      const from = edge.from.replace(/[^a-zA-Z0-9_]/g, "_");
+      const to = edge.to.replace(/[^a-zA-Z0-9_]/g, "_");
+      return `    ${from}["${escapeMarkdownCell(edge.from)}"] --> ${to}["${escapeMarkdownCell(edge.to)}"]`;
+    });
+  return [
+    "# Architecture Diagram",
+    "",
+    "```mermaid",
+    "flowchart LR",
+    ...mermaidEdges,
+    "```",
+    "",
+  ].join("\n");
 }
 
 interface NativeWikiTopic {
@@ -1411,15 +1538,26 @@ function nativeProjectTopicSlug(title: string) {
   );
 }
 
-function buildNativeProjectTopicClusters(index: NativeWikiIndex, dimensions: NativeWikiDimensions) {
+function buildNativeProjectTopicClusters(
+  index: NativeWikiIndex,
+  dimensions: NativeWikiDimensions,
+  priorityDirs?: string[],
+) {
   const byPath = new Map(index.files.map((file) => [file.path, file]));
+  const prioritySet = new Set((priorityDirs ?? []).map((d) => d.replace(/\/$/, "")));
   return NATIVE_WIKI_PROJECT_TOPIC_RULES.map((rule) => {
     const files = dimensions.files
       .map((entry) => {
         const file = byPath.get(entry.path);
         if (!file) return null;
-        const score = scoreNativeProjectTopicFile(rule, entry);
+        let score = scoreNativeProjectTopicFile(rule, entry);
         if (score <= 0) return null;
+        for (const prefix of prioritySet) {
+          if (entry.path.startsWith(prefix + "/")) {
+            score += 5;
+            break;
+          }
+        }
         return {
           file,
           score,
