@@ -288,6 +288,68 @@ describe("gxpm-native wiki engine", () => {
     expect(result.suggestedDocs).toContain(".gxpm/wiki/content/Overview.md");
   });
 
+  test("extracts symbols from TypeScript source files into index", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(
+      root,
+      "core/utils.ts",
+      "export function calculateRank() { return 1; }\nexport interface RankConfig { weight: number; }\nexport type RankResult = number;\nexport class RankEngine { run() {} }\n",
+    );
+    commitAll(root, "init");
+    const result = initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    const file = result.index.files.find((f) => f.path === "core/utils.ts");
+    expect(file).toBeDefined();
+    expect(file!.symbols.map((s) => `${s.kind}:${s.name}`)).toContain("function:calculateRank");
+    expect(file!.symbols.map((s) => `${s.kind}:${s.name}`)).toContain("interface:RankConfig");
+    expect(file!.symbols.map((s) => `${s.kind}:${s.name}`)).toContain("type:RankResult");
+    expect(file!.symbols.map((s) => `${s.kind}:${s.name}`)).toContain("class:RankEngine");
+  });
+
+  test("ranks query results by symbol matches and PageRank", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/rank.ts", "export function computePageRank() { return 1; }\n");
+    writeRepoFile(root, "core/graph.ts", 'import { computePageRank } from "./rank";\nexport function buildGraph() {}\nexport function usePageRank() {}\n');
+    writeRepoFile(root, "core/utils.ts", "export function helper() {}\n");
+    commitAll(root, "init");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+
+    // Query matches both rank.ts (symbol computePageRank) and graph.ts (symbol usePageRank)
+    const result = queryNativeWiki({ root, query: "PageRank", limit: 5 });
+    // Both files match the token; rank.ts should rank higher because it is
+    // imported by graph.ts (higher PageRank in-degree)
+    const rankIndex = result.contextFiles.indexOf("core/rank.ts");
+    const graphIndex = result.contextFiles.indexOf("core/graph.ts");
+    expect(rankIndex).toBeGreaterThan(-1);
+    expect(graphIndex).toBeGreaterThan(-1);
+    // rank.ts is imported by graph.ts, so it has higher PageRank
+    expect(rankIndex).toBeLessThan(graphIndex);
+  });
+
+  test("clips context files by token budget", () => {
+    const root = tempRoot();
+    initGitRepo(root);
+    writeRepoFile(root, "core/a.ts", "export function a() {}\n" + "// x\n".repeat(500));
+    writeRepoFile(root, "core/b.ts", "export function b() {}\n" + "// y\n".repeat(500));
+    writeRepoFile(root, "core/c.ts", "export function c() {}\n" + "// z\n".repeat(500));
+    commitAll(root, "init");
+    initializeNativeWiki({ root, now: new Date("2026-04-29T00:00:00Z") });
+    createIssueState({ root, issueId: "GXPM-TEST-1" });
+
+    const prev = process.env.GXPM_WIKI_MAX_CONTEXT_TOKENS;
+    process.env.GXPM_WIKI_MAX_CONTEXT_TOKENS = "200";
+    try {
+      const result = getNativeWikiContextForIssue({ root, issueId: "GXPM-TEST-1" });
+      // With 200 token budget (~800 chars), at most 1-2 files should be kept
+      expect(result.contextFiles.length).toBeLessThanOrEqual(2);
+    } finally {
+      if (prev === undefined) delete process.env.GXPM_WIKI_MAX_CONTEXT_TOKENS;
+      else process.env.GXPM_WIKI_MAX_CONTEXT_TOKENS = prev;
+    }
+  });
+
   test("suggests relevant topic docs before generic wiki pages", () => {
     const root = tempRoot();
     writeRepoFile(root, "core/phase-gates.ts", "export const PHASE_GATE_RULES = [];\n");

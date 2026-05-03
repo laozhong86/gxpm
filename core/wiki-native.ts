@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
+import ts from "typescript";
 import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
 import { GXPM_PHASES, isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
@@ -64,6 +65,7 @@ export interface NativeWikiFileEntry {
   exports: string[];
   imports: string[];
   headings: string[];
+  symbols: Array<{ name: string; kind: string; line: number }>;
   contentHash: string;
 }
 
@@ -371,8 +373,11 @@ export function queryNativeWiki(input: {
   const root = input.root ?? process.cwd();
   ensureNativeWikiCurrent({ root, autoUpdate: input.autoUpdate });
   const index = readNativeWikiIndex(root);
+  const graph = readNativeWikiGraphIfPresent(root);
   const tokens = tokenizeQuery(input.query);
-  const scored = index.files
+
+  // Phase 1: token-match scoring
+  const candidates = index.files
     .map((file) => {
       const matches = nativeFileMatches(file, tokens);
       return {
@@ -382,7 +387,19 @@ export function queryNativeWiki(input: {
         matches: matches.map((match) => match.label),
       };
     })
-    .filter((result) => result.score > 0)
+    .filter((result) => result.score > 0);
+
+  // Phase 2: PageRank re-ranking using matched files as seeds
+  if (graph && candidates.length > 0) {
+    const seeds = new Set(candidates.map((c) => c.path));
+    const pageRanks = computeNativePageRank(graph, seeds);
+    for (const candidate of candidates) {
+      const pr = pageRanks.get(candidate.path) ?? 0;
+      candidate.score = candidate.score * (1 + pr * 5);
+    }
+  }
+
+  const scored = candidates
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
     .slice(0, input.limit ?? 5);
   const contextFiles = scored.map((result) => result.path);
@@ -393,6 +410,25 @@ export function queryNativeWiki(input: {
     contextFiles,
     suggestedDocs: suggestedNativeDocs(root, contextFiles, tokens),
   };
+}
+
+function clipContextByTokenBudget(
+  root: string,
+  files: string[],
+  budgetTokens: number,
+): string[] {
+  let used = 0;
+  const kept: string[] = [];
+  for (const path of files) {
+    const content = safeRead(join(root, path));
+    const estimated = Math.ceil(content.length / 4);
+    if (used + estimated > budgetTokens && kept.length > 0) {
+      break;
+    }
+    kept.push(path);
+    used += estimated;
+  }
+  return kept;
 }
 
 export function getNativeWikiContextForIssue(input: {
@@ -415,6 +451,8 @@ export function getNativeWikiContextForIssue(input: {
     artifacts,
   });
   const result = queryNativeWiki({ root, query, limit: input.limit });
+  const budget = parseInt(process.env.GXPM_WIKI_MAX_CONTEXT_TOKENS ?? "8192", 10);
+  const clippedFiles = clipContextByTokenBudget(root, result.contextFiles, budget);
   return {
     schemaVersion: 1,
     provider: "gxpm",
@@ -426,9 +464,9 @@ export function getNativeWikiContextForIssue(input: {
       type: artifact.type,
       writtenAt: artifact.writtenAt,
     })),
-    results: result.results,
-    contextFiles: result.contextFiles,
-    suggestedDocs: result.suggestedDocs,
+    results: result.results.filter((r) => clippedFiles.includes(r.path)),
+    contextFiles: clippedFiles,
+    suggestedDocs: suggestedNativeDocs(root, clippedFiles, tokenizeQuery(query)),
   };
 }
 
@@ -743,7 +781,8 @@ function updateNativeWikiIncremental(input: { root?: string; now?: Date }): Nati
       updatedFiles.push(summarizeNativeFile(root, join(root, file.path), contents));
     } else {
       // Unchanged — keep existing entry (including hash)
-      updatedFiles.push(file);
+      // Backfill symbols if missing from older index schema
+      updatedFiles.push({ ...file, symbols: file.symbols ?? [] });
     }
   }
 
@@ -844,6 +883,86 @@ function buildNativeWikiGraph(index: NativeWikiIndex): NativeWikiGraph {
     edges: dedupeBy(edges, (edge) => `${edge.from}\0${edge.to}\0${edge.kind}`),
     unresolvedImports,
   };
+}
+
+function computeNativePageRank(
+  graph: NativeWikiGraph,
+  seeds?: Set<string>,
+  options: { damping?: number; iterations?: number; epsilon?: number } = {},
+): Map<string, number> {
+  const { damping = 0.85, iterations = 20, epsilon = 1e-6 } = options;
+  const nodePaths = graph.nodes.map((n) => n.path);
+  const n = nodePaths.length;
+  if (n === 0) return new Map();
+
+  // Build adjacency list (outgoing edges)
+  const outgoing = new Map<string, string[]>();
+  for (const path of nodePaths) outgoing.set(path, []);
+  for (const edge of graph.edges) {
+    if (edge.kind === "imports") {
+      outgoing.get(edge.from)?.push(edge.to);
+    }
+  }
+
+  // Normalize outgoing counts (teleport for dangling nodes)
+  const outCounts = new Map<string, number>();
+  for (const path of nodePaths) {
+    const outs = outgoing.get(path) ?? [];
+    outCounts.set(path, outs.length > 0 ? outs.length : n);
+  }
+
+  // Initial rank: uniform, or boosted for seeds
+  const ranks = new Map<string, number>();
+  const base = 1 / n;
+  for (const path of nodePaths) {
+    ranks.set(path, seeds?.has(path) ? base * 3 : base);
+  }
+  normalizeMap(ranks);
+
+  // Personalization vector: uniform, or boosted for seeds
+  const personal = new Map<string, number>();
+  for (const path of nodePaths) {
+    personal.set(path, seeds?.has(path) ? base * 3 : base);
+  }
+  normalizeMap(personal);
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const newRanks = new Map<string, number>();
+    for (const path of nodePaths) {
+      let sum = 0;
+      for (const edge of graph.edges) {
+        if (edge.to === path && edge.kind === "imports") {
+          const outCount = outCounts.get(edge.from) ?? n;
+          sum += (ranks.get(edge.from) ?? 0) / outCount;
+        }
+      }
+      // Dangling node: distribute rank uniformly
+      const outs = outgoing.get(path) ?? [];
+      if (outs.length === 0) {
+        sum += (ranks.get(path) ?? 0) / n;
+      }
+      newRanks.set(path, (1 - damping) * (personal.get(path) ?? base) + damping * sum);
+    }
+    normalizeMap(newRanks);
+
+    // Check convergence
+    let diff = 0;
+    for (const path of nodePaths) {
+      diff += Math.abs((newRanks.get(path) ?? 0) - (ranks.get(path) ?? 0));
+    }
+    for (const path of nodePaths) ranks.set(path, newRanks.get(path) ?? 0);
+    if (diff < epsilon) break;
+  }
+  return ranks;
+}
+
+function normalizeMap(map: Map<string, number>): void {
+  let sum = 0;
+  for (const v of map.values()) sum += v;
+  if (sum === 0) return;
+  for (const key of map.keys()) {
+    map.set(key, (map.get(key) ?? 0) / sum);
+  }
 }
 
 function buildNativeWikiDimensions(input: {
@@ -1053,6 +1172,7 @@ function summarizeNativeFile(root: string, file: string, contents?: Map<string, 
     exports: extractExports(content),
     imports: extractImports(content),
     headings: extractMarkdownHeadings(content),
+    symbols: extractNativeSymbols(repoPath, content),
     contentHash: sha256Hex(content),
   };
 }
@@ -2009,10 +2129,12 @@ function nativeFileMatches(file: NativeWikiFileEntry, tokens: string[]) {
   const exports = file.exports.join(" ").toLowerCase();
   const imports = file.imports.join(" ").toLowerCase();
   const headings = file.headings.join(" ").toLowerCase();
+  const symbolNames = file.symbols.map((s) => s.name.toLowerCase()).join(" ");
   for (const token of tokens) {
     if (path.includes(token)) matches.push({ label: `path:${token}`, score: 5 });
     if (exports.includes(token)) matches.push({ label: `export:${token}`, score: 4 });
     if (headings.includes(token)) matches.push({ label: `heading:${token}`, score: 3 });
+    if (symbolNames.includes(token)) matches.push({ label: `symbol:${token}`, score: 4 });
     if (imports.includes(token)) matches.push({ label: `import:${token}`, score: 1 });
   }
   return matches;
@@ -2070,6 +2192,51 @@ function extractMarkdownHeadings(content: string) {
   const headings = new Set<string>();
   collectRegex(content, /^#{1,6}\s+(.+)$/gm, headings);
   return [...headings].sort();
+}
+
+function extractNativeSymbols(filePath: string, content: string): Array<{ name: string; kind: string; line: number }> {
+  const ext = extname(filePath);
+  if (ext !== ".ts" && ext !== ".tsx" && ext !== ".js" && ext !== ".jsx" && ext !== ".mjs" && ext !== ".cjs") {
+    return [];
+  }
+  let scriptKind: ts.ScriptKind;
+  switch (ext) {
+    case ".tsx": scriptKind = ts.ScriptKind.TSX; break;
+    case ".jsx": scriptKind = ts.ScriptKind.JSX; break;
+    case ".js": scriptKind = ts.ScriptKind.JS; break;
+    default: scriptKind = ts.ScriptKind.TS; break;
+  }
+  const source = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, scriptKind);
+  const symbols: Array<{ name: string; kind: string; line: number }> = [];
+  function visit(node: ts.Node) {
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      const pos = source.getLineAndCharacterOfPosition(node.getStart());
+      symbols.push({ name: node.name.text, kind: "function", line: pos.line + 1 });
+    } else if (ts.isClassDeclaration(node) && node.name) {
+      const pos = source.getLineAndCharacterOfPosition(node.getStart());
+      symbols.push({ name: node.name.text, kind: "class", line: pos.line + 1 });
+    } else if (ts.isInterfaceDeclaration(node)) {
+      const pos = source.getLineAndCharacterOfPosition(node.getStart());
+      symbols.push({ name: node.name.text, kind: "interface", line: pos.line + 1 });
+    } else if (ts.isTypeAliasDeclaration(node)) {
+      const pos = source.getLineAndCharacterOfPosition(node.getStart());
+      symbols.push({ name: node.name.text, kind: "type", line: pos.line + 1 });
+    } else if (ts.isEnumDeclaration(node)) {
+      const pos = source.getLineAndCharacterOfPosition(node.getStart());
+      symbols.push({ name: node.name.text, kind: "enum", line: pos.line + 1 });
+    } else if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name)) {
+          const pos = source.getLineAndCharacterOfPosition(decl.getStart());
+          const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0;
+          symbols.push({ name: decl.name.text, kind: isConst ? "const" : "variable", line: pos.line + 1 });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return symbols;
 }
 
 function collectRegex(content: string, regex: RegExp, values: Set<string>, fallback?: string, prefix = "") {
