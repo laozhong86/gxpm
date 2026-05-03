@@ -112,7 +112,7 @@ export function claimIssue(input: {
 }): ClaimIssueResult {
   const root = input.root ?? process.cwd();
   const sessionId = input.sessionId ?? resolveSessionId();
-  const actor = input.actor ?? resolveAgentIdentity().actor;
+  const actor = input.actor ?? resolveAgentIdentity(process.env, root).actor;
   return withClaimLock(root, input.issueId, (paths) => {
     const state = readIssueState({ root, issueId: input.issueId });
 

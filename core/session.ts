@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { getConfigValue } from "./config";
 
 let volatileSessionId: string | null = null;
 
@@ -25,10 +26,15 @@ export interface AgentIdentity {
   actor: string;
 }
 
-export function resolveAgentIdentity(env: NodeJS.ProcessEnv = process.env): AgentIdentity {
+export function resolveAgentIdentity(
+  env: NodeJS.ProcessEnv = process.env,
+  root?: string,
+): AgentIdentity {
   const sessionId = resolveSessionId(env);
   const host = sessionId.split(":")[0] ?? "gen";
-  const actor = env.GXPM_AGENT_NAME?.trim() || host;
+  const envName = env.GXPM_AGENT_NAME?.trim() ?? "";
+  const configName = root ? String(getConfigValue({ root, key: "agent.name" }).value ?? "").trim() : "";
+  const actor = envName || configName || host;
   return { host, sessionId, actor };
 }
 

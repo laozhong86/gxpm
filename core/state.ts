@@ -179,7 +179,7 @@ export function createIssueState(input: IssueInput): IssueState {
 
   const now = new Date().toISOString();
   const sessionId = resolveSessionId();
-  const agent = resolveAgentIdentity();
+  const agent = resolveAgentIdentity(process.env, root);
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
