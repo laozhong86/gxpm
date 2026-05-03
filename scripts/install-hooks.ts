@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 interface HookSpec {
@@ -102,6 +102,44 @@ function main(argv: string[]) {
     console.log("To wire gxpm into them, append:");
     console.log('  [ -x .githooks/gxpm-<hook-name> ] && .githooks/gxpm-<hook-name> "$@"');
   }
+
+  const gxpmRoot = resolve(import.meta.dir, "..");
+  installAgentsFragment(target, gxpmRoot);
+}
+
+function installAgentsFragment(target: string, gxpmRoot: string): void {
+  const fragmentPath = join(gxpmRoot, "templates", "agents", "code-review-graph.md");
+  if (!existsSync(fragmentPath)) {
+    console.warn(`agents fragment not found: ${fragmentPath}`);
+    return;
+  }
+
+  const fragment = readFileSync(fragmentPath, "utf8").trim();
+  const MARKER_START = "<!-- GXPM:CODE-REVIEW-GRAPH:START -->";
+  const MARKER_END = "<!-- GXPM:CODE-REVIEW-GRAPH:END -->";
+
+  const agentsPath = join(target, "AGENTS.md");
+  let content: string;
+  let action: string;
+
+  if (existsSync(agentsPath)) {
+    content = readFileSync(agentsPath, "utf8");
+    if (content.includes(MARKER_START) && content.includes(MARKER_END)) {
+      const regex = new RegExp(`${MARKER_START}[\\s\\S]*?${MARKER_END}`, "g");
+      content = content.replace(regex, `${MARKER_START}\n${fragment}\n${MARKER_END}`);
+      action = "updated";
+    } else {
+      if (!content.endsWith("\n")) content += "\n";
+      content += `\n${MARKER_START}\n${fragment}\n${MARKER_END}\n`;
+      action = "appended";
+    }
+  } else {
+    content = `${MARKER_START}\n${fragment}\n${MARKER_END}\n`;
+    action = "created";
+  }
+
+  writeFileSync(agentsPath, content);
+  console.log(`${action}: ${agentsPath}`);
 }
 
 main(Bun.argv.slice(2));
