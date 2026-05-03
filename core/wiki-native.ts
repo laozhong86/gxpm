@@ -1080,6 +1080,18 @@ function readWikiConfig(root: string): NativeWikiConfig {
   }
 }
 
+function ensureWikiConfig(root: string): void {
+  const path = join(root, NATIVE_WIKI_CONFIG_PATH);
+  if (existsSync(path)) return;
+  const template = {
+    _comment: "gxpm native wiki configuration. Edit to customize wiki generation.",
+    repo_notes: ["Add domain context notes here — they appear in Overview.md"],
+    priority_dirs: ["core", "scripts"],
+    exclude_from_map: ["tmp", "node_modules", "dist"],
+  };
+  writeFileSync(path, JSON.stringify(template, null, 2) + "\n", "utf8");
+}
+
 function writeNativeWikiDocs(
   root: string,
   state: NativeWikiState,
@@ -1088,6 +1100,7 @@ function writeNativeWikiDocs(
   dimensions: NativeWikiDimensions,
   changedFiles?: string[],
 ) {
+  ensureWikiConfig(root);
   const config = readWikiConfig(root);
   const previousGeneratedPaths = readNativeWikiDocManifest(root);
   const projectTopicClusters = buildNativeProjectTopicClusters(index, dimensions, config.priority_dirs);
