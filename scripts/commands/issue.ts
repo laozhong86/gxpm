@@ -393,6 +393,10 @@ function runIssueNext(issueId: string) {
 function runIssueCheckpoint(argv: string[], issueId: string) {
   const payload = readJsonPayloadFromArgs(argv, "gxpm issue checkpoint");
   const title = optionValue(argv, "--title") ?? payloadTitle(payload) ?? "checkpoint";
+  const reason = optionValue(argv, "--reason");
+  if (reason && payload && typeof payload === "object") {
+    (payload as Record<string, unknown>).transitionReason = reason;
+  }
   const record = writeIssueCheckpoint({
     issueId,
     title,
@@ -413,6 +417,12 @@ function runIssueResume(issueId: string) {
   console.log(`branch: ${packet.branch}`);
   console.log(`saved: ${packet.writtenAt}`);
   console.log(`checkpoint: ${packet.checkpointPath}`);
+  if (packet.parentCheckpointId) {
+    console.log(`parent: ${packet.parentCheckpointId}`);
+  }
+  if (packet.transitionReason) {
+    console.log(`reason: ${packet.transitionReason}`);
+  }
   console.log("");
   console.log("Summary:");
   console.log(packet.summary);

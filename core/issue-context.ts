@@ -80,21 +80,48 @@ interface ResumeReadResult {
 }
 
 function readResumeWithGrace(issueDir: string): ResumeReadResult {
-  const resumePath = join(issueDir, "memory", "resume-packet.json");
+  const latestIndexPath = join(issueDir, "memory", "latest-resume-packet.json");
+  let resumePath: string | null = null;
+  let raw: unknown = null;
+  let parseError: string | null = null;
 
-  if (!existsSync(resumePath)) {
+  if (existsSync(latestIndexPath)) {
+    try {
+      const index = JSON.parse(readFileSync(latestIndexPath, "utf8")) as { path?: string };
+      if (index.path) {
+        const candidate = join(issueDir, index.path);
+        if (existsSync(candidate)) {
+          resumePath = candidate;
+          raw = JSON.parse(readFileSync(candidate, "utf8"));
+        }
+      }
+    } catch {
+      parseError = "latest resume packet index is not valid JSON";
+    }
+  }
+
+  if (!resumePath) {
+    const oldPath = join(issueDir, "memory", "resume-packet.json");
+    if (existsSync(oldPath)) {
+      resumePath = oldPath;
+      try {
+        raw = JSON.parse(readFileSync(oldPath, "utf8"));
+      } catch {
+        parseError = "resume packet is not valid JSON";
+      }
+    }
+  }
+
+  if (!resumePath) {
     return { packet: null, error: null, checkpointExists: false };
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(resumePath, "utf8"));
-  } catch {
-    return { packet: null, error: "resume-packet.json is not valid JSON", checkpointExists: false };
+  if (parseError) {
+    return { packet: null, error: parseError, checkpointExists: false };
   }
 
   if (!raw || typeof raw !== "object") {
-    return { packet: null, error: "resume-packet.json is not an object", checkpointExists: false };
+    return { packet: null, error: "resume packet is not an object", checkpointExists: false };
   }
 
   const record = raw as Record<string, unknown>;
@@ -104,7 +131,7 @@ function readResumeWithGrace(issueDir: string): ResumeReadResult {
   const title = typeof record.title === "string" ? record.title : "";
 
   if (!phase || !writtenAt) {
-    return { packet: null, error: "resume-packet.json missing required fields (phase, writtenAt)", checkpointExists: false };
+    return { packet: null, error: "resume packet missing required fields (phase, writtenAt)", checkpointExists: false };
   }
 
   const checkpointExists = checkpointPath ? existsSync(join(issueDir, checkpointPath)) : false;
@@ -125,6 +152,12 @@ function readResumeWithGrace(issueDir: string): ResumeReadResult {
     filesModified: normalizeStringArray(record.filesModified),
     ...(typeof record.sessionDurationSeconds === "number" && Number.isFinite(record.sessionDurationSeconds)
       ? { sessionDurationSeconds: record.sessionDurationSeconds }
+      : {}),
+    ...(typeof record.parentCheckpointId === "string" && record.parentCheckpointId.trim()
+      ? { parentCheckpointId: record.parentCheckpointId }
+      : {}),
+    ...(typeof record.transitionReason === "string" && record.transitionReason.trim()
+      ? { transitionReason: record.transitionReason }
       : {}),
   };
 
@@ -217,7 +250,7 @@ function buildConfidenceReasons(input: {
   }
 
   if (!input.resume) {
-    reasons.push("memory/resume-packet.json is absent");
+    reasons.push("no resume packet found");
     return reasons;
   }
 
