@@ -15,7 +15,7 @@ describe("buildIssueContext", () => {
     const context = buildIssueContext({ root, issueId: "GXPM-100" });
 
     expect(context.confidence).toBe("missing_resume");
-    expect(context.confidenceReasons).toContain("memory/resume-packet.json is absent");
+    expect(context.confidenceReasons).toContain("no resume packet found");
     expect(context.checkpointExists).toBe(false);
     expect(context.requiredReads).toContain(".gxpm/issues/GXPM-100/state.json");
     expect(context.requiredReads).toContain(".gxpm/issues/GXPM-100/events.jsonl");
@@ -107,7 +107,7 @@ describe("buildIssueContext", () => {
     const context = buildIssueContext({ root, issueId: "GXPM-104" });
 
     expect(context.confidence).toBe("invalid_resume");
-    expect(context.confidenceReasons).toContain("resume-packet.json is not valid JSON");
+    expect(context.confidenceReasons).toContain("resume packet is not valid JSON");
   });
 
   test("invalid_resume when checkpoint path is missing", () => {

@@ -19,6 +19,7 @@ export interface CheckpointPayload {
   notes?: string[];
   filesModified?: string[];
   sessionDurationSeconds?: number;
+  transitionReason?: string;
 }
 
 export interface ResumePacket {
@@ -36,6 +37,8 @@ export interface ResumePacket {
   notes: string[];
   filesModified: string[];
   sessionDurationSeconds?: number;
+  parentCheckpointId?: string;
+  transitionReason?: string;
 }
 
 interface CheckpointInput {
@@ -67,10 +70,12 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
 
   const checkpointDir = join(paths.issueDir, "memory", "checkpoints");
   mkdirSync(checkpointDir, { recursive: true });
+  const resumePacketsDir = join(paths.issueDir, "memory", "resume-packets");
+  mkdirSync(resumePacketsDir, { recursive: true });
 
-  const resumePacketPath = "memory/resume-packet.json";
+  const parentCheckpointId = readPreviousResumePacketPath(paths.issueDir);
 
-  const basePacket: Omit<ResumePacket, "checkpointPath"> = {
+  const basePacket: Omit<ResumePacket, "checkpointPath" | "parentCheckpointId"> = {
     schemaVersion: 1,
     issueId: input.issueId,
     phase: state.currentPhase,
@@ -86,6 +91,9 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
     ...(payload.sessionDurationSeconds === undefined
       ? {}
       : { sessionDurationSeconds: payload.sessionDurationSeconds }),
+    ...(payload.transitionReason === undefined
+      ? {}
+      : { transitionReason: payload.transitionReason }),
   };
 
   const relativeCheckpointPath = writeUniqueCheckpointMarkdown({
@@ -95,9 +103,25 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
     renderMarkdown: (checkpointPath) =>
       renderCheckpointMarkdown({ ...basePacket, checkpointPath }),
   });
-  const packet: ResumePacket = { ...basePacket, checkpointPath: relativeCheckpointPath };
 
-  writeFileSync(join(paths.issueDir, resumePacketPath), `${JSON.stringify(packet, null, 2)}\n`);
+  const resumePacket: ResumePacket = {
+    ...basePacket,
+    checkpointPath: relativeCheckpointPath,
+    ...(parentCheckpointId ? { parentCheckpointId } : {}),
+  };
+
+  const relativeResumePacketPath = writeUniqueResumePacket({
+    issueDir: paths.issueDir,
+    timestamp: formatTimestamp(now),
+    titleSlug: slugTitle(title),
+    packet: resumePacket,
+  });
+
+  writeFileSync(
+    join(paths.issueDir, "memory", "latest-resume-packet.json"),
+    `${JSON.stringify({ schemaVersion: 1, path: relativeResumePacketPath }, null, 2)}\n`,
+  );
+
   appendIssueEvent({
     issueDir: paths.issueDir,
     event: {
@@ -105,7 +129,12 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
       type: "checkpoint.written",
       issueId: input.issueId,
       timestamp: writtenAt,
-      payload: { checkpointPath: relativeCheckpointPath, resumePacketPath },
+      payload: {
+        checkpointPath: relativeCheckpointPath,
+        resumePacketPath: relativeResumePacketPath,
+        ...(parentCheckpointId ? { parentCheckpointId } : {}),
+        ...(payload.transitionReason ? { transitionReason: payload.transitionReason } : {}),
+      },
     },
   });
 
@@ -113,7 +142,7 @@ export function writeIssueCheckpoint(input: CheckpointInput): IssueCheckpointRec
     schemaVersion: 1,
     issueId: input.issueId,
     path: relativeCheckpointPath,
-    resumePacketPath,
+    resumePacketPath: relativeResumePacketPath,
     writtenAt,
   };
 }
@@ -122,15 +151,48 @@ export function readResumePacket(input: { root?: string; issueId: string }): Res
   const root = input.root ?? process.cwd();
   const paths = getIssuePaths(root, input.issueId);
   readIssueState({ root, issueId: input.issueId });
-  const resumePacketPath = join(paths.issueDir, "memory", "resume-packet.json");
 
-  if (!existsSync(resumePacketPath)) {
-    throw new Error(
-      `No resume packet found for ${input.issueId}; run gxpm issue checkpoint ${input.issueId} --title \"handoff\" --stdin`,
-    );
+  const latestIndexPath = join(paths.issueDir, "memory", "latest-resume-packet.json");
+  if (existsSync(latestIndexPath)) {
+    const index = JSON.parse(readFileSync(latestIndexPath, "utf8")) as { path?: string };
+    if (index.path) {
+      const packetPath = join(paths.issueDir, index.path);
+      if (existsSync(packetPath)) {
+        return JSON.parse(readFileSync(packetPath, "utf8")) as ResumePacket;
+      }
+    }
   }
 
-  return JSON.parse(readFileSync(resumePacketPath, "utf8")) as ResumePacket;
+  // Backward compatibility: old single-file resume packet
+  const oldPath = join(paths.issueDir, "memory", "resume-packet.json");
+  if (existsSync(oldPath)) {
+    return JSON.parse(readFileSync(oldPath, "utf8")) as ResumePacket;
+  }
+
+  throw new Error(
+    `No resume packet found for ${input.issueId}; run gxpm issue checkpoint ${input.issueId} --title "handoff" --stdin`,
+  );
+}
+
+function readPreviousResumePacketPath(issueDir: string): string | null {
+  const latestIndexPath = join(issueDir, "memory", "latest-resume-packet.json");
+  if (existsSync(latestIndexPath)) {
+    const index = JSON.parse(readFileSync(latestIndexPath, "utf8")) as { path?: string };
+    if (index.path) {
+      const fullPath = join(issueDir, index.path);
+      if (existsSync(fullPath)) {
+        return index.path;
+      }
+    }
+  }
+
+  // Backward compatibility: old single-file resume packet
+  const oldPath = join(issueDir, "memory", "resume-packet.json");
+  if (existsSync(oldPath)) {
+    return "memory/resume-packet.json";
+  }
+
+  return null;
 }
 
 function normalizeCheckpointPayload(value: unknown): CheckpointPayload {
@@ -152,6 +214,10 @@ function normalizeCheckpointPayload(value: unknown): CheckpointPayload {
     sessionDurationSeconds:
       typeof raw.sessionDurationSeconds === "number" && Number.isFinite(raw.sessionDurationSeconds)
         ? raw.sessionDurationSeconds
+        : undefined,
+    transitionReason:
+      typeof raw.transitionReason === "string" && raw.transitionReason.trim()
+        ? raw.transitionReason.trim()
         : undefined,
   };
 }
@@ -204,6 +270,32 @@ function writeUniqueCheckpointMarkdown(input: {
     const relativePath = suffix === 1 ? `${base}.md` : `${base}-${suffix}.md`;
     try {
       writeFileSync(join(input.issueDir, relativePath), input.renderMarkdown(relativePath), {
+        flag: "wx",
+      });
+      return relativePath;
+    } catch (error) {
+      if (isFileExistsError(error)) {
+        suffix += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+function writeUniqueResumePacket(input: {
+  issueDir: string;
+  timestamp: string;
+  titleSlug: string;
+  packet: ResumePacket;
+}) {
+  const base = `memory/resume-packets/${input.timestamp}-${input.titleSlug}`;
+  let suffix = 1;
+
+  while (true) {
+    const relativePath = suffix === 1 ? `${base}.json` : `${base}-${suffix}.json`;
+    try {
+      writeFileSync(join(input.issueDir, relativePath), `${JSON.stringify(input.packet, null, 2)}\n`, {
         flag: "wx",
       });
       return relativePath;

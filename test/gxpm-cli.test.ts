@@ -61,7 +61,7 @@ describe("gxpm CLI", () => {
     expect(output(result)).toContain("issueId: GXPM-12");
     expect(output(result)).toContain("currentPhase: triage");
     expect(output(result)).toContain("confidence: missing_resume");
-    expect(output(result)).toContain("memory/resume-packet.json is absent");
+    expect(output(result)).toContain("no resume packet found");
   });
 
   test("issue context --json returns structured output", () => {
@@ -473,7 +473,7 @@ describe("gxpm issue checkpoint/resume CLI", () => {
 
     expect(checkpoint.exitCode).toBe(0);
     expect(output(checkpoint)).toContain("checkpoint saved for GXPM-70");
-    expect(output(checkpoint)).toContain("resume-packet.json");
+    expect(output(checkpoint)).toContain("memory/resume-packets/");
 
     const resume = runCli(root, ["issue", "resume", "GXPM-70"]);
     expect(resume.exitCode).toBe(0);
