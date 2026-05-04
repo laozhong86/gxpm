@@ -49,6 +49,7 @@ interface ConfigDoc {
   };
   workspace?: {
     root?: string;
+    basePort?: number;
   };
   update_check?: boolean;
   sync?: {
@@ -81,6 +82,11 @@ const CONFIG_REGISTRY = {
     defaultValue: ".gxpm/local/workspaces",
     description: "Default root for gxpm-managed per-issue execution workspaces.",
     normalize: (value: unknown) => normalizeNonEmptyString("workspace.root", value),
+  },
+  "workspace.basePort": {
+    defaultValue: 3090,
+    description: "Base port for deterministic dev server port allocation in workspaces.",
+    normalize: (value: unknown) => normalizePositiveInteger("workspace.basePort", value),
   },
   update_check: {
     defaultValue: true,
@@ -356,6 +362,17 @@ function normalizeNonEmptyString(key: string, value: unknown) {
     throw new Error(`${key} must be a non-empty string`);
   }
   return value;
+}
+
+function normalizePositiveInteger(key: string, value: unknown) {
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 1) return parsed;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1) {
+    return value;
+  }
+  throw new Error(`${key} must be a positive integer`);
 }
 
 function normalizeEnum<T extends readonly string[]>(key: string, value: unknown, allowed: T): T[number] {

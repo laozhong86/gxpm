@@ -78,6 +78,7 @@ describe("setConfigValue + getConfigValue", () => {
       "worktree.enforcement",
       "worktree.default",
       "workspace.root",
+      "workspace.basePort",
       "update_check",
       "sync.provider",
       "sync.linearTeamId",

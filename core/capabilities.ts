@@ -1,4 +1,5 @@
 import { type ArtifactType } from "./artifacts";
+import { type ErrorType } from "./resilience";
 
 export const CAPABILITY_STATUSES = ["active", "planned"] as const;
 export type CapabilityStatus = (typeof CAPABILITY_STATUSES)[number];
@@ -21,6 +22,10 @@ export const CAPABILITY_MUTATION_SCOPES = [
 ] as const;
 export type CapabilityMutationScope = (typeof CAPABILITY_MUTATION_SCOPES)[number];
 
+export type CapabilityFailureMode =
+  | string
+  | { description: string; defaultType?: ErrorType };
+
 export interface CapabilityContract {
   id: string;
   title: string;
@@ -38,7 +43,7 @@ export interface CapabilityContract {
     description: string;
   };
   idempotency: string;
-  failureModes: string[];
+  failureModes: CapabilityFailureMode[];
   commands: string[];
   sourceFiles: string[];
 }
@@ -61,7 +66,10 @@ export const CAPABILITY_REGISTRY = [
       description: "Read-only; must not write artifacts, claims, runs, or phase state.",
     },
     idempotency: "Repeated reads at the same state produce the same decision set.",
-    failureModes: ["Missing or malformed issue state", "Unreadable .gxpm issue directory"],
+    failureModes: [
+      { description: "Missing or malformed issue state", defaultType: "FATAL" },
+      { description: "Unreadable .gxpm issue directory", defaultType: "TRANSIENT" },
+    ],
     commands: ["gxpm issue ready [--all] [--json]"],
     sourceFiles: ["core/issue-readiness.ts", "scripts/commands/issue.ts"],
   },
@@ -82,7 +90,11 @@ export const CAPABILITY_REGISTRY = [
       description: "May update only the target issue claim metadata and timeline events under .gxpm.",
     },
     idempotency: "Same-session claim is idempotent; release/reconcile only changes state when the claim is active or stale.",
-    failureModes: ["Issue already claimed by another session", "Missing release reason", "Invalid stale threshold"],
+    failureModes: [
+      { description: "Issue already claimed by another session", defaultType: "FATAL" },
+      { description: "Missing release reason", defaultType: "FATAL" },
+      { description: "Invalid stale threshold", defaultType: "FATAL" },
+    ],
     commands: [
       "gxpm issue claim <issue-id>",
       "gxpm issue release <issue-id>",
@@ -107,7 +119,11 @@ export const CAPABILITY_REGISTRY = [
       description: "May create, update, or remove run ledger files for the target issue only.",
     },
     idempotency: "Run status/list reads are stable; run start creates one new attempt unless rolled back by failed --claim.",
-    failureModes: ["Unknown run id", "Invalid run status", "Claim refusal during --claim start"],
+    failureModes: [
+      { description: "Unknown run id", defaultType: "FATAL" },
+      { description: "Invalid run status", defaultType: "FATAL" },
+      { description: "Claim refusal during --claim start", defaultType: "FATAL" },
+    ],
     commands: [
       "gxpm run start <issue-id> [--claim]",
       "gxpm run list <issue-id>",
@@ -133,7 +149,11 @@ export const CAPABILITY_REGISTRY = [
       description: "plan is read-only; ensure/cleanup may create or remove only the issue-derived workspace path.",
     },
     idempotency: "plan is pure; ensure reuses existing workspace; cleanup is a no-op when the workspace is absent.",
-    failureModes: ["Unsafe issue id for path derivation", "Workspace path escapes configured root", "Filesystem permission failure"],
+    failureModes: [
+      { description: "Unsafe issue id for path derivation", defaultType: "FATAL" },
+      { description: "Workspace path escapes configured root", defaultType: "FATAL" },
+      { description: "Filesystem permission failure", defaultType: "TRANSIENT" },
+    ],
     commands: [
       "gxpm workspace plan <issue-id>",
       "gxpm workspace ensure <issue-id>",
@@ -158,7 +178,10 @@ export const CAPABILITY_REGISTRY = [
       description: "Strictly read-only; must not mutate issue state, artifacts, runs, claims, or workspaces.",
     },
     idempotency: "Repeated dry-runs at the same state produce the same report.",
-    failureModes: ["Malformed issue state", "Unreadable issue directory"],
+    failureModes: [
+      { description: "Malformed issue state", defaultType: "FATAL" },
+      { description: "Unreadable issue directory", defaultType: "TRANSIENT" },
+    ],
     commands: ["gxpm orchestrator tick --dry-run [--json] [--include-all]"],
     sourceFiles: ["core/orchestrator.ts", "scripts/commands/runtime.ts"],
   },
@@ -185,7 +208,12 @@ export const CAPABILITY_REGISTRY = [
       description: "May create or overwrite files only under the target issue evidence directory.",
     },
     idempotency: "Path allocation is deterministic for the same filename; repeated writes replace only that evidence file.",
-    failureModes: ["Invalid issue id", "Unknown evidence kind", "Unsafe evidence filename", "Filesystem write failure"],
+    failureModes: [
+      { description: "Invalid issue id", defaultType: "FATAL" },
+      { description: "Unknown evidence kind", defaultType: "FATAL" },
+      { description: "Unsafe evidence filename", defaultType: "FATAL" },
+      { description: "Filesystem write failure", defaultType: "TRANSIENT" },
+    ],
     commands: ["gxpm-investigate <issue-id> [--label <text>]"],
     sourceFiles: ["core/evidence.ts", "bin/gxpm-investigate"],
   },
@@ -206,7 +234,11 @@ export const CAPABILITY_REGISTRY = [
       description: "init/update mutate .gxpm/wiki; context --write-artifact writes only the target issue wiki-context artifact.",
     },
     idempotency: "Index/update are deterministic for the same git tree; context selection is deterministic for the same query and index.",
-    failureModes: ["Missing native wiki state", "Stale wiki index", "Unsupported binary or ignored files"],
+    failureModes: [
+      { description: "Missing native wiki state", defaultType: "FATAL" },
+      { description: "Stale wiki index", defaultType: "TRANSIENT" },
+      { description: "Unsupported binary or ignored files", defaultType: "FATAL" },
+    ],
     commands: [
       "gxpm wiki init",
       "gxpm wiki update",
@@ -233,7 +265,11 @@ export const CAPABILITY_REGISTRY = [
       description: "Writes only the target issue local-verify artifact through the artifact store.",
     },
     idempotency: "Repeated writes replace the local-verify artifact with the newest evidence while preserving timeline history.",
-    failureModes: ["Current phase cannot initialize local-verify", "Invalid artifact payload", "Command evidence missing"],
+    failureModes: [
+      { description: "Current phase cannot initialize local-verify", defaultType: "FATAL" },
+      { description: "Invalid artifact payload", defaultType: "FATAL" },
+      { description: "Command evidence missing", defaultType: "FATAL" },
+    ],
     commands: ["gxpm implement verify <issue-id>", "gxpm artifact write <issue-id> local-verify --json <json>"],
     sourceFiles: ["core/implement.ts", "core/artifacts.ts"],
   },
@@ -254,7 +290,12 @@ export const CAPABILITY_REGISTRY = [
       description: "Artifact writes are local; external PR reads must not merge or mutate remote state.",
     },
     idempotency: "Repeated reads and artifact rewrites refresh evidence without changing phase unless transition is explicit.",
-    failureModes: ["PR unavailable", "Review pending or failed", "Mergeability unknown", "Invalid artifact payload"],
+    failureModes: [
+      { description: "PR unavailable", defaultType: "TRANSIENT" },
+      { description: "Review pending or failed", defaultType: "FATAL" },
+      { description: "Mergeability unknown", defaultType: "TRANSIENT" },
+      { description: "Invalid artifact payload", defaultType: "FATAL" },
+    ],
     commands: ["gxpm ship pr-check <issue-id>", "gxpm artifact write <issue-id> pr-check --json <json>"],
     sourceFiles: ["core/pr-check.ts", "scripts/commands/artifact.ts"],
   },
