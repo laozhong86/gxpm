@@ -9,6 +9,14 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { getResolvedConfigValue } from "./config";
 import { resolveDevPort } from "./port-allocation";
 import { readIssueState } from "./state";
+import {
+  IsolationResolver,
+  createFileSystemStore,
+  createGitProvider,
+  type IsolationHints,
+  type IsolationMethod,
+  type IsolationResolution,
+} from "./isolation-resolver";
 
 export interface WorkspacePlanInput {
   root?: string;
@@ -27,6 +35,13 @@ export interface WorkspacePlan {
 
 export interface WorkspaceEnsureResult extends WorkspacePlan {
   created: boolean;
+}
+
+export interface WorkspaceIsolationResult extends WorkspaceEnsureResult {
+  method?: IsolationMethod;
+  warnings?: string[];
+  userMessage?: string;
+  resolution?: IsolationResolution;
 }
 
 export interface WorkspaceCleanupResult extends WorkspacePlan {
@@ -69,6 +84,63 @@ export function ensureIssueWorkspace(input: WorkspacePlanInput): WorkspaceEnsure
   }
 
   return { ...plan, exists: true, created: !existed };
+}
+
+export async function ensureIssueWorkspaceWithResolver(
+  input: WorkspacePlanInput & { hints?: IsolationHints },
+): Promise<WorkspaceIsolationResult> {
+  const root = input.root ?? process.cwd();
+  const issueId = input.issueId;
+
+  // Run resolver first
+  const store = createFileSystemStore(root);
+  const provider = createGitProvider();
+  const resolver = new IsolationResolver({ store, provider });
+  const resolution = await resolver.resolve({ issueId, root, hints: input.hints });
+
+  let plan: WorkspacePlan;
+  let created = false;
+
+  if (resolution.status === "resolved" && resolution.env) {
+    // Use the resolved workspace path
+    const workspacePath = resolution.env.workspacePath;
+    const workspaceRoot = resolveWorkspaceRoot({ root, workspaceRoot: input.workspaceRoot });
+    plan = {
+      issueId,
+      workspaceKey: sanitizeWorkspaceKey(issueId),
+      workspaceRoot,
+      workspacePath,
+      exists: existsSync(workspacePath),
+      devPort: resolveDevPort({ workspacePath, root }),
+    };
+    if (!plan.exists) {
+      mkdirSync(workspacePath, { recursive: true });
+      created = true;
+    }
+  } else if (resolution.status === "none") {
+    // No git repo: fall back to plain directory workspace
+    plan = planIssueWorkspace(input);
+    mkdirSync(plan.workspaceRoot, { recursive: true });
+    assertPathInsideRoot(plan.workspaceRoot, plan.workspacePath);
+    const existed = existsSync(plan.workspacePath);
+    if (!existed) {
+      mkdirSync(plan.workspacePath, { recursive: true });
+      created = true;
+    }
+  } else {
+    // blocked or stale_cleaned — return as-is with minimal plan
+    plan = planIssueWorkspace(input);
+  }
+
+  return {
+    ...plan,
+    exists: true,
+    created,
+    method: resolution.method,
+    warnings: resolution.warnings,
+    userMessage: resolution.userMessage,
+    resolution,
+  };
 }
 
 export function cleanupIssueWorkspace(input: WorkspacePlanInput): WorkspaceCleanupResult {
