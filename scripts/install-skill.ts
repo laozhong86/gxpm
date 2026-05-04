@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS, getHostConfig } from "../hosts";
 import { discoverTemplates } from "./discover-skills";
 import { renderSkillContentForHost } from "./gen-skill-docs";
-import type { HostConfig } from "./host-config";
+import type { HostConfig } from "../core/contracts/host";
 
 interface InstallSkillOptions {
   hostName?: string; // "codex" | "claude" | "all"

@@ -1,26 +1,6 @@
-export type FrontmatterConfig =
-  | {
-      mode: "preserve";
-      keys?: never;
-    }
-  | {
-      mode: "allowlist";
-      keys: string[];
-    };
+import type { HostConfig } from "../core/contracts/host";
 
-export interface HostConfig {
-  name: string;
-  displayName: string;
-  cliCommand: string;
-  hostSubdir: string;
-  globalRoot: string;
-  localSkillRoot: string;
-  usesEnvVars: boolean;
-  frontmatter: FrontmatterConfig;
-  install: {
-    strategy: "copy" | "symlink";
-  };
-}
+export type { FrontmatterConfig, HostConfig } from "../core/contracts/host";
 
 const HOST_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const CLI_PATTERN = /^[a-z][a-z0-9-]*$/;

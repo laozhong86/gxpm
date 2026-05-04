@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { discoverTemplates } from "./discover-skills";
 import { getHostConfig } from "../hosts";
-import type { HostConfig } from "./host-config";
+import type { HostConfig } from "../core/contracts/host";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 
 export interface GenerateSkillDocsOptions {
