@@ -3,9 +3,10 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
 import { resolveAgentIdentity, resolveSessionId } from "./session";
 import { getWorkflowEventEmitter } from "./workflow-event-emitter";
@@ -655,6 +656,38 @@ function assertPhaseGate(input: {
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
+  // Worktree gate: dispatch -> implement must not run in canonical main checkout on non-main branch
+  if (input.fromPhase === "dispatch" && input.nextPhase === "implement") {
+    const branch = getCurrentGitBranch();
+    if (branch && branch !== "main") {
+      const canonicalRoot = getCanonicalMainRoot();
+      const currentRoot = getCurrentGitRoot();
+      if (canonicalRoot && currentRoot && normalizePath(currentRoot) === normalizePath(canonicalRoot)) {
+        const now = new Date().toISOString();
+        appendIssueEvent({
+          issueDir: input.issueDir,
+          event: {
+            schemaVersion: 1,
+            type: "gate.blocked",
+            issueId: input.issueId,
+            timestamp: now,
+            sessionId: resolveSessionId(),
+            payload: {
+              fromPhase: input.fromPhase,
+              toPhase: input.nextPhase,
+              reason: "dispatch-to-implement blocked: canonical main checkout must stay on main; create a git worktree for feature branches",
+            },
+          },
+        });
+        throw new Error(
+          `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
+          `Current directory is the canonical main checkout on branch '${branch}'. ` +
+          `Run: git worktree add ../gxpm-worktrees/<branch-name> -b ${branch} && cd ../gxpm-worktrees/<branch-name>`
+        );
+      }
+    }
+  }
+
   const requiredArtifact = getRequiredArtifactForTransition(input.fromPhase, input.nextPhase);
   if (!requiredArtifact) {
     return;
@@ -700,4 +733,63 @@ function assertPhaseGate(input: {
   throw new Error(
     `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );
+}
+
+function getCurrentGitBranch(): string | undefined {
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return undefined;
+    const branch = result.stdout.toString().trim();
+    return branch || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getCanonicalMainRoot(): string | undefined {
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "worktree", "list", "--porcelain"],
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return undefined;
+    const line = result.stdout
+      .toString()
+      .split("\n")
+      .find((l) => l.startsWith("worktree "));
+    return line?.slice("worktree ".length);
+  } catch {
+    return undefined;
+  }
+}
+
+function getCurrentGitRoot(): string | undefined {
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "rev-parse", "--show-toplevel"],
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return undefined;
+    return result.stdout.toString().trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePath(path: string): string {
+  const resolved = resolve(path).replace(/\/+$/, "");
+  try {
+    return realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
 }

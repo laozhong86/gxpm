@@ -27,6 +27,7 @@ describe("dispatch gate", () => {
       targetBranch: "",
       validation: [],
       worktreePath: "",
+      worktreeDecision: "pending",
       workerTasks: [],
     });
   });

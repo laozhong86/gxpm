@@ -24,7 +24,7 @@ import {
   releaseIssueClaim,
 } from "../../core/issue-readiness";
 import { runPostLandSkillSync } from "../post-land-sync";
-import { currentGitBranch, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
+import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -378,6 +378,22 @@ function runIssueNext(issueId: string) {
 
   const has = hasArtifact({ issueId, type: rule.requiredArtifact });
   console.log("");
+
+  // Worktree advisory: when in dispatch on canonical main checkout with a feature branch, warn early
+  if (state.currentPhase === "dispatch") {
+    const branch = currentGitBranch();
+    if (branch && branch !== "main") {
+      const canonicalRoot = detectCanonicalMainRoot();
+      const currentRoot = currentGitRoot();
+      if (canonicalRoot && currentRoot && currentRoot === canonicalRoot) {
+        console.log("WARNING: You are on a feature branch in the canonical main checkout.");
+        console.log("         gxpm requires feature branches to run in a dedicated git worktree.");
+        console.log(`         Run: git worktree add ../gxpm-worktrees/${branch} -b ${branch}`);
+        console.log("");
+      }
+    }
+  }
+
   if (!has) {
     console.log(`Next: ${rule.command.replace("<issue-id>", issueId)}`);
     console.log(`      → creates draft of artifact: ${rule.requiredArtifact}`);

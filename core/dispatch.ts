@@ -10,6 +10,7 @@ export const initializeDispatch = createPhaseArtifactInitializer({
     targetBranch: "",
     validation: [],
     worktreePath: "",
+    worktreeDecision: "pending",
     workerTasks: [],
   },
   requiredPhase: "dispatch",

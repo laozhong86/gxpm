@@ -108,3 +108,19 @@ export function detectCanonicalMainRoot() {
     .find((line) => line.startsWith("worktree "))
     ?.slice("worktree ".length);
 }
+
+/**
+ * Detect whether the current cwd is inside a linked git worktree (not the canonical main checkout).
+ */
+export function isInsideLinkedWorktree(): boolean {
+  const result = Bun.spawnSync({
+    cmd: ["git", "rev-parse", "--git-path", "HEAD"],
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return false;
+  const gitPath = result.stdout.toString().trim();
+  // In a linked worktree, git-path resolves to .git/worktrees/<name>/HEAD
+  return gitPath.includes("/worktrees/");
+}
