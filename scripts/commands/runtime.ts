@@ -1,5 +1,5 @@
 import { appendRunEvent, deleteRun, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
-import { cleanupIssueWorkspace, ensureIssueWorkspace, planIssueWorkspace } from "../../core/workspace-runtime";
+import { cleanupIssueWorkspace, ensureIssueWorkspace, ensureIssueWorkspaceWithResolver, planIssueWorkspace } from "../../core/workspace-runtime";
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
 import { claimIssue } from "../../core/issue-readiness";
 import { optionValue, parsePositiveIntegerOption } from "./helpers";
@@ -144,7 +144,7 @@ function claimRunOrRollback(input: { issueId: string; runId: string; actor?: str
   }
 }
 
-export function runWorkspaceCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {
+export async function runWorkspaceCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {
   if (!issueId) {
     throw new Error("Usage: gxpm workspace plan|ensure|cleanup <issue-id> [--root <path>] [--json]");
   }
@@ -153,7 +153,7 @@ export function runWorkspaceCommand(argv: string[], subcommand: string | undefin
     subcommand === "plan"
       ? planIssueWorkspace({ issueId, workspaceRoot })
       : subcommand === "ensure"
-        ? ensureIssueWorkspace({ issueId, workspaceRoot })
+        ? await ensureIssueWorkspaceWithResolver({ issueId, workspaceRoot })
         : subcommand === "cleanup"
           ? cleanupIssueWorkspace({ issueId, workspaceRoot })
           : null;
@@ -172,6 +172,8 @@ export function runWorkspaceCommand(argv: string[], subcommand: string | undefin
   if ("devPort" in result) console.log(`devPort: ${result.devPort}`);
   if ("created" in result) console.log(`created: ${result.created}`);
   if ("removed" in result) console.log(`removed: ${result.removed}`);
+  if ("method" in result && result.method) console.log(`method: ${result.method.type}`);
+  if ("warnings" in result && result.warnings) console.log(`warnings: ${result.warnings.join("; ")}`);
 }
 
 export function runOrchestratorCommand(argv: string[], subcommand: string | undefined) {

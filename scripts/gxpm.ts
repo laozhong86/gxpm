@@ -17,14 +17,13 @@ import { runInitCommand } from "./commands/init";
 import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
 
-function main(argv: string[]) {
+async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
     argv = argv.filter((arg) => arg !== "--verbose-events");
     getWorkflowEventEmitter().subscribe((event) => {
       console.error(`[event] ${JSON.stringify(event)}`);
     });
   }
-
   const [command, subcommand, issueId, value] = argv;
 
   if (!command || command === "check") {
@@ -104,7 +103,7 @@ function main(argv: string[]) {
   }
 
   if (command === "workspace") {
-    runWorkspaceCommand(argv, subcommand, issueId);
+    await runWorkspaceCommand(argv, subcommand, issueId);
     return;
   }
 
@@ -161,9 +160,7 @@ function main(argv: string[]) {
   throw new Error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
 }
 
-try {
-  main(Bun.argv.slice(2));
-} catch (error) {
+main(Bun.argv.slice(2)).catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
-}
+});
