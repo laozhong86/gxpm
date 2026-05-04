@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 export type WorktreeEnforcement = "required" | "forbidden" | "optional" | "unset";
 export type WorktreeDefault = "use" | "skip" | "ask";
-export type ConfigValueSource = "config-repo" | "config-global" | "default" | "unset";
+export type ConfigValueSource = "config-repo" | "config-global" | "env" | "default" | "unset";
 
 export interface ConfigEntry {
   key: KnownConfigKey;
@@ -66,6 +66,18 @@ const CONFIG_FILENAME = "config.json";
 const WORKTREE_ENFORCEMENT_VALUES = ["required", "forbidden", "optional", "unset"] as const;
 const WORKTREE_DEFAULT_VALUES = ["use", "skip", "ask"] as const;
 const SYNC_PROVIDER_VALUES = ["linear", "github", "none"] as const;
+
+function getGxpmHome(): string {
+  const envHome = process.env.GXPM_HOME;
+  if (envHome && envHome.trim()) return envHome.trim();
+  return homedir();
+}
+
+function getRepoConfigPath(root: string): string {
+  const envPath = process.env.GXPM_CONFIG_PATH;
+  if (envPath && envPath.trim()) return envPath.trim();
+  return join(root, ".gxpm", CONFIG_FILENAME);
+}
 
 const CONFIG_REGISTRY = {
   "worktree.enforcement": {
@@ -134,10 +146,10 @@ export type KnownConfigKey = keyof typeof CONFIG_REGISTRY;
 export const KNOWN_CONFIG_KEYS = Object.keys(CONFIG_REGISTRY) as KnownConfigKey[];
 
 function repoConfigPath(root: string) {
-  return join(root, ".gxpm", CONFIG_FILENAME);
+  return getRepoConfigPath(root);
 }
 function globalConfigPath(home: string) {
-  return join(home, ".gxpm", CONFIG_FILENAME);
+  return join(getGxpmHome(), ".gxpm", CONFIG_FILENAME);
 }
 
 function readConfig(path: string): ConfigDoc {
@@ -154,16 +166,44 @@ function writeConfig(path: string, doc: ConfigDoc) {
   writeFileSync(path, JSON.stringify(doc, null, 2) + "\n");
 }
 
+function getEnvConfigValue(key: string): unknown | undefined {
+  const envMap: Record<string, string> = {
+    "sync.provider": "GXPM_SYNC_PROVIDER",
+    "sync.linearTeamId": "GXPM_LINEAR_TEAM_ID",
+    "sync.linearTeamKey": "GXPM_LINEAR_TEAM_KEY",
+    "sync.linearAssigneeId": "GXPM_LINEAR_ASSIGNEE_ID",
+    "sync.autoSync": "GXPM_AUTO_SYNC",
+    "sync.syncArtifacts": "GXPM_SYNC_ARTIFACTS",
+    "worktree.enforcement": "GXPM_WORKTREE_ENFORCEMENT",
+    "worktree.default": "GXPM_WORKTREE_DEFAULT",
+    "workspace.root": "GXPM_WORKSPACE_ROOT",
+    "workspace.basePort": "GXPM_WORKSPACE_BASE_PORT",
+    update_check: "GXPM_UPDATE_CHECK",
+    "agent.name": "GXPM_AGENT_NAME",
+  };
+  const envKey = envMap[key];
+  if (!envKey) return undefined;
+  const raw = process.env[envKey];
+  if (raw === undefined) return undefined;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (/^-?\d+$/.test(raw)) return Number(raw);
+  return raw;
+}
+
 export function getConfigValue(input: { root?: string; home?: string; key: string }): {
   value: unknown;
-  source: "config-repo" | "config-global" | "unset";
+  source: "config-repo" | "config-global" | "env" | "unset";
 } {
   const root = input.root ?? process.cwd();
-  const home = input.home ?? homedir();
+  // Check env var override first for select keys
+  const envVal = getEnvConfigValue(input.key);
+  if (envVal !== undefined) return { value: envVal, source: "env" };
+
   const repo = readConfig(repoConfigPath(root));
   const repoVal = lookup(repo, input.key);
   if (repoVal !== undefined) return { value: repoVal, source: "config-repo" };
-  const global = readConfig(globalConfigPath(home));
+  const global = readConfig(globalConfigPath(input.home ?? homedir()));
   const globalVal = lookup(global, input.key);
   if (globalVal !== undefined) return { value: globalVal, source: "config-global" };
   return { value: undefined, source: "unset" };

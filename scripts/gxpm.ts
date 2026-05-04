@@ -12,6 +12,9 @@ import { runGateCommand } from "./commands/gate";
 import { runIssueCommand } from "./commands/issue";
 import { runOrchestratorCommand, runRunCommand, runWorkspaceCommand } from "./commands/runtime";
 import { runWikiCommand } from "./commands/wiki";
+import { runInitCommand } from "./commands/init";
+import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
+import { runVerifyCommand } from "./commands/verify";
 
 function main(argv: string[]) {
   const [command, subcommand, issueId, value] = argv;
@@ -51,15 +54,40 @@ function main(argv: string[]) {
     return;
   }
 
+  if (command === "init") {
+    runInitCommand(argv.slice(1));
+    return;
+  }
+
   if (command === "doctor") {
     const json = argv.includes("--json");
-    const report = runDoctor();
+    const fix = argv.includes("--fix");
+    const report = runDoctor({ fix });
     if (json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
       console.log(formatDoctorReport(report));
     }
     return;
+  }
+
+  if (command === "upgrade") {
+    runUpgradeCommand(argv.slice(1));
+    return;
+  }
+
+  if (command === "post-upgrade") {
+    runPostUpgradeCommand(argv.slice(1));
+    return;
+  }
+
+  if (command === "verify") {
+    // gxpm verify qa <id> is a phase artifact command; do not shadow it.
+    const phaseArtifactCommand = findPhaseArtifactCommand(command, subcommand);
+    if (!phaseArtifactCommand) {
+      runVerifyCommand(argv.slice(1));
+      return;
+    }
   }
 
   if (command === "run") {

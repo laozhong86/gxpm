@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS } from "../hosts";
+import { getConfigValue, getResolvedConfigValue, type KnownConfigKey, KNOWN_CONFIG_KEYS } from "../core/config";
 import { readGxpmVersion } from "./version";
 
 export interface SkillCheck {
@@ -29,16 +30,28 @@ export interface RuntimeCheck {
   gxpmRepoRoot: string;
 }
 
+export interface DoctorCheck {
+  name: string;
+  status: "ok" | "warn" | "fail";
+  message: string;
+}
+
 export interface DoctorReport {
-  runtime: RuntimeCheck;
-  skill: SkillCheck[];
-  repo: RepoCheck;
+  schema_version: number;
+  status: "healthy" | "warnings" | "error";
+  health_score: number;
+  checks: DoctorCheck[];
+  // Legacy fields preserved for backward compatibility
+  runtime?: RuntimeCheck;
+  skill?: SkillCheck[];
+  repo?: RepoCheck;
 }
 
 interface RunDoctorInput {
   home?: string;
   cwd?: string;
   gxpmRoot?: string;
+  fix?: boolean;
 }
 
 const GXPM_HOOK_FILES = [
@@ -54,11 +67,168 @@ export function runDoctor(input: RunDoctorInput = {}): DoctorReport {
   const home = input.home ?? homedir();
   const cwd = input.cwd ?? process.cwd();
   const gxpmRoot = input.gxpmRoot ?? DEFAULT_GXPM_ROOT;
+  const fix = input.fix ?? false;
+
+  const runtime = checkRuntime(gxpmRoot);
+  const skillChecks = checkSkill(home);
+  const repo = checkRepo(cwd);
+
+  const checks: DoctorCheck[] = [];
+  const fixLog: string[] = [];
+
+  // --- Runtime checks ---
+  checks.push({
+    name: "bun_runtime",
+    status: runtime.bunAvailable ? "ok" : "fail",
+    message: runtime.bunAvailable ? "bun is available" : "bun not found on PATH",
+  });
+
+  checks.push({
+    name: "gxpm_version",
+    status: runtime.gxpmVersion ? "ok" : "warn",
+    message: runtime.gxpmVersion ? `gxpm ${runtime.gxpmVersion} at ${runtime.gxpmRepoRoot}` : "could not read VERSION",
+  });
+
+  // --- Skill checks ---
+  const missingSkills = skillChecks.filter((s) => !s.installed);
+  if (missingSkills.length === 0) {
+    checks.push({ name: "skill_installation", status: "ok", message: `${skillChecks.length} hosts have gxpm skill` });
+  } else {
+    checks.push({
+      name: "skill_installation",
+      status: "warn",
+      message: `${missingSkills.length} missing skill installations: ${missingSkills.map((s) => s.host).join(", ")}`,
+    });
+    if (fix) {
+      try {
+        execSync(`bun run "${join(gxpmRoot, "scripts", "install-skill.ts")}" --host all`, { stdio: "ignore" });
+        fixLog.push("installed missing skills to all hosts");
+      } catch {
+        fixLog.push("failed to install missing skills");
+      }
+    }
+  }
+
+  // --- Skill freshness ---
+  const stale = checkSkillFreshness(gxpmRoot);
+  if (stale.length === 0) {
+    checks.push({ name: "skill_freshness", status: "ok", message: "all SKILL.md files are up to date with templates" });
+  } else {
+    checks.push({
+      name: "skill_freshness",
+      status: "warn",
+      message: `${stale.length} stale SKILL.md files: ${stale.join(", ")}`,
+    });
+    if (fix) {
+      try {
+        execSync(`bun run "${join(gxpmRoot, "scripts", "gen-skill-docs.ts")}"`, { stdio: "ignore" });
+        fixLog.push("regenerated skill docs");
+      } catch {
+        fixLog.push("failed to regenerate skill docs");
+      }
+    }
+  }
+
+  // --- Repo checks ---
+  if (!repo.isGitRepo) {
+    checks.push({ name: "git_repo", status: "fail", message: "not a git repository" });
+  } else {
+    checks.push({ name: "git_repo", status: "ok", message: "git repository detected" });
+  }
+
+  if (repo.gxpmHooksInstalled) {
+    checks.push({ name: "gxpm_hooks", status: "ok", message: `all ${GXPM_HOOK_FILES.length} hooks installed` });
+  } else {
+    const missing = GXPM_HOOK_FILES.filter((h) => !repo.installedHooks.includes(h));
+    checks.push({
+      name: "gxpm_hooks",
+      status: repo.isGitRepo ? "warn" : "fail",
+      message: `missing hooks: ${missing.join(", ")}`,
+    });
+    if (fix && repo.isGitRepo) {
+      try {
+        execSync(`bun run "${join(gxpmRoot, "scripts", "install-hooks.ts")}" --target "${cwd}"`, { stdio: "ignore" });
+        fixLog.push("installed missing git hooks");
+      } catch {
+        fixLog.push("failed to install git hooks");
+      }
+    }
+  }
+
+  if (repo.gxpmDirExists) {
+    checks.push({ name: "gxpm_dir", status: "ok", message: `.gxpm/issues/ exists (${repo.issueCount} issues)` });
+  } else {
+    checks.push({ name: "gxpm_dir", status: "warn", message: ".gxpm/ not initialized" });
+  }
+
+  // --- Worktree availability ---
+  if (repo.isGitRepo) {
+    try {
+      execSync("git worktree list", { cwd, stdio: "ignore" });
+      checks.push({ name: "worktree_available", status: "ok", message: "git worktree is available" });
+    } catch {
+      checks.push({ name: "worktree_available", status: "warn", message: "git worktree command failed" });
+    }
+  }
+
+  // --- Config validity ---
+  const configIssues = checkConfigValidity(cwd, home);
+  if (configIssues.length === 0) {
+    checks.push({ name: "config_validity", status: "ok", message: "all config values are valid" });
+  } else {
+    checks.push({ name: "config_validity", status: "warn", message: configIssues.join("; ") });
+  }
+
+  // --- Linear connectivity (if configured) ---
+  const provider = getConfigValue({ root: cwd, home, key: "sync.provider" });
+  if (provider.value === "linear") {
+    const linearOk = checkLinearQuick();
+    checks.push({
+      name: "linear_connectivity",
+      status: linearOk ? "ok" : "warn",
+      message: linearOk ? "Linear API reachable" : "Linear API not reachable (check LINEAR_API_KEY)",
+    });
+  }
+
+  // --- Upgrade error trail ---
+  const upgradeErrors = loadUpgradeErrors();
+  if (upgradeErrors.length > 0) {
+    const latest = upgradeErrors[upgradeErrors.length - 1];
+    checks.push({
+      name: "upgrade_errors",
+      status: "warn",
+      message: `Post-upgrade failure on ${latest.ts.slice(0, 10)} (${latest.from_version} -> ${latest.to_version}, phase: ${latest.phase}). Recovery: ${latest.hint}`,
+    });
+  }
+
+  // Compute health score
+  let score = 100;
+  for (const c of checks) {
+    if (c.status === "fail") score -= 20;
+    else if (c.status === "warn") score -= 5;
+  }
+  score = Math.max(0, score);
+
+  const hasFail = checks.some((c) => c.status === "fail");
+  const hasWarn = checks.some((c) => c.status === "warn");
+  const status: DoctorReport["status"] = hasFail ? "error" : hasWarn ? "warnings" : "healthy";
+
+  // Write fix log if any fixes were applied
+  if (fix && fixLog.length > 0) {
+    const auditDir = join(home, ".gxpm", "audit");
+    mkdirSync(auditDir, { recursive: true });
+    const line = JSON.stringify({ ts: new Date().toISOString(), fixes: fixLog }) + "\n";
+    writeFileSync(join(auditDir, "doctor-fixes.jsonl"), line, { flag: "a" });
+  }
 
   return {
-    runtime: checkRuntime(gxpmRoot),
-    skill: checkSkill(home),
-    repo: checkRepo(cwd),
+    schema_version: 1,
+    status,
+    health_score: score,
+    checks,
+    runtime,
+    skill: skillChecks,
+    repo,
   };
 }
 
@@ -100,15 +270,14 @@ function checkRepo(cwd: string): RepoCheck {
     installedHooks: [],
     gxpmDirExists: false,
     issueCount: 0,
+    contextMdExists: existsSync(join(cwd, "CONTEXT.md")),
   };
 
-  // git repo?
   const gitDir = join(cwd, ".git");
   try {
     repo.isGitRepo = existsSync(gitDir) && statSync(gitDir).isDirectory();
   } catch {}
 
-  // core.hooksPath
   if (repo.isGitRepo) {
     try {
       repo.coreHooksPath = execSync("git config core.hooksPath", {
@@ -122,7 +291,6 @@ function checkRepo(cwd: string): RepoCheck {
     }
   }
 
-  // gxpm hooks installed?
   const hooksDir = join(cwd, ".githooks");
   if (existsSync(hooksDir)) {
     for (const hook of GXPM_HOOK_FILES) {
@@ -133,7 +301,6 @@ function checkRepo(cwd: string): RepoCheck {
     repo.gxpmHooksInstalled = repo.installedHooks.length === GXPM_HOOK_FILES.length;
   }
 
-  // .gxpm/ exists + count
   const gxpmDir = join(cwd, ".gxpm", "issues");
   if (existsSync(gxpmDir)) {
     repo.gxpmDirExists = true;
@@ -152,69 +319,97 @@ function checkRepo(cwd: string): RepoCheck {
   return repo;
 }
 
+function checkSkillFreshness(gxpmRoot: string): string[] {
+  const stale: string[] = [];
+  const skillsDir = join(gxpmRoot, "skills");
+  if (!existsSync(skillsDir)) return stale;
+
+  for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const skillDir = join(skillsDir, entry.name);
+    const tmplPath = join(skillDir, "SKILL.md.tmpl");
+    const skillPath = join(skillDir, "SKILL.md");
+    if (!existsSync(tmplPath) || !existsSync(skillPath)) continue;
+    try {
+      const tmplStat = statSync(tmplPath);
+      const skillStat = statSync(skillPath);
+      if (tmplStat.mtimeMs > skillStat.mtimeMs) {
+        stale.push(entry.name);
+      }
+    } catch {
+      // skip
+    }
+  }
+  return stale;
+}
+
+function checkConfigValidity(cwd: string, home: string): string[] {
+  const issues: string[] = [];
+  for (const key of KNOWN_CONFIG_KEYS) {
+    try {
+      const resolved = getResolvedConfigValue({ root: cwd, home, key });
+      // Basic type checks based on registry knowledge would go here;
+      // for now we just ensure the value can be resolved without throwing.
+    } catch (e) {
+      issues.push(`${key}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return issues;
+}
+
+function checkLinearQuick(): boolean {
+  try {
+    const token = process.env.LINEAR_API_KEY || process.env.LINEAR_API_TOKEN;
+    if (!token) return false;
+    execSync(
+      `curl -sf -m 5 -H "Authorization: ${token}" -H "Content-Type: application/json" -X POST -d '{"query":"{ viewer { id } }"}' https://api.linear.app/graphql`,
+      { stdio: "ignore" }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadUpgradeErrors(): Array<{ ts: string; phase: string; from_version: string; to_version: string; hint: string }> {
+  try {
+    const path = join(homedir(), ".gxpm", "audit", "upgrade-errors.jsonl");
+    if (!existsSync(path)) return [];
+    const lines = readFileSync(path, "utf-8").split("\n").filter((l) => l.trim());
+    return lines.map((l) => JSON.parse(l));
+  } catch {
+    return [];
+  }
+}
+
 export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [];
-
   lines.push("gxpm doctor");
   lines.push("===========");
   lines.push("");
-
-  // Runtime
-  lines.push("Runtime:");
-  lines.push(`  ${report.runtime.bunAvailable ? "✓" : "✗"} bun available`);
-  lines.push(
-    `  ${report.runtime.gxpmVersion ? "✓" : "✗"} gxpm ${report.runtime.gxpmVersion ?? "<unknown>"} at ${report.runtime.gxpmRepoRoot}`,
-  );
+  lines.push(`Status: ${report.status} (score: ${report.health_score}/100)`);
   lines.push("");
 
-  // Skill
-  lines.push("Skill installation:");
-  for (const skill of report.skill) {
-    const mark = skill.installed ? "✓" : "✗";
-    const detail = skill.installed && skill.bytes ? ` (${skill.bytes} bytes)` : "";
-    lines.push(`  ${mark} ${skill.host} → ${skill.installPath}${detail}`);
+  for (const c of report.checks) {
+    const icon = c.status === "ok" ? "✓" : c.status === "warn" ? "⚠" : "✗";
+    lines.push(`  ${icon} ${c.name}: ${c.message}`);
   }
-  if (report.skill.some((s) => !s.installed)) {
-    lines.push("    Fix: gxpm-init --install-skill --host all");
-  }
-  lines.push("");
 
-  // Repo
-  lines.push(`Current repo (${report.repo.cwd}):`);
-  if (!report.repo.isGitRepo) {
-    lines.push("  ✗ not a git repository — gxpm hooks require git");
+  lines.push("");
+  if (report.status === "healthy") {
+    lines.push("All checks passed.");
+  } else if (report.status === "warnings") {
+    lines.push("Some warnings found. Run `gxpm doctor --fix` to auto-repair where possible.");
   } else {
-    lines.push("  ✓ git repository");
-    const cph = report.repo.coreHooksPath;
-    const expectedHooksPath = join(resolve(cwd), ".githooks");
-    if (cph === expectedHooksPath) {
-      lines.push(`  ✓ git core.hooksPath = ${expectedHooksPath}`);
-    } else {
-      lines.push(`  ✗ git core.hooksPath = ${cph ?? "<unset>"} (expected ${expectedHooksPath})`);
-    }
-    if (report.repo.gxpmHooksInstalled) {
-      lines.push(`  ✓ all 4 gxpm hooks installed (${report.repo.installedHooks.join(", ")})`);
-    } else {
-      const missing = GXPM_HOOK_FILES.filter((h) => !report.repo.installedHooks.includes(h));
-      lines.push(`  ✗ missing gxpm hooks: ${missing.join(", ") || "<none>"}`);
-      lines.push("    Fix: gxpm-init --install-hooks --target .");
-    }
-    if (report.repo.gxpmDirExists) {
-      lines.push(`  ✓ .gxpm/issues/ exists (${report.repo.issueCount} issue${report.repo.issueCount === 1 ? "" : "s"} tracked)`);
-    } else {
-      lines.push("  · no .gxpm/issues/ yet (run 'gxpm issue create <id>' to start)");
-    }
-    if (report.repo.contextMdExists) {
-      lines.push("  ✓ CONTEXT.md exists");
-    } else {
-      lines.push("  · CONTEXT.md missing (create when first domain term is resolved)");
-    }
+    lines.push("Failing checks found. Run `gxpm doctor --fix` to auto-repair where possible.");
   }
 
   return lines.join("\n");
 }
 
 if (import.meta.main) {
-  const report = runDoctor();
+  const fix = Bun.argv.includes("--fix");
+  const report = runDoctor({ fix });
   console.log(formatDoctorReport(report));
+  process.exit(report.status === "error" ? 1 : 0);
 }

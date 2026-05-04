@@ -26,14 +26,33 @@ gxpm 是面向完全替代 PMC 和 gstack 的第二代代理项目管理产品�
 - `skills/gxpm/SKILL.md.tmpl`：gxpm skill 模板真值。
 - `skills/gxpm/SKILL.md`：由模板生成的 gxpm skill 入口。
 
+## 快速开始
+
+```bash
+git clone https://github.com/laozhong86/gxpm.git ~/gxpm && cd ~/gxpm
+bun install && bun link
+
+cd /path/to/your/project
+gxpm init                      # 初始化项目（hooks + skills + config）
+gxpm doctor --json             # 健康检查
+gxpm verify                    # 端到端验证
+```
+
+Agent 自举协议见 `docs/INSTALL_FOR_AGENTS.md`。
+
 ## 本地命令
 
 ```bash
 bun test
 bun run gen:skill-docs
 bun run check
-bin/gxpm issue create local-demo
-bin/gxpm issue status local-demo
+
+gxpm issue create --auto-id
+gxpm issue status <id>
+gxpm doctor --fix
+gxpm upgrade
+gxpm verify
+
 bin/gxpm workspace plan local-demo
 bin/gxpm run list local-demo
 bin/gxpm orchestrator tick --dry-run
