@@ -14,4 +14,10 @@ export const claudeHostConfig: HostConfig = {
   install: {
     strategy: "copy",
   },
+  hooks: {
+    configFileName: "settings.json",
+    configFormat: "json",
+    configPathSegments: [".claude", "settings.json"],
+    featureFlagRequired: false,
+  },
 };
