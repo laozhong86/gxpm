@@ -188,7 +188,7 @@ export function createGitProvider(): IIsolationProvider {
   return {
     async create(request: IsolationRequest): Promise<IsolationCreateResult> {
       const branchName = request.prBranch ?? `gxpm-${request.identifier}`;
-      const worktreePath = join(request.canonicalRepoPath, "..", `${request.codebaseName}-${branchName}`);
+      const worktreePath = join(request.canonicalRepoPath, ".gxpm", "worktrees", branchName);
 
       // Check if branch already exists
       const branchExists = Bun.spawnSync({
