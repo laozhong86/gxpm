@@ -22,9 +22,37 @@ describe("ship gate", () => {
     expect(artifact.type).toBe("ship-readiness");
     expect(readArtifact({ root, issueId: "GXPM-91", type: "ship-readiness" }).payload).toEqual({
       checklist: [],
+      compatibilityMigration: {
+        backwardCompatible: true,
+        configChanges: false,
+        migrationSteps: "",
+      },
+      blastRadius: {
+        affectedSubsystems: [],
+        guardrails: "",
+        unintendedEffects: "",
+      },
+      humanVerification: {
+        edgeCases: "",
+        notVerified: "",
+        verifiedScenarios: "",
+      },
       releaseNotes: "",
       reviewedArtifacts: ["self-review", "acceptance-check"],
       risks: [],
+      risksAndMitigations: [],
+      rollbackPlan: {
+        failureSymptoms: "",
+        featureFlags: "",
+        rollbackCommand: "",
+      },
+      securityImpact: {
+        fileSystemAccessChanged: false,
+        networkCallsChanged: false,
+        newPermissionsOrCapabilities: false,
+        riskAndMitigation: "",
+        secretsHandlingChanged: false,
+      },
       status: "draft",
       summary: "",
       targetBranch: "",
