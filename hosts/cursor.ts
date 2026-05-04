@@ -14,4 +14,6 @@ export const cursorHostConfig: HostConfig = {
   install: {
     strategy: "copy",
   },
+  // Cursor does not currently expose a native hooks system.
+  // Rules (.cursor/rules/*.md) and skills are the primary extension points.
 };

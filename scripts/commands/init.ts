@@ -2,7 +2,9 @@ import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { installClaudeHooks } from "../install-claude-hooks";
 import { installCodexHooks } from "../install-codex-hooks";
+import { installKimiHooks } from "../install-kimi-hooks";
 import { installSkill } from "../install-skill";
 import { probeHosts, detectedHostNames } from "../../core/host-probe";
 import type { HostProbeResult } from "../../core/host-probe";
@@ -239,7 +241,9 @@ export function runInitCommand(argv: string[]) {
   const results: Record<string, string[] | string> = {
     dirs: [],
     hooks: [],
+    claudeHooks: [],
     codexHooks: [],
+    kimiHooks: [],
     skills: [],
     config: [],
     hostsConfigured: selectedHosts.join(",") || "none",
@@ -253,15 +257,32 @@ export function runInitCommand(argv: string[]) {
     results.hooks = installGitHooks(target, gxpmRoot);
   }
 
-  // 3. Codex hooks (only if codex is among selected hosts)
+  // 3. Claude hooks (only if claude is among selected hosts)
+  if (selectedHosts.includes("claude")) {
+    const hasRepoClaude = existsSync(join(target, ".claude"));
+    const hasUserClaude = existsSync(join(homedir(), ".claude"));
+    if (hasRepoClaude || hasUserClaude) {
+      const scope = hasRepoClaude ? "repo" : "user";
+      const claudeResult = installClaudeHooks({ scope, target: scope === "repo" ? target : undefined });
+      results.claudeHooks = [claudeResult.settingsJsonPath];
+    }
+  }
+
+  // 4. Codex hooks (only if codex is among selected hosts)
   if (!options.skipCodexHooks && selectedHosts.includes("codex")) {
     const hasRepoCodex = existsSync(join(target, ".codex"));
     const hasUserCodex = existsSync(join(homedir(), ".codex"));
     if (hasRepoCodex || hasUserCodex) {
       const scope = hasRepoCodex ? "repo" : "user";
-      const codexResult = installCodexHooks({ scope, target: scope === "repo" ? target : undefined, gxpmRoot });
-      results.codexHooks = codexResult.installedScripts;
+      installCodexHooks({ scope, target: scope === "repo" ? target : undefined, gxpmRoot });
+      results.codexHooks = ["hooks.json installed"];
     }
+  }
+
+  // 5. Kimi hooks (only if kimi is among selected hosts)
+  if (selectedHosts.includes("kimi")) {
+    const kimiResult = installKimiHooks();
+    results.kimiHooks = [kimiResult.configTomlPath];
   }
 
   // 4. Skills (only for selected hosts)
@@ -288,6 +309,16 @@ export function runInitCommand(argv: string[]) {
   console.log("");
   console.log(`Installed git hooks: ${results.hooks.length}`);
   for (const h of results.hooks) console.log(`  ${h}`);
+  if (results.claudeHooks.length > 0) {
+    console.log("");
+    console.log(`Installed Claude hooks: ${results.claudeHooks.length}`);
+    for (const h of results.claudeHooks) console.log(`  ${h}`);
+  }
+  if (results.kimiHooks.length > 0) {
+    console.log("");
+    console.log(`Installed Kimi hooks: ${results.kimiHooks.length}`);
+    for (const h of results.kimiHooks) console.log(`  ${h}`);
+  }
   if (results.codexHooks.length > 0) {
     console.log("");
     console.log(`Installed Codex hooks: ${results.codexHooks.length}`);

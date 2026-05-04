@@ -258,7 +258,8 @@ async function processPreToolUse(
   const toolName = input.tool_name;
   const cwd = input.cwd;
 
-  if (toolName !== "update_plan" || !cwd) {
+  const RECORDABLE_TOOLS = ["update_plan", "ExitPlanMode"];
+  if (!toolName || !RECORDABLE_TOOLS.includes(toolName) || !cwd) {
     return { action: "allow", exitCode: 0 };
   }
 

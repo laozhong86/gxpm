@@ -15,4 +15,12 @@ export const codexHostConfig: HostConfig = {
   install: {
     strategy: "copy",
   },
+  hooks: {
+    configFileName: "hooks.json",
+    configFormat: "json",
+    configPathSegments: [".codex", "hooks.json"],
+    featureFlagRequired: true,
+    featureFlagKey: "codex_hooks",
+    featureFlagSection: "[features]",
+  },
 };
