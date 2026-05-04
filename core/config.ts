@@ -149,7 +149,7 @@ function repoConfigPath(root: string) {
   return getRepoConfigPath(root);
 }
 function globalConfigPath(home: string) {
-  return join(getGxpmHome(), ".gxpm", CONFIG_FILENAME);
+  return join(home, ".gxpm", CONFIG_FILENAME);
 }
 
 function readConfig(path: string): ConfigDoc {
