@@ -46,6 +46,7 @@ interface ConfigDoc {
   worktree?: {
     enforcement?: WorktreeEnforcement;
     default?: WorktreeDefault;
+    baseBranch?: string;
   };
   workspace?: {
     root?: string;
@@ -89,6 +90,11 @@ const CONFIG_REGISTRY = {
     defaultValue: "ask" satisfies WorktreeDefault,
     description: "Default worktree choice when enforcement is optional: use, skip, or ask.",
     normalize: (value: unknown) => normalizeEnum("worktree.default", value, WORKTREE_DEFAULT_VALUES),
+  },
+  "worktree.baseBranch": {
+    defaultValue: "main",
+    description: "Default branch name used as the base for new worktrees (e.g., main, master, develop).",
+    normalize: (value: unknown) => normalizeNonEmptyString("worktree.baseBranch", value),
   },
   "workspace.root": {
     defaultValue: ".gxpm/local/workspaces",

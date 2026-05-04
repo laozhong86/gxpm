@@ -133,6 +133,34 @@ describe("evaluateBranchPolicy", () => {
     expect(v.allowed).toBe(true);
     expect(v.code).toBe("disabled");
   });
+
+  test("allows the canonical checkout on a custom baseBranch", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm",
+      currentBranch: "master",
+      canonicalMainRoot: "/repo/gxpm",
+      baseBranch: "master",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(true);
+    expect(v.code).toBe("phase-ok");
+    expect(v.reason).toBe("current branch is master");
+  });
+
+  test("blocks a feature branch when baseBranch is master", () => {
+    const v = evaluateBranchPolicy({
+      currentRoot: "/repo/gxpm",
+      currentBranch: "feature-x",
+      canonicalMainRoot: "/repo/gxpm",
+      baseBranch: "master",
+      env: {},
+    });
+
+    expect(v.allowed).toBe(false);
+    expect(v.code).toBe("main-worktree-non-main");
+    expect(v.reason).toContain("master");
+  });
 });
 
 describe("evaluateCommitMsg", () => {

@@ -5,6 +5,7 @@ import { evaluateBranchPolicy, evaluateCommitMsg, evaluatePostMerge, evaluatePre
 import { initializeLandFindings, reconcileLandFindings } from "../../core/land";
 import { runPostLandSkillSync } from "../post-land-sync";
 import { asRecord, currentGitBranch, currentGitRoot, detectCanonicalMainRoot, optionValue } from "./helpers";
+import { getResolvedConfigValue } from "../../core/config";
 
 export function runGateCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {
   if (subcommand === "pre-commit") {
@@ -92,17 +93,19 @@ function runBranchPolicyGate(argv: string[]) {
     detectCanonicalMainRoot() ??
     currentRoot;
   const allowedWorktreeRoot = optionValue(argv, "--worktree-root") ?? process.env.GXPM_WORKTREE_ROOT ?? undefined;
+  const baseBranch = getResolvedConfigValue({ key: "worktree.baseBranch" }).value as string;
   const verdict = evaluateBranchPolicy({
     currentRoot,
     currentBranch,
     canonicalMainRoot,
     allowedWorktreeRoot,
+    baseBranch,
     env: process.env,
   });
 
   if (!verdict.allowed) {
     console.error(`[gxpm gate branch-policy] ${verdict.code}: ${verdict.reason}`);
-    console.error("Use a dedicated git worktree for feature branches; keep the canonical checkout on main.");
+    console.error(`Use a dedicated git worktree for feature branches; keep the canonical checkout on ${baseBranch}.`);
     console.error("Escape: GXPM_GATE_DISABLE=1 git ...");
     process.exit(1);
   }
