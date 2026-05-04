@@ -25,7 +25,7 @@ function checkGitHooksFire(target: string): VerifyCheck {
     // Create a temp file to verify pre-commit fires
     const testFile = join(target, ".gxpm", ".verify-hook-test");
     writeFileSync(testFile, "hook test\n");
-    execSync("git add .gxpm/.verify-hook-test", { cwd: target });
+    execSync("git add -f .gxpm/.verify-hook-test", { cwd: target });
     // Run pre-commit hook manually to see if it exits 0
     const hooksPath = execSync("git config core.hooksPath", { cwd: target, encoding: "utf-8" }).trim();
     const preCommit = join(hooksPath, "pre-commit");
@@ -100,10 +100,10 @@ function checkIssueLifecycle(target: string, dryRun: boolean): VerifyCheck {
       return { name: "issue_lifecycle", status: "fail", message: "Could not parse issue creation output" };
     }
     const id = match[1];
+    // Initialize required artifact for triage → plan transition
+    execSync(`bin/gxpm triage init ${id}`, { cwd: target, stdio: "ignore" });
     // Transition to plan
     execSync(`bin/gxpm issue transition ${id} plan`, { cwd: target, stdio: "ignore" });
-    // Transition back to triage (to keep it clean)
-    execSync(`bin/gxpm issue transition ${id} triage`, { cwd: target, stdio: "ignore" });
     return { name: "issue_lifecycle", status: "ok", message: `Created and transitioned ${id} successfully` };
   } catch (e) {
     return { name: "issue_lifecycle", status: "fail", message: `Issue lifecycle test failed: ${e instanceof Error ? e.message : String(e)}` };

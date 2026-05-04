@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readArtifact } from "../core/artifacts";
@@ -88,5 +88,54 @@ describe("dispatch gate", () => {
     const transition = runCli(root, ["issue", "transition", "GXPM-53", "implement"]);
     expect(transition.exitCode).toBe(0);
     expect(output(transition)).toContain("transitioned GXPM-53: dispatch -> implement");
+  });
+
+  test("auto-creates worktree on dispatch to implement transition in a git repo", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-worktree-"));
+    // Initialize git repo on main branch
+    Bun.spawnSync({ cmd: ["git", "init"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.email", "test@test.com"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.name", "Test"], cwd: root });
+    writeFileSync(join(root, "file.txt"), "hello");
+    Bun.spawnSync({ cmd: ["git", "add", "."], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "commit", "-m", "init"], cwd: root });
+
+    enterPhaseCli(root, "GXPM-54", "dispatch");
+
+    const dispatch = runCli(root, ["dispatch", "init", "GXPM-54"]);
+    expect(dispatch.exitCode).toBe(0);
+
+    const transition = runCli(root, ["issue", "transition", "GXPM-54", "implement"]);
+    expect(transition.exitCode).toBe(0);
+    expect(output(transition)).toContain("transitioned GXPM-54: dispatch -> implement");
+    expect(output(transition)).toContain("worktree:");
+    expect(output(transition)).toContain("branch:");
+
+    const handoff = readArtifact({ root, issueId: "GXPM-54", type: "dispatch-handoff" });
+    const payload = handoff.payload as Record<string, unknown>;
+    expect(payload.worktreeDecision).toBeOneOf(["created", "reused"]);
+    expect(payload.worktreePath).toBeTruthy();
+    expect(existsSync(String(payload.worktreePath))).toBe(true);
+  });
+
+  test("worktree gate still blocks transition on feature branch in canonical checkout", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-worktree-gate-"));
+    Bun.spawnSync({ cmd: ["git", "init"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.email", "test@test.com"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.name", "Test"], cwd: root });
+    writeFileSync(join(root, "file.txt"), "hello");
+    Bun.spawnSync({ cmd: ["git", "add", "."], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "commit", "-m", "init"], cwd: root });
+
+    // Create a feature branch in the canonical checkout
+    Bun.spawnSync({ cmd: ["git", "checkout", "-b", "feat-55"], cwd: root });
+
+    enterPhaseCli(root, "GXPM-55", "dispatch");
+    runCli(root, ["dispatch", "init", "GXPM-55"]);
+
+    const transition = runCli(root, ["issue", "transition", "GXPM-55", "implement"]);
+    expect(transition.exitCode).toBe(1);
+    expect(output(transition)).toContain("Transition blocked");
+    expect(output(transition)).toContain("git worktree");
   });
 });
