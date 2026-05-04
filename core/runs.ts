@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getIssuePaths, readIssueState } from "./state";
 import { resolveSessionId } from "./session";
+import { classifyError, type ErrorType } from "./resilience";
 
 export const RUN_STATUSES = [
   "preparing-workspace",
@@ -55,6 +56,7 @@ export interface RunRecord {
   sessionId: string;
   workspacePath?: string;
   failureReason?: string;
+  errorType?: ErrorType;
   events: RunEvent[];
 }
 
@@ -77,6 +79,7 @@ export interface AppendRunEventInput {
   status?: RunStatus | string;
   message?: string;
   failureReason?: string;
+  errorType?: ErrorType;
   payload?: Record<string, unknown>;
 }
 
@@ -113,8 +116,20 @@ export function startRun(input: StartRunInput): RunRecord {
     ],
   };
 
-  mkdirSync(runsDir(root, input.issueId), { recursive: true });
-  writeRunRecord(root, run);
+  try {
+    mkdirSync(runsDir(root, input.issueId), { recursive: true });
+    writeRunRecord(root, run);
+  } catch (rawError) {
+    const error = rawError instanceof Error ? rawError : new Error(String(rawError));
+    run.errorType = classifyError(error);
+    // Write what we can before re-throwing so the error type is discoverable
+    try {
+      writeRunRecord(root, run);
+    } catch {
+      // ignore secondary write failure
+    }
+    throw error;
+  }
   return run;
 }
 
@@ -123,11 +138,18 @@ export function appendRunEvent(input: AppendRunEventInput): RunRecord {
   const run = readRun({ root, issueId: input.issueId, runId: input.runId });
   const now = new Date().toISOString();
   const status = assertRunStatus(input.status ?? run.status);
+
+  let errorType = input.errorType;
+  if (!errorType && input.failureReason) {
+    errorType = classifyError(new Error(input.failureReason));
+  }
+
   const updated: RunRecord = {
     ...run,
     status,
     updatedAt: now,
     failureReason: input.failureReason ?? run.failureReason,
+    errorType: errorType ?? run.errorType,
     events: [
       ...run.events,
       {
@@ -141,7 +163,18 @@ export function appendRunEvent(input: AppendRunEventInput): RunRecord {
     ],
   };
 
-  writeRunRecord(root, updated);
+  try {
+    writeRunRecord(root, updated);
+  } catch (rawError) {
+    const error = rawError instanceof Error ? rawError : new Error(String(rawError));
+    updated.errorType = classifyError(error);
+    try {
+      writeRunRecord(root, updated);
+    } catch {
+      // ignore secondary write failure
+    }
+    throw error;
+  }
   return updated;
 }
 
