@@ -7,7 +7,10 @@ import { renderSkillContentForHost } from "./gen-skill-docs";
 import type { HostConfig } from "../core/contracts/host";
 
 interface InstallSkillOptions {
+  /** @deprecated use `hosts` instead */
   hostName?: string; // "codex" | "claude" | "all"
+  /** Explicit list of host names to install to. Overrides `hostName`. */
+  hosts?: string[];
   root?: string; // gxpm repo root (default: cwd)
   home?: string; // override for testing (default: homedir())
 }
@@ -43,7 +46,7 @@ function renderOrReadSkill(root: string, host: HostConfig, tmplPath: string): st
 export function installSkill(options: InstallSkillOptions = {}): string[] {
   const root = options.root ?? DEFAULT_GXPM_ROOT;
   const home = options.home ?? homedir();
-  const targets = resolveTargets(options.hostName);
+  const targets = resolveTargets(options.hostName, options.hosts);
 
   const installed: string[] = [];
 
@@ -61,7 +64,10 @@ export function installSkill(options: InstallSkillOptions = {}): string[] {
   return installed;
 }
 
-function resolveTargets(name: string | undefined): readonly HostConfig[] {
+function resolveTargets(name: string | undefined, hosts: string[] | undefined): readonly HostConfig[] {
+  if (hosts && hosts.length > 0) {
+    return hosts.map((n) => getHostConfig(n));
+  }
   if (!name || name === "all") {
     return ALL_HOST_CONFIGS;
   }
@@ -96,6 +102,7 @@ function applyFrontmatter(content: string, host: HostConfig): string {
 
 interface ParsedArgs {
   hostName?: string;
+  hosts?: string[];
   root?: string;
   home?: string;
 }
@@ -106,6 +113,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     const arg = argv[index];
     if (arg === "--host") {
       options.hostName = argv[++index];
+    } else if (arg === "--hosts") {
+      const raw = argv[++index];
+      options.hosts = raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
     } else if (arg === "--root") {
       options.root = argv[++index];
     } else if (arg === "--home") {
@@ -122,6 +132,7 @@ if (import.meta.main) {
     const args = parseArgs(Bun.argv.slice(2));
     const installed = installSkill({
       hostName: args.hostName,
+      hosts: args.hosts,
       root: args.root ? resolve(args.root) : undefined,
       home: args.home ? resolve(args.home) : undefined,
     });
