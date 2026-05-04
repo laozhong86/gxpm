@@ -126,7 +126,7 @@ async function main(argv: string[]) {
   }
 
   if (command === "issue") {
-    runIssueCommand(argv, subcommand, issueId, value);
+    await runIssueCommand(argv, subcommand, issueId, value);
     return;
   }
 

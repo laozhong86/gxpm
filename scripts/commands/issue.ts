@@ -24,13 +24,15 @@ import {
   releaseIssueClaim,
 } from "../../core/issue-readiness";
 import { runPostLandSkillSync } from "../post-land-sync";
+import { ensureIssueWorkspaceWithResolver } from "../../core/workspace-runtime";
+import { readArtifact, writeArtifact } from "../../core/artifacts";
 import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
 const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}]`;
 
-export function runIssueCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, value: string | undefined) {
+export async function runIssueCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, value: string | undefined) {
   if (subcommand === "create") {
     const resolvedId = resolveIssueCreateId(argv);
     const issueType = parseIssueTypeOption(argv, "feature");
@@ -173,6 +175,40 @@ export function runIssueCommand(argv: string[], subcommand: string | undefined, 
     if (!issueId || !value) throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
     const before = readIssueState({ issueId });
     const after = transitionIssuePhase({ issueId, nextPhase: value });
+
+    // Auto-ensure worktree on dispatch -> implement transition
+    if (before.currentPhase === "dispatch" && after.currentPhase === "implement") {
+      try {
+        const result = await ensureIssueWorkspaceWithResolver({ issueId });
+        if (result.resolution?.status === "resolved" && result.resolution.env) {
+          const handoff = readArtifact({ issueId, type: "dispatch-handoff" });
+          writeArtifact({
+            issueId,
+            type: "dispatch-handoff",
+            payload: {
+              ...(handoff.payload as Record<string, unknown>),
+              worktreePath: result.resolution.env.workspacePath,
+              worktreeDecision: result.method?.type === "created" ? "created" : "reused",
+            },
+          });
+          console.log(`worktree: ${result.resolution.env.workspacePath}`);
+          if (result.resolution.env.branchName) {
+            console.log(`branch:   ${result.resolution.env.branchName}`);
+          }
+          if (result.warnings) {
+            for (const warning of result.warnings) {
+              console.log(`warning:  ${warning}`);
+            }
+          }
+        } else if (result.resolution?.status === "blocked" && result.userMessage) {
+          console.error(`worktree blocked: ${result.userMessage}`);
+        }
+      } catch (worktreeError) {
+        const message = worktreeError instanceof Error ? worktreeError.message : String(worktreeError);
+        console.error(`worktree ensure failed: ${message}`);
+      }
+    }
+
     console.log(`transitioned ${after.issueId}: ${before.currentPhase} -> ${after.currentPhase}`);
     if (after.currentPhase === "land") {
       const sync = runPostLandSkillSync({ env: process.env });
@@ -402,6 +438,20 @@ function runIssueNext(issueId: string) {
     console.log(`Then: gxpm issue transition ${issueId} ${rule.nextPhase}`);
   } else {
     console.log(`Artifact ${rule.requiredArtifact} already exists.`);
+    // Worktree advisory: when dispatch-handoff exists but worktree is still pending
+    if (state.currentPhase === "dispatch") {
+      try {
+        const handoff = readArtifact({ issueId, type: "dispatch-handoff" });
+        const decision = (handoff.payload as Record<string, unknown>)?.worktreeDecision;
+        if (decision === "pending") {
+          console.log(`Next: gxpm workspace ensure ${issueId}`);
+          console.log("      → prepares the git worktree before implementation");
+          console.log("");
+        }
+      } catch {
+        // ignore missing dispatch-handoff
+      }
+    }
     console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
   }
 }

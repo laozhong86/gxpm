@@ -103,6 +103,17 @@ gxpm worktree policy
 Resolution chain: `config.json` → user message → `AGENTS.md` → default (optional, ask).
 When `enforcement = required`: always create a worktree. When `forbidden`: never.
 
+In the **dispatch** phase, prepare the workspace before transitioning to implement:
+
+```bash
+gxpm workspace ensure <issue-id>
+```
+
+- If a git worktree is created or reused, the path is printed. `cd` into it before editing code.
+- If the command returns a plain directory (non-git repo), use that directory directly.
+- When `enforcement = required` or `default = use`, treat `gxpm workspace ensure` as a mandatory pre-transition step.
+- When transitioning `dispatch → implement`, gxpm automatically calls `ensureIssueWorkspaceWithResolver` and updates the `dispatch-handoff` artifact with the resulting `worktreePath` and `worktreeDecision`.
+
 ### Checkpoint / Resume
 
 Save handoff state:
