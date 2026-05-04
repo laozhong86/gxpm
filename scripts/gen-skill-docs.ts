@@ -5,6 +5,8 @@ import { discoverTemplates } from "./discover-skills";
 import { getHostConfig } from "../hosts";
 import type { HostConfig } from "../core/contracts/host";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
+import { renderTemplate } from "../core/converters/template-renderer";
+import { SkillParser, HostConverter, SkillWriter } from "../core/converters";
 
 export interface GenerateSkillDocsOptions {
   root?: string;
@@ -23,16 +25,17 @@ export function renderSkillContentForHost(
   const templatePath = join(root, templateRelative);
   const source = readFileSync(templatePath, "utf8");
 
-  // Static files (non-.tmpl) are read as-is without template rendering
+  // Static files (non-.tmpl) are returned as-is for backward compatibility
   if (!templateRelative.endsWith(".tmpl")) {
     return source;
   }
 
+  // Template files keep string-replacement behavior for backward compatibility
   const rendered = renderTemplate(source, {
-    artifactReadCommands: buildArtifactReadCommands(),
-    phaseGateCommands: buildPhaseGateCommands(),
-    phaseTransitionSummary: buildPhaseTransitionSummary(),
-    preamble: buildPreamble(root, host),
+    PREAMBLE: buildPreamble(root, host),
+    ARTIFACT_READ_COMMANDS: buildArtifactReadCommands(),
+    PHASE_GATE_COMMANDS: buildPhaseGateCommands(),
+    PHASE_TRANSITION_SUMMARY: buildPhaseTransitionSummary(),
     references: buildReferences(root, references),
   });
   return insertGeneratedMark(rendered);
@@ -66,28 +69,6 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
   }
 
   return outputs;
-}
-
-interface TemplateVars {
-  artifactReadCommands: string;
-  phaseGateCommands: string;
-  phaseTransitionSummary: string;
-  preamble: string;
-  references: Record<string, string>;
-}
-
-function renderTemplate(template: string, vars: TemplateVars) {
-  let result = template
-    .replaceAll("{{PREAMBLE}}", vars.preamble.trimEnd())
-    .replaceAll("{{ARTIFACT_READ_COMMANDS}}", vars.artifactReadCommands)
-    .replaceAll("{{PHASE_GATE_COMMANDS}}", vars.phaseGateCommands)
-    .replaceAll("{{PHASE_TRANSITION_SUMMARY}}", vars.phaseTransitionSummary);
-
-  for (const [name, content] of Object.entries(vars.references)) {
-    result = result.replaceAll(`{{REFERENCE:${name}}}`, content);
-  }
-
-  return result;
 }
 
 function buildReferences(root: string, references?: string[]): Record<string, string> {
