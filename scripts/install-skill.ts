@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS, getHostConfig } from "../hosts";
 import { discoverTemplates } from "./discover-skills";
 import { renderSkillContentForHost } from "./gen-skill-docs";
+import { SkillParser, HostConverter, SkillWriter } from "../core/converters";
 import type { HostConfig } from "../core/contracts/host";
 
 interface InstallSkillOptions {
@@ -39,8 +40,15 @@ function renderOrReadSkill(root: string, host: HostConfig, template: ReturnType<
   if (template.tmpl.endsWith(".tmpl")) {
     return renderSkillContentForHost(root, host, template.tmpl, template.references);
   }
-  // Static file: read as-is, but resolve reference placeholders
-  return renderSkillContentForHost(root, host, template.tmpl, template.references);
+
+  // Static file: use the new AST pipeline for multi-platform conversion
+  const source = readFileSync(join(root, template.tmpl), "utf8");
+  const parser = new SkillParser();
+  const converter = new HostConverter();
+  const writer = new SkillWriter();
+  const doc = parser.parse(source);
+  const converted = converter.convert(doc, { hostName: host.name });
+  return writer.write(converted);
 }
 
 export function installSkill(options: InstallSkillOptions = {}): string[] {
@@ -53,7 +61,9 @@ export function installSkill(options: InstallSkillOptions = {}): string[] {
   for (const template of discoverTemplates(root)) {
     for (const host of targets) {
       const content = renderOrReadSkill(root, host, template);
-      const transformed = applyFrontmatter(content, host);
+      // For .tmpl files, frontmatter is not yet filtered; apply host-specific filtering.
+      // For static files, the new pipeline already filtered frontmatter.
+      const transformed = template.tmpl.endsWith(".tmpl") ? applyFrontmatter(content, host) : content;
       const installPath = resolveSkillInstallPath(template.name, host, home);
       mkdirSync(dirname(installPath), { recursive: true });
       writeFileSync(installPath, transformed);
