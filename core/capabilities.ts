@@ -323,6 +323,55 @@ export const CAPABILITY_REGISTRY = [
     commands: ["gxpm --verbose-events <command>"],
     sourceFiles: ["core/workflow-event-emitter.ts"],
   },
+  {
+    id: "execution.dag-run",
+    title: "DAG Run",
+    summary: "Execute a DAG workflow with topological ordering, concurrent layers, trigger rules, and when conditions.",
+    runtime: "execution",
+    status: "active",
+    inputContract: "A validated WorkflowDefinition with DagNode array and an executor function.",
+    outputContract: {
+      description: "DagExecutionResult with success flag, node outputs map, and duration.",
+      artifacts: [],
+      evidence: ["stdout execution trace", "node output map"],
+    },
+    mutationPolicy: {
+      scope: "none",
+      description: "Execution is side-effect-free except for user-provided executor callbacks.",
+    },
+    idempotency: "Same inputs produce same topological ordering; executor side-effects are caller-responsible.",
+    failureModes: [
+      { description: "Cycle detected at runtime", defaultType: "FATAL" },
+      { description: "Node executor throws", defaultType: "FATAL" },
+      { description: "Abort signal triggered", defaultType: "TRANSIENT" },
+    ],
+    commands: ["gxpm dag run <workflow-file>"],
+    sourceFiles: ["core/dag-executor.ts", "core/dag-loader.ts", "core/dag-schemas.ts"],
+  },
+  {
+    id: "execution.dag-validate",
+    title: "DAG Validate",
+    summary: "Validate a workflow definition for structural correctness: unique IDs, dependency existence, cycle detection, and output reference integrity.",
+    runtime: "execution",
+    status: "active",
+    inputContract: "A raw workflow object or YAML string.",
+    outputContract: {
+      description: "Parsed WorkflowDefinition or WorkflowLoadError with detailed message.",
+      artifacts: [],
+      evidence: ["stdout validation result"],
+    },
+    mutationPolicy: {
+      scope: "none",
+      description: "Read-only validation; no mutations.",
+    },
+    idempotency: "Repeated validation of the same input produces the same result.",
+    failureModes: [
+      { description: "Parse error", defaultType: "FATAL" },
+      { description: "Validation error", defaultType: "FATAL" },
+    ],
+    commands: ["gxpm dag validate <workflow-file>"],
+    sourceFiles: ["core/dag-loader.ts", "core/dag-schemas.ts"],
+  },
 ] as const satisfies readonly CapabilityContract[];
 
 export type CapabilityId = (typeof CAPABILITY_REGISTRY)[number]["id"];

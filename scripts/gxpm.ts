@@ -16,6 +16,7 @@ import { runWikiCommand } from "./commands/wiki";
 import { runInitCommand } from "./commands/init";
 import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
+import { runDagCommand } from "./commands/dag";
 
 async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
@@ -136,6 +137,11 @@ async function main(argv: string[]) {
 
   if (command === "gate") {
     runGateCommand(argv, subcommand, issueId);
+    return;
+  }
+
+  if (command === "dag") {
+    runDagCommand(argv);
     return;
   }
 
