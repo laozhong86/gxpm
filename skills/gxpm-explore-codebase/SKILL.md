@@ -2,7 +2,6 @@
 name: Explore Codebase
 description: Navigate and understand codebase structure using the knowledge graph
 ---
-<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
 ## Explore Codebase
 
@@ -22,6 +21,15 @@ Use the code-review-graph MCP tools to explore and understand the codebase.
 - Start broad (stats, architecture) then narrow down to specific areas.
 - Use `children_of` on a file to see all its functions and classes.
 - Use `find_large_functions` to identify complex code.
+
+## Script-First Helpers
+
+For data-heavy graph output, use bundled scripts instead of manual parsing:
+
+```bash
+# Summarize community list into a compact markdown table
+list_communities_tool | bun run skills/gxpm-explore-codebase/scripts/summarize-communities.ts
+```
 
 ## Token Efficiency Rules
 - ALWAYS start with `get_minimal_context(task="<your task>")` before any other graph tool.

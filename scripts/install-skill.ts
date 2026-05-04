@@ -35,12 +35,12 @@ function resolveSkillInstallPath(skillName: string, host: HostConfig, home: stri
   return join(home, dirname(host.globalRoot), skillName, "SKILL.md");
 }
 
-function renderOrReadSkill(root: string, host: HostConfig, tmplPath: string): string {
-  if (tmplPath.endsWith(".tmpl")) {
-    return renderSkillContentForHost(root, host, tmplPath);
+function renderOrReadSkill(root: string, host: HostConfig, template: ReturnType<typeof discoverTemplates>[number]): string {
+  if (template.tmpl.endsWith(".tmpl")) {
+    return renderSkillContentForHost(root, host, template.tmpl, template.references);
   }
-  // Static file: read as-is, no template rendering
-  return readFileSync(join(root, tmplPath), "utf8");
+  // Static file: read as-is, but resolve reference placeholders
+  return renderSkillContentForHost(root, host, template.tmpl, template.references);
 }
 
 export function installSkill(options: InstallSkillOptions = {}): string[] {
@@ -52,12 +52,40 @@ export function installSkill(options: InstallSkillOptions = {}): string[] {
 
   for (const template of discoverTemplates(root)) {
     for (const host of targets) {
-      const content = renderOrReadSkill(root, host, template.tmpl);
+      const content = renderOrReadSkill(root, host, template);
       const transformed = applyFrontmatter(content, host);
       const installPath = resolveSkillInstallPath(template.name, host, home);
       mkdirSync(dirname(installPath), { recursive: true });
       writeFileSync(installPath, transformed);
       installed.push(installPath);
+
+      // Install references
+      if (template.references) {
+        const skillInstallDir = dirname(installPath);
+        const refsInstallDir = join(skillInstallDir, "references");
+        for (const refPath of template.references) {
+          const refContent = readFileSync(join(root, refPath), "utf8");
+          const refName = refPath.replace(/^.*\//, "");
+          const refInstallPath = join(refsInstallDir, refName);
+          mkdirSync(refsInstallDir, { recursive: true });
+          writeFileSync(refInstallPath, refContent);
+          installed.push(refInstallPath);
+        }
+      }
+
+      // Install scripts
+      if (template.scripts) {
+        const skillInstallDir = dirname(installPath);
+        const scriptsInstallDir = join(skillInstallDir, "scripts");
+        for (const scriptPath of template.scripts) {
+          const scriptContent = readFileSync(join(root, scriptPath), "utf8");
+          const scriptName = scriptPath.replace(/^.*\//, "");
+          const scriptInstallPath = join(scriptsInstallDir, scriptName);
+          mkdirSync(scriptsInstallDir, { recursive: true });
+          writeFileSync(scriptInstallPath, scriptContent);
+          installed.push(scriptInstallPath);
+        }
+      }
     }
   }
 

@@ -17,6 +17,7 @@ gxpm 的 skill 和 capability 文档会逐步由模板生成。本文件规定�
 当前已支持：
 
 - `{{PREAMBLE}}`：由 host config 注入 host-aware preamble。
+- `{{REFERENCE:<name>}}`：注入 `references/<name>.md` 的内容。用于将详细指南、模板、示例从 SKILL.md 中拆分，减少主文件上下文负载。
 
 新增占位符时必须：
 

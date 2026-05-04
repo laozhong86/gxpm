@@ -2,6 +2,7 @@
 name: grill
 description: Grilling session that challenges plans against the existing domain model, sharpens terminology, and updates CONTEXT.md and ADRs inline as decisions crystallise. Use when user wants to stress-test a plan, align on requirements, or make architecture decisions.
 ---
+<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
 # Grill
 
@@ -40,6 +41,7 @@ When domain relationships are being discussed, stress-test them with specific sc
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it:
 
 > "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
+
 
 ## Documentation side effects
 
@@ -101,6 +103,7 @@ What are we doing?
 
 What becomes easier? What becomes harder?
 ```
+
 
 ## gxpm integration
 

@@ -7,17 +7,19 @@
 ```
 skills/<category>/<name>/
 ├── SKILL.md           # Main instructions (required)
-├── REFERENCE.md       # Detailed docs (if needed)
-├── EXAMPLES.md        # Usage examples (if needed)
-└── scripts/           # Utility scripts (if needed)
-    └── helper.sh
+├── SKILL.md.tmpl      # Template source (if host-specific injection needed)
+├── references/        # Reference docs for on-demand loading (optional)
+│   └── detailed-guide.md
+├── scripts/           # Utility scripts for Script-First architecture (optional)
+│   └── helper.ts
+└── REFERENCE.md       # Legacy detailed docs (deprecated, use references/)
 ```
 
 ## Two Types of Skills
 
 ### 1. Generated skills (`.tmpl`)
 
-Use `.tmpl` when the skill needs host-specific injection:
+Use `.tmpl` when the skill needs host-specific injection or references/ loading:
 
 ```
 skills/gxpm/SKILL.md.tmpl
@@ -28,6 +30,7 @@ Variables available during generation:
 - `{{ARTIFACT_READ_COMMANDS}}` — `gxpm artifact read` commands for all phase gates
 - `{{PHASE_GATE_COMMANDS}}` — `gxpm <phase> init` commands for all transitions
 - `{{PHASE_TRANSITION_SUMMARY}}` — strict transition rules summary
+- `{{REFERENCE:<name>}}` — inject content from `references/<name>.md`
 
 Generated output goes to the same path without `.tmpl`:
 ```
@@ -97,6 +100,13 @@ Split into separate files when:
 - Content has distinct domains
 - Advanced features are rarely needed
 
+Use `references/` for on-demand content that should not bloat the main SKILL.md:
+- Detailed step-by-step templates
+- Long examples or personas
+- Data-heavy reference tables
+
+In `.tmpl`, reference a file with `{{REFERENCE:filename}}` (reads `references/filename.md`).
+
 ## Review Checklist
 
 After drafting, verify:
@@ -107,6 +117,8 @@ After drafting, verify:
 - [ ] Concrete examples included
 - [ ] References one level deep
 - [ ] gxpm integration section included (for phase-aware skills)
+- [ ] references/ files are `.md` and named without spaces
+- [ ] scripts/ are executable and documented in SKILL.md
 
 ## Installation
 

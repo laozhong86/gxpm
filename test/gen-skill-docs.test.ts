@@ -69,4 +69,25 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("`/gxpm-grill`");
     expect(generated).toContain("`/gxpm-tdd`");
   });
+
+  test("renders {{REFERENCE:name}} placeholders from references/", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-ref-"));
+    mkdirSync(join(root, "skills", "test-skill"), { recursive: true });
+    writeFileSync(
+      join(root, "skills", "test-skill", "SKILL.md.tmpl"),
+      ["---", "name: test", "description: test", "---", "", "# Test", "", "{{REFERENCE:detail}}"].join("\n"),
+    );
+    mkdirSync(join(root, "skills", "test-skill", "references"), { recursive: true });
+    writeFileSync(join(root, "skills", "test-skill", "references", "detail.md"), "Detailed content here.");
+
+    const generated = renderSkillContentForHost(
+      root,
+      getHostConfig("codex"),
+      "skills/test-skill/SKILL.md.tmpl",
+      ["skills/test-skill/references/detail.md"],
+    );
+
+    expect(generated).toContain("Detailed content here.");
+    expect(generated).not.toContain("{{REFERENCE:");
+  });
 });

@@ -1,0 +1,30 @@
+---
+name: grill
+description: Grilling session that challenges plans against the existing domain model, sharpens terminology, and updates CONTEXT.md and ADRs inline as decisions crystallise. Use when user wants to stress-test a plan, align on requirements, or make architecture decisions.
+---
+
+# Grill
+
+Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+
+## When to trigger
+
+- Before leaving `triage` — when issue scope is unclear or involves new domain concepts.
+- During `plan` — when implementation decisions need fleshing out.
+- Any time the user says "grill me", "let's align", or describes a design without details.
+
+## Process
+
+{{REFERENCE:process}}
+
+## Documentation side effects
+
+As decisions crystallise, update project documentation inline. Do not batch these up — capture them as they happen.
+
+{{REFERENCE:documentation-templates}}
+
+## gxpm integration
+
+- Before leaving `triage`, use grilling to clarify issue scope and write the `acceptance-contract`.
+- During `plan`, use grilling to resolve implementation decisions and write the `implementation-plan`.
+- Record any ADR created during grilling in the issue's artifact history via `gxpm artifact write`.

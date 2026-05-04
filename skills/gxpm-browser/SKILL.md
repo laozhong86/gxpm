@@ -2,6 +2,7 @@
 name: gxpm-browser
 description: Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
 ---
+<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
 # gxpm-browser
 
@@ -59,6 +60,7 @@ gxpm-browser screenshot <url> --no-headless
 
 Opens a visible Chrome window. Use sparingly; default is headless.
 
+
 ## Evidence path
 
 When `--issueid` is provided, screenshots are written to:
@@ -79,6 +81,7 @@ gxpm artifact write <issue-id> qa-findings --json '{"evidence":["browser/screens
 - No persistent session state between commands (each command launches a fresh browser).
 - No network interception or request mocking; use `agent-browser` for advanced automation.
 - cmux browser session investigation is a separate path (see main gxpm skill).
+
 
 ## Read Next
 
