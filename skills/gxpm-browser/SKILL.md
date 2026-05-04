@@ -1,6 +1,7 @@
 ---
 name: gxpm-browser
 description: Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
+status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
