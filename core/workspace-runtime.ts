@@ -7,6 +7,7 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { getResolvedConfigValue } from "./config";
+import { resolveDevPort } from "./port-allocation";
 import { readIssueState } from "./state";
 
 export interface WorkspacePlanInput {
@@ -21,6 +22,7 @@ export interface WorkspacePlan {
   workspaceRoot: string;
   workspacePath: string;
   exists: boolean;
+  devPort: number;
 }
 
 export interface WorkspaceEnsureResult extends WorkspacePlan {
@@ -39,12 +41,17 @@ export function planIssueWorkspace(input: WorkspacePlanInput): WorkspacePlan {
   const workspacePath = join(workspaceRoot, workspaceKey);
   assertPathInsideRoot(workspaceRoot, workspacePath);
 
-  return {
+  const plan = {
     issueId: state.issueId,
     workspaceKey,
     workspaceRoot,
     workspacePath,
     exists: existsSync(workspacePath),
+  };
+
+  return {
+    ...plan,
+    devPort: resolveDevPort({ workspacePath, root }),
   };
 }
 
