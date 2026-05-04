@@ -1,4 +1,4 @@
-import type { HostConfig } from "../scripts/host-config";
+import type { HostConfig } from "../core/contracts/host";
 
 export const claudeHostConfig: HostConfig = {
   name: "claude",
