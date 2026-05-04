@@ -54,6 +54,24 @@ describe("setConfigValue + getConfigValue", () => {
     expect((list.repo as any).worktree.enforcement).toBe("forbidden");
   });
 
+  test("worktree.baseBranch round-trips and resolves to default", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-base-branch-"));
+    setConfigValue({ root, scope: "repo", key: "worktree.baseBranch", value: "develop" });
+    const got = getConfigValue({ root, key: "worktree.baseBranch" });
+    expect(got.value).toBe("develop");
+    expect(got.source).toBe("config-repo");
+
+    const resolved = getResolvedConfigValue({ root, key: "worktree.baseBranch" });
+    expect(resolved.value).toBe("develop");
+    expect(resolved.source).toBe("config-repo");
+
+    // Default when unset
+    const emptyRoot = mkdtempSync(join(tmpdir(), "gxpm-cfg-empty-"));
+    const defaulted = getResolvedConfigValue({ root: emptyRoot, key: "worktree.baseBranch" });
+    expect(defaulted.value).toBe("main");
+    expect(defaulted.source).toBe("default");
+  });
+
   test("resolved values include whitelisted defaults", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-default-root-"));
     const got = getResolvedConfigValue({ root, key: "update_check" });
@@ -77,6 +95,7 @@ describe("setConfigValue + getConfigValue", () => {
     expect(entries.map((entry) => entry.key)).toEqual([
       "worktree.enforcement",
       "worktree.default",
+      "worktree.baseBranch",
       "workspace.root",
       "workspace.basePort",
       "update_check",
@@ -116,6 +135,7 @@ describe("setConfigValue + getConfigValue", () => {
     expect(list.exitCode).toBe(0);
     expect(list.stdout.toString()).toContain("worktree.enforcement");
     expect(list.stdout.toString()).toContain("worktree.default");
+    expect(list.stdout.toString()).toContain("worktree.baseBranch");
     expect(list.stdout.toString()).toContain("workspace.root");
     expect(list.stdout.toString()).toContain("update_check: false");
   });
@@ -139,6 +159,7 @@ content
     const cfg = parseAgentsMdConfig(md);
     expect((cfg as any).worktree.enforcement).toBe("required");
     expect((cfg as any).worktree.default).toBe("use");
+    expect((cfg as any).worktree.baseBranch).toBeUndefined();
   });
 
   test("handles colon-separated lines without bullet", () => {

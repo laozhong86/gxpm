@@ -44,6 +44,7 @@ export interface BranchPolicyInput {
   currentBranch?: string;
   canonicalMainRoot: string;
   allowedWorktreeRoot?: string;
+  baseBranch?: string;
   env: Env;
 }
 
@@ -81,17 +82,18 @@ export function evaluateBranchPolicy(input: BranchPolicyInput): GateVerdict {
   const currentRoot = normalizePath(input.currentRoot);
   const canonicalMainRoot = normalizePath(input.canonicalMainRoot);
   const currentBranch = input.currentBranch ?? "HEAD";
+  const baseBranch = input.baseBranch ?? "main";
 
-  if (currentBranch === "main") {
-    return { allowed: true, code: "phase-ok", reason: "current branch is main" };
+  if (currentBranch === baseBranch) {
+    return { allowed: true, code: "phase-ok", reason: `current branch is ${baseBranch}` };
   }
 
   if (currentRoot === canonicalMainRoot) {
     return {
       allowed: false,
       code: "main-worktree-non-main",
-      reason: `canonical main checkout must stay on main; currentBranch=${currentBranch}`,
-      details: { currentRoot, canonicalMainRoot, currentBranch },
+      reason: `canonical main checkout must stay on ${baseBranch}; currentBranch=${currentBranch}`,
+      details: { currentRoot, canonicalMainRoot, currentBranch, baseBranch },
     };
   }
 

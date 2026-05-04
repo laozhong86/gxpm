@@ -218,21 +218,49 @@ export function createGitProvider(): IIsolationProvider {
         }
       }
 
-      // Create worktree
-      const result = Bun.spawnSync({
-        cmd: ["git", "worktree", "add", "-b", branchName, worktreePath],
+      // Determine base branch for worktree creation
+      const baseBranch = request.fromBranch ?? "main";
+      const remoteRef = `origin/${baseBranch}`;
+
+      // Try to fetch latest remote state (best-effort; network failures are non-blocking)
+      Bun.spawnSync({
+        cmd: ["git", "fetch", "origin", baseBranch],
         cwd: request.canonicalRepoPath,
         stdout: "pipe",
         stderr: "pipe",
       });
 
-      if (result.exitCode !== 0) {
-        const err = new Error(result.stderr.toString().trim());
-        (err as Error & { stderr?: string }).stderr = result.stderr.toString().trim();
+      // Check if remote base branch exists
+      const remoteCheck = Bun.spawnSync({
+        cmd: ["git", "rev-parse", "--verify", remoteRef],
+        cwd: request.canonicalRepoPath,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const hasRemote = remoteCheck.exitCode === 0;
+
+      // Create worktree based on remote branch if available, else fall back to local HEAD
+      const createResult = Bun.spawnSync({
+        cmd: hasRemote
+          ? ["git", "worktree", "add", "-b", branchName, "--track", worktreePath, remoteRef]
+          : ["git", "worktree", "add", "-b", branchName, worktreePath],
+        cwd: request.canonicalRepoPath,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      if (createResult.exitCode !== 0) {
+        const err = new Error(createResult.stderr.toString().trim());
+        (err as Error & { stderr?: string }).stderr = createResult.stderr.toString().trim();
         throw err;
       }
 
-      return { workingPath: resolve(worktreePath), branchName };
+      const warnings: string[] = [];
+      if (!hasRemote) {
+        warnings.push(`Remote '${remoteRef}' not found; worktree created from local HEAD.`);
+      }
+
+      return { workingPath: resolve(worktreePath), branchName, warnings };
     },
 
     async destroy(workingPath: string, options: IsolationDestroyOptions): Promise<void> {

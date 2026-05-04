@@ -27,6 +27,7 @@ import { runPostLandSkillSync } from "../post-land-sync";
 import { ensureIssueWorkspaceWithResolver } from "../../core/workspace-runtime";
 import { readArtifact, writeArtifact } from "../../core/artifacts";
 import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
+import { getResolvedConfigValue } from "../../core/config";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -418,13 +419,14 @@ function runIssueNext(issueId: string) {
   // Worktree advisory: when in dispatch on canonical main checkout with a feature branch, warn early
   if (state.currentPhase === "dispatch") {
     const branch = currentGitBranch();
-    if (branch && branch !== "main") {
+    const baseBranch = getResolvedConfigValue({ key: "worktree.baseBranch" }).value as string;
+    if (branch && branch !== baseBranch) {
       const canonicalRoot = detectCanonicalMainRoot();
       const currentRoot = currentGitRoot();
       if (canonicalRoot && currentRoot && currentRoot === canonicalRoot) {
-        console.log("WARNING: You are on a feature branch in the canonical main checkout.");
+        console.log(`WARNING: You are on a feature branch in the canonical ${baseBranch} checkout.`);
         console.log("         gxpm requires feature branches to run in a dedicated git worktree.");
-        console.log(`         Run: git worktree add ../gxpm-worktrees/${branch} -b ${branch}`);
+        console.log(`         Run: gxpm workspace ensure ${issueId}`);
         console.log("");
       }
     }

@@ -11,6 +11,7 @@ import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates"
 import { resolveAgentIdentity, resolveSessionId } from "./session";
 import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 import { getWorkflowEventEmitter } from "./workflow-event-emitter";
+import { getResolvedConfigValue } from "./config";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -656,10 +657,11 @@ function assertPhaseGate(input: {
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
-  // Worktree gate: dispatch -> implement must not run in canonical main checkout on non-main branch
+  // Worktree gate: dispatch -> implement must not run in canonical main checkout on non-base branch
   if (input.fromPhase === "dispatch" && input.nextPhase === "implement") {
     const branch = getCurrentGitBranch();
-    if (branch && branch !== "main") {
+    const baseBranch = getResolvedConfigValue({ key: "worktree.baseBranch" }).value as string;
+    if (branch && branch !== baseBranch) {
       const canonicalRoot = getCanonicalMainRoot();
       const currentRoot = getCurrentGitRoot();
       if (canonicalRoot && currentRoot && normalizePath(currentRoot) === normalizePath(canonicalRoot)) {
@@ -675,14 +677,14 @@ function assertPhaseGate(input: {
             payload: {
               fromPhase: input.fromPhase,
               toPhase: input.nextPhase,
-              reason: "dispatch-to-implement blocked: canonical main checkout must stay on main; create a git worktree for feature branches",
+              reason: `dispatch-to-implement blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
             },
           },
         });
         throw new Error(
           `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
           `Current directory is the canonical main checkout on branch '${branch}'. ` +
-          `Run: git worktree add ../gxpm-worktrees/<branch-name> -b ${branch} && cd ../gxpm-worktrees/<branch-name>`
+          `Run: gxpm workspace ensure ${input.issueId}`
         );
       }
     }
