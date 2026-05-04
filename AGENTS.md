@@ -68,10 +68,10 @@ gxpm 不是 PMC 的兼容壳，也不是 gstack 的插件集合。所有设计�
 
 ## gxpm Config
 
-- worktree.enforcement: optional
+- worktree.enforcement: required
 - worktree.default: ask
 
-如需强制走 worktree-first，把 enforcement 改为 `required`；如禁用 worktree，改为 `forbidden`。任何 `.gxpm/config.json` 中显式设置都会覆盖本段。
+如需禁用 worktree，改为 `forbidden`。任何 `.gxpm/config.json` 中显式设置都会覆盖本段。
 
 ## gxpm Workflow (本仓库自托管)
 
