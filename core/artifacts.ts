@@ -9,6 +9,7 @@ import {
   type StateEvent,
 } from "./state";
 import { resolveSessionId } from "./session";
+import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 
 export const ARTIFACT_TYPES = [
   "issue-intake",
@@ -112,6 +113,13 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
   appendIssueEvent({
     issueDir: paths.issueDir,
     event: artifactWrittenEvent(input.issueId, type, now, relativePath, sessionId),
+  });
+
+  getWorkflowEventEmitter().emit({
+    type: "artifact_written",
+    issueId: input.issueId,
+    artifactType: type,
+    timestamp: now,
   });
 
   // Fire-and-forget sync to external issue tracker

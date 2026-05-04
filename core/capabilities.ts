@@ -299,6 +299,30 @@ export const CAPABILITY_REGISTRY = [
     commands: ["gxpm ship pr-check <issue-id>", "gxpm artifact write <issue-id> pr-check --json <json>"],
     sourceFiles: ["core/pr-check.ts", "scripts/commands/artifact.ts"],
   },
+  {
+    id: "execution.workflow-events",
+    title: "Workflow Events",
+    summary: "Typed event bus for gxpm execution observability with fire-and-forget semantics.",
+    runtime: "execution",
+    status: "active",
+    inputContract: "Event listener functions or issue-scoped filters.",
+    outputContract: {
+      description: "Subscription handles and side-effect-free event emission.",
+      artifacts: [],
+      evidence: ["stderr event logs when --verbose-events is enabled"],
+    },
+    mutationPolicy: {
+      scope: "none",
+      description: "Emit is side-effect-free for listeners; subscribe is read-only on the emitter.",
+    },
+    idempotency: "Emitting the same event multiple times delivers to all active listeners each time.",
+    failureModes: [
+      { description: "Listener throws", defaultType: "FATAL" },
+      { description: "Memory leak from uncleared subscriptions", defaultType: "FATAL" },
+    ],
+    commands: ["gxpm --verbose-events <command>"],
+    sourceFiles: ["core/workflow-event-emitter.ts"],
+  },
 ] as const satisfies readonly CapabilityContract[];
 
 export type CapabilityId = (typeof CAPABILITY_REGISTRY)[number]["id"];

@@ -8,6 +8,8 @@ import {
 import { join } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
 import { resolveAgentIdentity, resolveSessionId } from "./session";
+import { getWorkflowEventEmitter } from "./workflow-event-emitter";
+import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -228,6 +230,13 @@ export function createIssueState(input: IssueInput): IssueState {
     },
   });
 
+  getWorkflowEventEmitter().emit({
+    type: "issue_created",
+    issueId: input.issueId,
+    issueType: state.issueType,
+    timestamp: now,
+  });
+
   // Fire-and-forget sync to external issue tracker
   import("./issue-sync")
     .then(({ maybeSyncIssue }) =>
@@ -324,6 +333,14 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
       sessionId,
       payload: { fromPhase: state.currentPhase, toPhase: nextPhase },
     },
+  });
+
+  getWorkflowEventEmitter().emit({
+    type: "issue_transitioned",
+    issueId: input.issueId,
+    fromPhase: state.currentPhase,
+    toPhase: nextPhase,
+    timestamp: now,
   });
 
   // Fire-and-forget sync to external issue tracker

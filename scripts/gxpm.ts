@@ -5,6 +5,7 @@ import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
 import { readGxpmVersion } from "./version";
 import { resolveSessionId } from "../core/session";
+import { getWorkflowEventEmitter } from "../core/workflow-event-emitter";
 import { runArtifactCommand } from "./commands/artifact";
 import { runCapabilityCommand } from "./commands/capability";
 import { runConfigCommand, runWorktreePolicyCommand } from "./commands/config";
@@ -17,6 +18,13 @@ import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
 
 function main(argv: string[]) {
+  if (argv.includes("--verbose-events")) {
+    argv = argv.filter((arg) => arg !== "--verbose-events");
+    getWorkflowEventEmitter().subscribe((event) => {
+      console.error(`[event] ${JSON.stringify(event)}`);
+    });
+  }
+
   const [command, subcommand, issueId, value] = argv;
 
   if (!command || command === "check") {

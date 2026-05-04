@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { getIssuePaths, readIssueState } from "./state";
 import { resolveSessionId } from "./session";
 import { classifyError, type ErrorType } from "./resilience";
+import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 
 export const RUN_STATUSES = [
   "preparing-workspace",
@@ -130,6 +131,15 @@ export function startRun(input: StartRunInput): RunRecord {
     }
     throw error;
   }
+
+  getWorkflowEventEmitter().emit({
+    type: "run_started",
+    issueId: input.issueId,
+    runId: run.runId,
+    status: run.status,
+    timestamp: now,
+  });
+
   return run;
 }
 
@@ -175,6 +185,27 @@ export function appendRunEvent(input: AppendRunEventInput): RunRecord {
     }
     throw error;
   }
+
+  if (isTerminalRunStatus(status)) {
+    if (status === "failed" || status === "timed-out" || status === "stalled" || status === "canceled-by-reconciliation") {
+      getWorkflowEventEmitter().emit({
+        type: "run_failed",
+        issueId: input.issueId,
+        runId: input.runId,
+        failureReason: input.failureReason,
+        timestamp: now,
+      });
+    } else {
+      getWorkflowEventEmitter().emit({
+        type: "run_completed",
+        issueId: input.issueId,
+        runId: input.runId,
+        status,
+        timestamp: now,
+      });
+    }
+  }
+
   return updated;
 }
 
