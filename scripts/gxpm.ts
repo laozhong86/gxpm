@@ -17,6 +17,7 @@ import { runInitCommand } from "./commands/init";
 import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
 import { runDagCommand } from "./commands/dag";
+import { runHookCommand } from "./commands/hook";
 
 async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
@@ -142,6 +143,11 @@ async function main(argv: string[]) {
 
   if (command === "dag") {
     runDagCommand(argv);
+    return;
+  }
+
+  if (command === "hook") {
+    await runHookCommand(argv);
     return;
   }
 

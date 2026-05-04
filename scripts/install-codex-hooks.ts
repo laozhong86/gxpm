@@ -1,63 +1,41 @@
-import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+/**
+ * Install Codex CLI hooks that call the unified `gxpm hook` entry point.
+ *
+ * Instead of installing per-event bash scripts, we write a single hooks.json
+ * that delegates to `gxpm hook <event> --host codex`. All business logic lives
+ * in core/hook-engine.ts and is shared across Claude, Codex, Kimi, and Cursor.
+ */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 interface InstallCodexHooksOptions {
-  /** "repo" → <target>/.codex/ (default), "user" → ~/.codex/ (broader, more invasive). */
+  /** "repo" → <target>/.codex/ (default), "user" → ~/.codex/ */
   scope?: "user" | "repo";
-  /** Target repo (only used when scope === "repo"). Defaults to cwd. */
   target?: string;
-  /** Override $HOME for testing. */
   home?: string;
-  /** Override gxpm repo root for testing. */
-  gxpmRoot?: string;
-  /** When true (default), enable codex_hooks feature flag in ~/.codex/config.toml if missing. */
   enableFeatureFlag?: boolean;
 }
 
 interface InstallResult {
-  installedScripts: string[];
   hooksJsonPath: string;
   rootDir: string;
-  featureFlagEnabled: "already-set" | "enabled-now" | "skipped" | "config-missing";
+  featureFlagEnabled: "already-set" | "enabled-now" | "config-missing" | "skipped";
 }
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
 
-const HOOK_SCRIPTS = ["session-start.sh", "user-prompt-submit.sh", "pre-tool-use.sh"];
-
 export function installCodexHooks(options: InstallCodexHooksOptions = {}): InstallResult {
   const scope = options.scope ?? "repo";
   const home = options.home ?? homedir();
-  const gxpmRoot = options.gxpmRoot ?? DEFAULT_GXPM_ROOT;
 
   const rootDir =
     scope === "user" ? join(home, ".codex") : join(resolve(options.target ?? process.cwd()), ".codex");
+  mkdirSync(rootDir, { recursive: true });
 
-  const hooksDir = join(rootDir, "hooks");
-  mkdirSync(hooksDir, { recursive: true });
-
-  const templatesDir = join(gxpmRoot, "templates", "codex-hooks");
-  const installedScripts: string[] = [];
-
-  for (const script of HOOK_SCRIPTS) {
-    const src = join(templatesDir, script);
-    const dst = join(hooksDir, `gxpm-${script}`);
-    copyFileSync(src, dst);
-    execSync(`chmod +x "${dst}"`);
-    installedScripts.push(dst);
-  }
-
-  // Write/merge hooks.json — use stable path keys so re-running is idempotent.
   const hooksJsonPath = join(rootDir, "hooks.json");
-  const sessionStartCmd = join(hooksDir, "gxpm-session-start.sh");
-  const promptSubmitCmd = join(hooksDir, "gxpm-user-prompt-submit.sh");
 
-  // Per Codex official spec: "If timeout is omitted, Codex uses 600 seconds."
-  // We omit timeout to inherit the official default rather than override it.
-  // statusMessage and type are kept because they are official supported fields.
-  const preToolUseCmd = join(hooksDir, "gxpm-pre-tool-use.sh");
   const newConfig = {
     hooks: {
       SessionStart: [
@@ -65,7 +43,7 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
           hooks: [
             {
               type: "command",
-              command: sessionStartCmd,
+              command: "gxpm hook SessionStart --host codex",
               statusMessage: "gxpm: loading capability hint",
             },
           ],
@@ -76,7 +54,7 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
           hooks: [
             {
               type: "command",
-              command: promptSubmitCmd,
+              command: "gxpm hook UserPromptSubmit --host codex",
               statusMessage: "gxpm: resolving referenced issue",
             },
           ],
@@ -87,7 +65,7 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
           hooks: [
             {
               type: "command",
-              command: preToolUseCmd,
+              command: "gxpm hook PreToolUse --host codex",
               statusMessage: "gxpm: recording update_plan payload",
             },
           ],
@@ -103,14 +81,9 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
     ? ensureCodexHooksFeatureFlag(home)
     : "skipped";
 
-  return { installedScripts, hooksJsonPath, rootDir, featureFlagEnabled };
+  return { hooksJsonPath, rootDir, featureFlagEnabled };
 }
 
-/**
- * Codex requires `[features] codex_hooks = true` in ~/.codex/config.toml for hooks
- * to fire. Per official spec we ensure it's set; idempotent + creates timestamped
- * backup before any write.
- */
 function ensureCodexHooksFeatureFlag(home: string): "already-set" | "enabled-now" | "config-missing" {
   const configPath = join(home, ".codex", "config.toml");
   if (!existsSync(configPath)) return "config-missing";
@@ -122,18 +95,15 @@ function ensureCodexHooksFeatureFlag(home: string): "already-set" | "enabled-now
   const backup = `${configPath}.bak-codex-hooks-${ts}`;
   writeFileSync(backup, content);
 
-  // Insert into existing [features] section, or create one at end of file.
   const featuresMatch = content.match(/^\[features\]\s*$/m);
   let updated: string;
   if (featuresMatch) {
     const lines = content.split("\n");
     const idx = lines.findIndex((line) => /^\[features\]\s*$/.test(line));
-    // Find end of this section (next [section] or EOF)
     let endIdx = lines.length;
     for (let i = idx + 1; i < lines.length; i += 1) {
       if (/^\[/.test(lines[i])) { endIdx = i; break; }
     }
-    // Insert before next section, skipping trailing blank lines
     let insertAt = endIdx;
     while (insertAt > idx + 1 && lines[insertAt - 1].trim() === "") insertAt -= 1;
     lines.splice(insertAt, 0, "codex_hooks = true");
@@ -191,11 +161,7 @@ function parseArgs(argv: string[]): InstallCodexHooksOptions {
 if (import.meta.main) {
   try {
     const result = installCodexHooks(parseArgs(Bun.argv.slice(2)));
-    for (const script of result.installedScripts) {
-      console.log(`installed: ${script}`);
-    }
     console.log(`wrote: ${result.hooksJsonPath}`);
-    console.log("");
     console.log(
       "scope:",
       result.rootDir.includes(homedir() + "/.codex") ? "user (~/.codex/)" : "repo (<repo>/.codex/)",
@@ -209,7 +175,7 @@ if (import.meta.main) {
         console.log("feature flag: codex_hooks = true (enabled now; backup written)");
         break;
       case "config-missing":
-        console.log("feature flag: ⚠️  ~/.codex/config.toml not found; create it with [features]\\ncodex_hooks = true");
+        console.log("feature flag: ⚠️  ~/.codex/config.toml not found; create it with [features]\ncodex_hooks = true");
         break;
       case "skipped":
         console.log("feature flag: skipped per --no-feature-flag");

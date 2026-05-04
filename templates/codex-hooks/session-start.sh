@@ -19,6 +19,18 @@ except Exception:
     pass
 ')
 
+WORKTREE_CONTEXT=""
+if [ -n "$CWD" ] && [ -d "$CWD/.git" ]; then
+  cd "$CWD" || true
+  branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+  if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
+    git_path=$(git rev-parse --git-path HEAD 2>/dev/null || echo "")
+    if ! echo "$git_path" | grep -q "/worktrees/"; then
+      WORKTREE_CONTEXT="WARNING: You are on branch '$branch' in the canonical main checkout. gxpm worktree.enforcement is required. Create a worktree before editing code: gxpm workspace ensure <issue-id>"
+    fi
+  fi
+fi
+
 STATIC_CONTEXT=""
 if [ -n "$CWD" ] && [ -d "$CWD/.gxpm/issues" ]; then
   SCHEMA="1"
@@ -71,9 +83,9 @@ if [ -n "$CWD" ] && [ -d "$CWD" ] && command -v gxpm >/dev/null 2>&1; then
   (cd "$CWD" && gxpm wiki update >/dev/null 2>&1 &) || true
 fi
 
-export STATIC_CONTEXT UPDATE_CONTEXT WIKI_JSON
+export STATIC_CONTEXT UPDATE_CONTEXT WIKI_JSON WORKTREE_CONTEXT
 python3 -c 'import json, os, sys
-parts = [p for p in [os.environ.get("STATIC_CONTEXT", ""), os.environ.get("UPDATE_CONTEXT", "")] if p]
+parts = [p for p in [os.environ.get("WORKTREE_CONTEXT", ""), os.environ.get("STATIC_CONTEXT", ""), os.environ.get("UPDATE_CONTEXT", "")] if p]
 try:
     wiki = json.loads(os.environ.get("WIKI_JSON", "{}"))
 except Exception:
