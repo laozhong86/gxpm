@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readArtifact } from "../core/artifacts";
+import { readArtifact, writeArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
 import { createIssueState, transitionIssuePhase } from "../core/state";
 import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
@@ -137,5 +137,99 @@ describe("dispatch gate", () => {
     expect(transition.exitCode).toBe(1);
     expect(output(transition)).toContain("Transition blocked");
     expect(output(transition)).toContain("git worktree");
+  });
+
+  test("auto-populates dispatch handoff from upstream artifacts", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-auto-"));
+    enterPhase(root, "GXPM-60", "dispatch");
+
+    // Seed upstream artifacts with realistic data
+    writeArtifact({
+      root,
+      issueId: "GXPM-60",
+      type: "implementation-plan",
+      payload: {
+        steps: ["Refactor dispatch.ts", "Add tests", "Run validation"],
+        validation: ["All gates pass", "No regressions"],
+        risks: ["Breaking existing CLI behavior"],
+      },
+    });
+    writeArtifact({
+      root,
+      issueId: "GXPM-60",
+      type: "triage-report",
+      payload: {
+        nonGoals: ["Refactor unrelated modules", "Add new dependencies"],
+      },
+    });
+
+    initializeDispatch({ root, issueId: "GXPM-60" });
+    const handoff = readArtifact({ root, issueId: "GXPM-60", type: "dispatch-handoff" }).payload as Record<
+      string,
+      unknown
+    >;
+
+    expect(handoff.workerTasks).toEqual([
+      { id: "task-001", description: "Refactor dispatch.ts", status: "pending" },
+      { id: "task-002", description: "Add tests", status: "pending" },
+      { id: "task-003", description: "Run validation", status: "pending" },
+    ]);
+    expect(handoff.validation).toEqual(["All gates pass", "No regressions"]);
+    expect(handoff.stopRule).toBe(
+      "Breaking existing CLI behavior; Refactor unrelated modules; Add new dependencies",
+    );
+  });
+
+  test("gracefully handles missing upstream artifacts", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-missing-"));
+    enterPhase(root, "GXPM-61", "dispatch");
+
+    // Do not seed any upstream artifacts — implementation-plan may exist from enterPhase with empty payload
+    initializeDispatch({ root, issueId: "GXPM-61" });
+    const handoff = readArtifact({ root, issueId: "GXPM-61", type: "dispatch-handoff" }).payload as Record<
+      string,
+      unknown
+    >;
+
+    expect(handoff.workerTasks).toEqual([]);
+    expect(handoff.validation).toEqual([]);
+    expect(handoff.stopRule).toBe("");
+  });
+
+  test("filters empty strings and whitespace-only entries from upstream arrays", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-filter-"));
+    enterPhase(root, "GXPM-62", "dispatch");
+
+    writeArtifact({
+      root,
+      issueId: "GXPM-62",
+      type: "implementation-plan",
+      payload: {
+        steps: ["Valid step", "", "  ", null, 42, "Another valid step"],
+        validation: ["Check A", "", "Check B", "   "],
+        risks: ["Risk 1", "", "Risk 2", "  "],
+      },
+    });
+    writeArtifact({
+      root,
+      issueId: "GXPM-62",
+      type: "triage-report",
+      payload: {
+        nonGoals: ["", "Non-goal 1", "  ", "Non-goal 2", null],
+      },
+    });
+
+    initializeDispatch({ root, issueId: "GXPM-62" });
+    const handoff = readArtifact({ root, issueId: "GXPM-62", type: "dispatch-handoff" }).payload as Record<
+      string,
+      unknown
+    >;
+
+    expect(handoff.workerTasks).toEqual([
+      { id: "task-001", description: "Valid step", status: "pending" },
+      { id: "task-002", description: "Another valid step", status: "pending" },
+    ]);
+    expect(handoff.validation).toEqual(["Check A", "Check B"]);
+    expect(handoff.stopRule).toBe("Risk 1; Risk 2; Non-goal 1; Non-goal 2");
   });
 });

@@ -66,11 +66,10 @@ function buildWorkerTasks(
   }
 
   const tasks: DispatchHandoffPayload["workerTasks"] = [];
-  for (let i = 0; i < steps.length; i += 1) {
-    const step = steps[i];
+  for (const step of steps) {
     if (typeof step === "string" && step.trim()) {
       tasks.push({
-        id: generateTaskId(i),
+        id: generateTaskId(tasks.length),
         description: step.trim(),
         status: "pending",
       });
