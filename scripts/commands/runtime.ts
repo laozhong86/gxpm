@@ -169,6 +169,7 @@ export function runWorkspaceCommand(argv: string[], subcommand: string | undefin
   console.log(`workspaceRoot: ${result.workspaceRoot}`);
   console.log(`workspacePath: ${result.workspacePath}`);
   console.log(`exists: ${result.exists}`);
+  if ("devPort" in result) console.log(`devPort: ${result.devPort}`);
   if ("created" in result) console.log(`created: ${result.created}`);
   if ("removed" in result) console.log(`removed: ${result.removed}`);
 }
