@@ -14,7 +14,12 @@ export interface GenerateSkillDocsOptions {
 
 const GENERATED_MARK = "<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->";
 
-export function renderSkillContentForHost(root: string, host: HostConfig, templateRelative: string): string {
+export function renderSkillContentForHost(
+  root: string,
+  host: HostConfig,
+  templateRelative: string,
+  references?: string[],
+): string {
   const templatePath = join(root, templateRelative);
   const source = readFileSync(templatePath, "utf8");
 
@@ -28,6 +33,7 @@ export function renderSkillContentForHost(root: string, host: HostConfig, templa
     phaseGateCommands: buildPhaseGateCommands(),
     phaseTransitionSummary: buildPhaseTransitionSummary(),
     preamble: buildPreamble(root, host),
+    references: buildReferences(root, references),
   });
   return insertGeneratedMark(rendered);
 }
@@ -40,7 +46,7 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
 
   for (const template of discoverTemplates(root)) {
     const outputPath = join(root, template.output);
-    const generated = renderSkillContentForHost(root, host, template.tmpl);
+    const generated = renderSkillContentForHost(root, host, template.tmpl, template.references);
 
     if (options.dryRun) {
       const current = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";
@@ -67,14 +73,32 @@ interface TemplateVars {
   phaseGateCommands: string;
   phaseTransitionSummary: string;
   preamble: string;
+  references: Record<string, string>;
 }
 
 function renderTemplate(template: string, vars: TemplateVars) {
-  return template
+  let result = template
     .replaceAll("{{PREAMBLE}}", vars.preamble.trimEnd())
     .replaceAll("{{ARTIFACT_READ_COMMANDS}}", vars.artifactReadCommands)
     .replaceAll("{{PHASE_GATE_COMMANDS}}", vars.phaseGateCommands)
     .replaceAll("{{PHASE_TRANSITION_SUMMARY}}", vars.phaseTransitionSummary);
+
+  for (const [name, content] of Object.entries(vars.references)) {
+    result = result.replaceAll(`{{REFERENCE:${name}}}`, content);
+  }
+
+  return result;
+}
+
+function buildReferences(root: string, references?: string[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!references) return result;
+  for (const refPath of references) {
+    const name = refPath.replace(/^.*\//, "").replace(/\.md$/, "");
+    const content = readFileSync(join(root, refPath), "utf8");
+    result[name] = content;
+  }
+  return result;
 }
 
 function insertGeneratedMark(content: string) {

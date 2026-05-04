@@ -62,4 +62,19 @@ describe("installSkill", () => {
       installSkill({ hostName: "kuro", root: repoRoot, home: fakeHome }),
     ).toThrow("Unknown gxpm host");
   });
+
+  test("installs references/ and scripts/ alongside SKILL.md", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-refs-"));
+    const installed = installSkill({ hostName: "codex", root: repoRoot, home: fakeHome });
+
+    // gxpm-grill should have references installed
+    const grillRefPath = join(fakeHome, ".codex", "skills", "gxpm-grill", "references", "process.md");
+    expect(installed).toContain(grillRefPath);
+    expect(existsSync(grillRefPath)).toBe(true);
+
+    // gxpm-explore-codebase should have scripts installed
+    const scriptPath = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts", "summarize-communities.ts");
+    expect(installed).toContain(scriptPath);
+    expect(existsSync(scriptPath)).toBe(true);
+  });
 });
