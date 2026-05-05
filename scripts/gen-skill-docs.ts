@@ -7,6 +7,7 @@ import type { HostConfig } from "../core/contracts/host";
 import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { renderTemplate } from "../core/converters/template-renderer";
 import { SkillParser, HostConverter, SkillWriter } from "../core/converters";
+import { PresetResolver } from "../core/preset-system/preset-resolver";
 
 export interface GenerateSkillDocsOptions {
   root?: string;
@@ -47,20 +48,28 @@ export function generateSkillDocs(options: GenerateSkillDocsOptions = {}): strin
   const outputs: string[] = [];
   const stale: string[] = [];
 
+  // Load preset resolver for composition layer support
+  const resolver = new PresetResolver(root);
+  resolver.load();
+
   for (const template of discoverTemplates(root)) {
     const outputPath = join(root, template.output);
     const generated = renderSkillContentForHost(root, host, template.tmpl, template.references);
 
+    // Apply Override > Preset > Core resolution
+    const resolved = resolver.resolve(template.output, generated);
+    const finalContent = resolved?.content ?? generated;
+
     if (options.dryRun) {
       const current = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";
-      if (current !== generated) {
+      if (current !== finalContent) {
         stale.push(template.output);
       }
       continue;
     }
 
     mkdirSync(dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, generated);
+    writeFileSync(outputPath, finalContent);
     outputs.push(template.output);
   }
 
