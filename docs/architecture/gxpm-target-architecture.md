@@ -21,7 +21,7 @@
 graph TB
     subgraph "External Systems"
         LINEAR["Linear<br/>Issue Tracker"]
-        GRAPH["code-review-graph<br/>MCP Server"]
+        GITNEXUS["GitNexus<br/>MCP Server"]
         GIT["Git Repository"]
     end
 
@@ -208,11 +208,11 @@ graph TB
     SKILL_ARCH -.-> |"reads"| ADRS
     SKILL_TRIAGE -.-> |"reads"| OOS_STORE
 
-    %% Graph skill uses MCP
-    SKILL_DEBUG -.-> |"MCP"| GRAPH
-    SKILL_EXPLORE -.-> |"MCP"| GRAPH
-    SKILL_REFACTOR -.-> |"MCP"| GRAPH
-    SKILL_REVIEW -.-> |"MCP"| GRAPH
+    %% Graph skills use GitNexus MCP
+    SKILL_DEBUG -.-> |"MCP"| GITNEXUS
+    SKILL_EXPLORE -.-> |"MCP"| GITNEXUS
+    SKILL_REFACTOR -.-> |"MCP"| GITNEXUS
+    SKILL_REVIEW -.-> |"MCP"| GITNEXUS
 
     style SKILL_GXPM fill:#e3f2fd
     style SKILL_DIAGNOSE fill:#e8f5e9
@@ -243,7 +243,7 @@ flowchart TB
         TDD["tdd<br/>(Matt absorbed)"]
         DIAGNOSE["diagnose<br/>(Matt + gxpm)"]
         ARCH["architecture<br/>(Matt absorbed)"]
-        GRAPH["graph/*<br/>(gxpm existing)"]
+        GITNEXUS_SKILLS["gitnexus<br/>(code intelligence skills)"]
     end
 
     subgraph "Phase Pipeline"

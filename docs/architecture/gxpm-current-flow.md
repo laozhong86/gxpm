@@ -250,20 +250,20 @@ flowchart LR
 
     subgraph "External Systems"
         LINEAR["Linear"]
-        GRAPH["code-review-graph<br/>MCP"]
+        GITNEXUS["GitNexus<br/>MCP"]
         GIT["Git"]
         BROWSER["cmux / agent-browser"]
     end
 
     CODEX --> |"gxpm CLI<br/>read/write state"| ISSUE_DIR
-    CLAUDE --> |"MCP tools<br/>graph queries"| GRAPH
+    CLAUDE --> |"MCP tools<br/>code intelligence"| GITNEXUS
     CLAUDE --> |"load skill"| SKILL_CLAUDE[".claude/skills/<br/>*.md"]
 
     ISSUE_DIR -.-> |"sync<br/>(Linear 是协作前门)"| LINEAR
     ISSUE_DIR --> |"evidence capture"| BROWSER
 
     GIT --> |"hook events"| ISSUE_DIR
-    GRAPH -.-> |"code nav<br/>debug/refactor/review"| CLAUDE
+    GITNEXUS -.-> |"code nav<br/>debug/refactor/review"| CLAUDE
 
     WIKI_DIR --> |"native wiki<br/>query/context"| CODEX
     CONFIG --> |"worktree policy<br/>host config"| CODEX

@@ -9,7 +9,3 @@ if [ -x "$HOOK_DIR/gxpm-pre-commit" ]; then
   "$HOOK_DIR/gxpm-pre-commit"
 fi
 
-# code-review-graph incremental update (best-effort — never blocks commit)
-if [ -x "$HOOK_DIR/crg-pre-commit" ]; then
-  "$HOOK_DIR/crg-pre-commit" || true
-fi

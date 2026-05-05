@@ -107,39 +107,22 @@ function main(argv: string[]) {
   installAgentsFragment(target, gxpmRoot);
 }
 
-function installAgentsFragment(target: string, gxpmRoot: string): void {
-  const fragmentPath = join(gxpmRoot, "templates", "agents", "code-review-graph.md");
-  if (!existsSync(fragmentPath)) {
-    console.warn(`agents fragment not found: ${fragmentPath}`);
+function installAgentsFragment(target: string, _gxpmRoot: string): void {
+  const agentsPath = join(target, "AGENTS.md");
+  if (!existsSync(agentsPath)) {
     return;
   }
 
-  const fragment = readFileSync(fragmentPath, "utf8").trim();
   const MARKER_START = "<!-- GXPM:CODE-REVIEW-GRAPH:START -->";
   const MARKER_END = "<!-- GXPM:CODE-REVIEW-GRAPH:END -->";
 
-  const agentsPath = join(target, "AGENTS.md");
-  let content: string;
-  let action: string;
-
-  if (existsSync(agentsPath)) {
-    content = readFileSync(agentsPath, "utf8");
-    if (content.includes(MARKER_START) && content.includes(MARKER_END)) {
-      const regex = new RegExp(`${MARKER_START}[\\s\\S]*?${MARKER_END}`, "g");
-      content = content.replace(regex, `${MARKER_START}\n${fragment}\n${MARKER_END}`);
-      action = "updated";
-    } else {
-      if (!content.endsWith("\n")) content += "\n";
-      content += `\n${MARKER_START}\n${fragment}\n${MARKER_END}\n`;
-      action = "appended";
-    }
-  } else {
-    content = `${MARKER_START}\n${fragment}\n${MARKER_END}\n`;
-    action = "created";
+  let content = readFileSync(agentsPath, "utf8");
+  if (content.includes(MARKER_START) && content.includes(MARKER_END)) {
+    const regex = new RegExp(`${MARKER_START}[\\s\\S]*?${MARKER_END}\\n?`, "g");
+    content = content.replace(regex, "");
+    writeFileSync(agentsPath, content);
+    console.log(`cleaned legacy graph marker from: ${agentsPath}`);
   }
-
-  writeFileSync(agentsPath, content);
-  console.log(`${action}: ${agentsPath}`);
 }
 
 main(Bun.argv.slice(2));

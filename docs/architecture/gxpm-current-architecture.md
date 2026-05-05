@@ -11,7 +11,7 @@
 graph TB
     subgraph "External Systems"
         LINEAR["Linear<br/>Issue Tracker"]
-        GRAPH["code-review-graph<br/>MCP Server"]
+        GITNEXUS["GitNexus<br/>MCP Server"]
         GIT["Git Repository"]
     end
 
@@ -143,8 +143,8 @@ graph TB
     GIT_HOOKS --> |"calls"| GATE
     CODEX_HOOKS --> |"inject context"| STATE
 
-    %% Graph skill (orphan path)
-    SKILL_ORPHAN -.-> |"uses MCP"| GRAPH
+    %% Graph skills now use GitNexus (external tool)
+    SKILL_ORPHAN -.-> |"uses MCP"| GITNEXUS
 ```
 
 ---
@@ -171,4 +171,4 @@ graph TB
 ### 2.4 外部系统集成是"可选依赖"模式
 
 - Linear：协作前门，同步 issue，但不替代本地 state
-- code-review-graph：MCP 工具，Claude Code 专用，Codex 不用
+- GitNexus：MCP 工具，代码知识图谱替代方案

@@ -36,10 +36,10 @@
 | Skill | 核心能力 | 宿主 |
 |-------|---------|------|
 | **gxpm** | 状态图驱动的 issue 交付闭环（triage→plan→dispatch→implement→…→land） | Codex CLI |
-| **debug-issue** | code-review-graph 驱动的调试（语义搜索→调用链→影响半径） | Claude Code |
-| **explore-codebase** | code-review-graph 驱动的代码库探索（架构概览→社区→执行流） | Claude Code |
-| **refactor-safely** | code-review-graph 驱动的安全重构（建议→死代码→重命名预览） | Claude Code |
-| **review-changes** | code-review-graph 驱动的变更评审（风险评分→影响流→测试覆盖） | Claude Code |
+| **debug-issue** | GitNexus 驱动的调试（语义搜索→调用链→影响半径） | Claude Code |
+| **explore-codebase** | GitNexus 驱动的代码库探索（架构概览→社区→执行流） | Claude Code |
+| **refactor-safely** | GitNexus 驱动的安全重构（建议→死代码→重命名预览） | Claude Code |
+| **review-changes** | GitNexus 驱动的变更评审（风险评分→影响流→测试覆盖） | Claude Code |
 
 ---
 
@@ -51,7 +51,7 @@
 |------|--------------|------------------|
 | **哲学** | "反馈循环是调试的全部" — 先建可自动运行的 pass/fail 信号 | "图谱是调试的地图" — 先找相关代码和执行路径 |
 | **方法** | 六阶段流程：建循环→复现→假设→探测→修复→复盘 | 五步图谱查询：语义搜索→调用链→执行流→变更检测→影响半径 |
-| **工具链** | 测试、curl、CLI、headless browser、trace 回放、property fuzz | code-review-graph MCP（semantic_search_nodes, query_graph, detect_changes） |
+| **工具链** | 测试、curl、CLI、headless browser、trace 回放、property fuzz | GitNexus MCP（query, context, impact, detect_changes） |
 | **人工介入** | HITL bash script 作为最后手段 | 无明确 HITL 设计 |
 | **产出** | 回归测试、清理后的代码、假设记录、架构改进建议 | 问题定位报告 |
 | **token 效率** | 无明确约束 | **强制 ≤5 工具调用 / ≤800 tokens** |
@@ -100,7 +100,7 @@
 | 维度 | Matt improve-codebase-architecture | gxpm refactor-safely |
 |------|-----------------------------------|----------------------|
 | **目标** | 识别 deepening 机会（浅→深模块） | 执行安全重构（重命名、死代码清理） |
-| **方法** | Deletion test + 领域术语 + ADR 交叉引用 | code-review-graph refactor_tool + impact_radius |
+| **方法** | Deletion test + 领域术语 + ADR 交叉引用 | GitNexus refactor + impact analysis |
 | **交互** | 列出候选 → 用户选 → grilling 设计细节 | 自动分析 → 预览 → 应用 |
 | **产出** | 设计讨论 + CONTEXT.md 更新 + 可选 ADR | 代码变更 + 变更验证 |
 | **执行** | **只建议，不执行** | **建议 + 可执行** |
@@ -271,7 +271,7 @@
 | 维度 | Matt zoom-out | gxpm explore-codebase |
 |------|--------------|----------------------|
 | **触发** | "我不熟悉这块代码" | 系统性代码库探索 |
-| **方法** | 上升一层抽象，用领域术语画模块地图 | code-review-graph 的 stats → architecture → communities → flows |
+| **方法** | 上升一层抽象，用领域术语画模块地图 | GitNexus 的 query → architecture → communities → flows |
 | **产出** | 模块地图 + 调用关系描述 | 架构概览 + 执行路径 + 社区结构 |
 
 **差距**：
@@ -309,7 +309,7 @@
 | **Artifact 机器可读真值** | Matt 的文档是人类友好但机器难解析，gxpm 的 JSON 是机器真值 |
 | **Worktree 隔离 + Claim 机制** | Matt 没有代码隔离和并发执行管理 |
 | **Native wiki engine** | Matt 依赖外部知识管理，gxpm 有 `gxpm wiki` |
-| **Code-review-graph 集成** | Matt 的 skill 是文本驱动，gxpm 有图谱驱动的导航 |
+| **GitNexus 集成** | Matt 的 skill 是文本驱动，gxpm 有图谱驱动的导航 |
 | **Token 效率强制约束** | gxpm 的 graph skill 有 ≤5 调用 / ≤800 tokens 规则 |
 | **Linear 协作前门** | Matt 只支持 GitHub/GitLab，gxpm 以 Linear 为协作界面 |
 | **Host 适配层**（Codex/Claude 双宿主） | Matt 的 skill 主要面向 Claude Code |

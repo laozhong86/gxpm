@@ -5,17 +5,17 @@ Run the loop. Confirm:
 - [ ] The failure is reproducible across multiple runs.
 - [ ] You have captured the exact symptom.
 
-## Phase 3 — Explore with the graph (gxpm integration)
+## Phase 3 — Explore with the codebase
 
-Use code-review-graph MCP tools to accelerate understanding:
+Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to accelerate understanding:
 
-1. `semantic_search_nodes` to find code related to the symptom.
-2. `query_graph` with `callers_of` / `callees_of` to trace call chains.
-3. `get_flow` to see full execution paths through suspected areas.
-4. `detect_changes` to check if recent changes caused the issue.
-5. `get_impact_radius` on suspected files to see what else is affected.
+1. **Semantic search** to find code related to the symptom.
+2. **Call-chain tracing** to follow `callers_of` / `callees_of` relationships.
+3. **Execution flow analysis** to see full paths through suspected areas.
+4. **Change detection** (`git diff`, `detect_changes`) to check if recent changes caused the issue.
+5. **Impact analysis** on suspected files to see what else is affected.
 
-**Token efficiency**: start with `get_minimal_context(task="...")`, use `detail_level="minimal"`. Target ≤5 tool calls and ≤800 total output tokens for the graph exploration phase.
+**Token efficiency**: start with the narrowest context possible, then expand. Target ≤5 tool calls and ≤800 total output tokens for the exploration phase.
 
 ## Phase 4 — Hypothesise
 
