@@ -27,6 +27,7 @@ describe("implement gate", () => {
       results: [],
       risks: [],
       status: "draft",
+      verificationLog: [],
     });
   });
 

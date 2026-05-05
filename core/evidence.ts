@@ -12,6 +12,7 @@ export const EVIDENCE_KINDS = [
   "investigations",
   "review",
   "release",
+  "test-runs",
 ] as const;
 
 export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
