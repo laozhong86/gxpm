@@ -23,11 +23,15 @@ describe("plan gate", () => {
 
     expect(artifact.type).toBe("implementation-plan");
     expect(readArtifact({ root, issueId: "GXPM-40", type: "implementation-plan" }).payload).toEqual({
-      risks: [],
-      status: "draft",
+      objective: "",
+      scope: "",
+      nonGoals: "",
+      approach: "",
       steps: [],
-      summary: "",
+      risks: [],
       validation: [],
+      rollback: "",
+      status: "draft",
     });
   });
 
