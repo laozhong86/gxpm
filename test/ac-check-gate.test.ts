@@ -21,9 +21,15 @@ describe("ac-check gate", () => {
 
     expect(artifact.type).toBe("acceptance-check");
     expect(readArtifact({ root, issueId: "GXPM-71", type: "acceptance-check" }).payload).toEqual({
+      adversarialFindings: [],
       criteria: [],
       findings: [],
       localVerifyArtifact: "local-verify",
+      specCompliance: {
+        missingRequirements: [],
+        planCoverage: 0,
+        unplannedChanges: [],
+      },
       status: "draft",
       summary: "",
     });
