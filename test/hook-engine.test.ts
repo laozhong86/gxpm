@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -159,18 +160,62 @@ describe("processHook SessionStart", () => {
     expect(result.additionalContext).toContain("gxpm issue list");
   });
 
-  test("honors GXPM_SESSION_START_DISABLE via env", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-disable-"));
+  test("on main branch in canonical checkout → no worktree warning", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-main-"));
     mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    execSync("git init", { cwd, stdio: "ignore" });
+    execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
+    execSync("git config user.name Test", { cwd, stdio: "ignore" });
+    execSync("git checkout -b main", { cwd, stdio: "ignore" });
 
-    const orig = process.env.GXPM_SESSION_START_DISABLE;
-    process.env.GXPM_SESSION_START_DISABLE = "1";
-    // The hook engine does not read this env var; the old bash script did.
-    // This test documents the current behavior (no special handling).
     const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
-    expect(result.action).toBe("allow");
-    if (orig === undefined) delete process.env.GXPM_SESSION_START_DISABLE;
-    else process.env.GXPM_SESSION_START_DISABLE = orig;
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).not.toContain("WARNING:");
+  });
+
+  test("on feature branch in canonical checkout → worktree warning first", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-feat-"));
+    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    execSync("git init", { cwd, stdio: "ignore" });
+    execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
+    execSync("git config user.name Test", { cwd, stdio: "ignore" });
+    execSync("git checkout -b gxpm-92-test", { cwd, stdio: "ignore" });
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).toContain("WARNING:");
+    expect(result.additionalContext).toContain("gxpm-92-test");
+    expect(result.additionalContext).toContain("gxpm workspace ensure");
+    // Worktree warning should appear before schema context
+    const idxWarning = result.additionalContext!.indexOf("WARNING:");
+    const idxSchema = result.additionalContext!.indexOf("schema v");
+    expect(idxWarning).toBeLessThan(idxSchema);
+  });
+
+  test("on feature branch inside worktree → no worktree warning", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-wt-"));
+    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    execSync("git init", { cwd, stdio: "ignore" });
+    execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
+    execSync("git config user.name Test", { cwd, stdio: "ignore" });
+    execSync("git checkout -b gxpm-92-test", { cwd, stdio: "ignore" });
+    // Simulate worktree by creating a .git file pointing to a worktrees path
+    // and creating the git-path structure so rev-parse --git-path HEAD returns a worktrees path
+    const gitDir = execSync("git rev-parse --git-dir", { cwd, encoding: "utf8" }).trim();
+    const absGitDir = resolve(cwd, gitDir);
+    // In a real worktree, --git-path HEAD returns something like .../worktrees/<name>/HEAD
+    // We simulate by replacing .git/HEAD with a path containing /worktrees/
+    const headPath = join(absGitDir, "HEAD");
+    // Create a fake worktrees directory structure
+    const worktreeDir = join(absGitDir, "worktrees", "test-wt");
+    mkdirSync(worktreeDir, { recursive: true });
+    writeFileSync(join(worktreeDir, "HEAD"), "ref: refs/heads/gxpm-92-test\n");
+    // Replace the main HEAD with a file pointing to the worktree HEAD (like git worktree does)
+    writeFileSync(headPath, `gitdir: ${worktreeDir}\n`);
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).not.toContain("WARNING:");
   });
 });
 

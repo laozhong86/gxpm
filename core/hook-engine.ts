@@ -180,6 +180,9 @@ async function processSessionStart(
 
   const parts: string[] = [];
 
+  const worktreeCtx = getWorktreeContext(cwd);
+  if (worktreeCtx) parts.push(worktreeCtx);
+
   const schema = readSchemaVersion(cwd);
   const version = readVersion(cwd);
   parts.push(
@@ -299,6 +302,38 @@ async function processPostToolUse(
 // =======================================================================
 // Helpers
 // =======================================================================
+
+function getWorktreeContext(cwd: string): string | null {
+  try {
+    execSync("git rev-parse --git-dir", { cwd, stdio: ["ignore", "ignore", "ignore"] });
+  } catch {
+    return null;
+  }
+
+  let branch: string;
+  try {
+    branch = execSync("git symbolic-ref --short HEAD", { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+
+  if (!branch || branch === "main" || branch === "master") {
+    return null;
+  }
+
+  let gitPath: string;
+  try {
+    gitPath = execSync("git rev-parse --git-path HEAD", { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+
+  if (gitPath.includes("/worktrees/")) {
+    return null;
+  }
+
+  return `WARNING: You are on branch '${branch}' in the canonical main checkout. gxpm worktree.enforcement is required. Create a worktree before editing code: gxpm workspace ensure <issue-id>`;
+}
 
 function readSchemaVersion(cwd: string): number {
   const stateFile = join(cwd, "core", "state.ts");
