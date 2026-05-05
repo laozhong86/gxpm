@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { appendIssueEvent, getIssuePaths, readIssueState } from "../core/state";
 
@@ -113,6 +114,29 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     },
   });
 
+  // 10. Archive issue directory to .gxpm/archive/
+  const archiveDir = join(root, ".gxpm", "archive", `${new Date().toISOString().split("T")[0]}-${issueId}`);
+  try {
+    copyDirRecursive(paths.issueDir, archiveDir);
+    console.log(`archived issue: ${archiveDir}`);
+  } catch (err) {
+    console.warn(`archive failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   console.log(`removed worktree: ${worktree}`);
   console.log(`deleted branch: ${branch}`);
+}
+
+function copyDirRecursive(src: string, dest: string): void {
+  mkdirSync(dest, { recursive: true });
+  const entries = readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+  }
 }

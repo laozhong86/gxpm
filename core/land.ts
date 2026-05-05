@@ -1,6 +1,6 @@
 import { hasArtifact, readArtifact, rewriteArtifact } from "./artifacts";
 import { createPhaseArtifactInitializer } from "./phase-artifact";
-import { readIssueState, type StateEvent } from "./state";
+import { readIssueState, setIssueArchived, type StateEvent } from "./state";
 
 export interface LandFindingsPayload {
   landReady?: boolean;
@@ -93,6 +93,9 @@ export function reconcileLandFindings(input: {
     timestamp: mergedAt,
     event,
   });
+
+  // Auto-archive issue on successful reconcile
+  setIssueArchived({ root, issueId: input.issueId, archived: true });
 
   return { reconciled: true, reason: "land-findings reconciled", mergedAt };
 }

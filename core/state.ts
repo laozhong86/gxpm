@@ -36,6 +36,10 @@ export const ISSUE_TYPES = ["feature", "meta", "spike"] as const;
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
+export const RIGOR_LEVELS = ["lite", "standard", "full"] as const;
+
+export type RigorLevel = (typeof RIGOR_LEVELS)[number];
+
 export interface IssueOwnershipHistoryEntry {
   sessionId: string;
   firstTouch: string;
@@ -85,6 +89,7 @@ export interface IssueState {
   schemaVersion: 1;
   issueId: string;
   issueType?: IssueType;
+  rigorLevel?: RigorLevel;
   currentPhase: GxpmPhase;
   createdAt: string;
   updatedAt: string;
@@ -184,10 +189,12 @@ export function createIssueState(input: IssueInput): IssueState {
   const now = new Date().toISOString();
   const sessionId = resolveSessionId();
   const agent = resolveAgentIdentity(process.env, root);
+  const defaultRigor = (input.issueType === "spike" || input.issueType === "meta") ? "lite" : "standard";
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
     issueType: input.issueType ?? "feature",
+    rigorLevel: defaultRigor,
     currentPhase: "triage",
     createdAt: now,
     updatedAt: now,
@@ -414,6 +421,14 @@ export function normalizeIssueType(value: unknown): IssueType {
   return typeof value === "string" && isIssueType(value) ? value : "feature";
 }
 
+export function isRigorLevel(value: string): value is RigorLevel {
+  return RIGOR_LEVELS.includes(value as RigorLevel);
+}
+
+export function normalizeRigorLevel(value: unknown): RigorLevel | undefined {
+  return typeof value === "string" && isRigorLevel(value) ? value : undefined;
+}
+
 function migrateIssueState(raw: RawIssueState): IssueState {
   if (raw.schemaVersion !== CURRENT_SCHEMA_VERSION) {
     throw new Error(`Unsupported issue state schemaVersion: ${String(raw.schemaVersion)}`);
@@ -423,6 +438,7 @@ function migrateIssueState(raw: RawIssueState): IssueState {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     issueId: String(raw.issueId),
     issueType: normalizeIssueType(raw.issueType),
+    rigorLevel: normalizeRigorLevel(raw.rigorLevel),
     currentPhase: assertValidPhase(String(raw.currentPhase)),
     createdAt: String(raw.createdAt),
     updatedAt: String(raw.updatedAt),
