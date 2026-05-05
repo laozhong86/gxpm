@@ -31,6 +31,19 @@ describe("gxpm-eval CLI", () => {
     expect(gxpm.score).toBeGreaterThanOrEqual(0);
     expect(gxpm.maxScore).toBe(60);
     expect(gxpm.checks.length).toBe(6);
+    expect(gxpm.type).toBe("unknown");
+
+    const tdd = out.results.find((r: { skill: string }) => r.skill === "gxpm-tdd");
+    if (tdd) {
+      expect(tdd.type).toBe("discipline");
+      expect(tdd.maxScore).toBe(100);
+      expect(tdd.checks.length).toBe(10);
+      const disciplineChecks = tdd.checks.filter((c: { name: string }) =>
+        ["rationalization-table", "red-flags", "explicit-negation", "foundational-principle"].includes(c.name),
+      );
+      expect(disciplineChecks.length).toBe(4);
+      expect(disciplineChecks.every((c: { pass: boolean }) => c.pass)).toBe(true);
+    }
   });
 
   test("run gxpm-diagnose evaluates one skill", () => {

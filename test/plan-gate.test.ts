@@ -23,6 +23,10 @@ describe("plan gate", () => {
 
     expect(artifact.type).toBe("implementation-plan");
     expect(readArtifact({ root, issueId: "GXPM-40", type: "implementation-plan" }).payload).toEqual({
+      objective: "",
+      scope: "",
+      nonGoals: "",
+      approach: "",
       constitutionCheck: {
         capabilityDeclared: false,
         testStrategyDefined: false,
@@ -30,11 +34,11 @@ describe("plan gate", () => {
         integrationPathClear: false,
         status: "pending",
       },
-      risks: [],
-      status: "draft",
       steps: [],
-      summary: "",
+      risks: [],
       validation: [],
+      rollback: "",
+      status: "draft",
     });
   });
 

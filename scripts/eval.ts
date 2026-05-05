@@ -15,6 +15,7 @@ interface EvalResult {
   score: number;
   maxScore: number;
   checks: EvalCheck[];
+  type: string;
 }
 
 interface EvalCheck {
@@ -25,9 +26,37 @@ interface EvalCheck {
 
 const ROOT = join(import.meta.dir, "..");
 
+type SkillType = "discipline" | "technique" | "pattern" | "reference" | "unknown";
+
+function detectSkillType(content: string): SkillType {
+  // 1. Frontmatter type field
+  const typeMatch = content.match(/^type:\s*(.+)$/m);
+  if (typeMatch) {
+    const t = typeMatch[1].trim().toLowerCase();
+    if (["discipline", "technique", "pattern", "reference"].includes(t)) {
+      return t as SkillType;
+    }
+  }
+
+  // 2. Content heuristic: strong signals of a discipline skill
+  const disciplineSignals = [
+    /## The Iron Law/i,
+    /## Red Flags/i,
+    /## Common Rationalizations/i,
+    /\*\*No exceptions:\*\*/i,
+    /Violating the letter/i,
+  ];
+  if (disciplineSignals.some((re) => re.test(content))) {
+    return "discipline";
+  }
+
+  return "unknown";
+}
+
 function evaluateSkill(skillPath: string, content: string): EvalResult {
   const checks: EvalCheck[] = [];
   const lines = content.split("\n");
+  const skillType = detectSkillType(content);
 
   // 1. Frontmatter exists
   const hasFrontmatter = content.startsWith("---");
@@ -83,11 +112,48 @@ function evaluateSkill(skillPath: string, content: string): EvalResult {
     message: hasReferences ? "Has references/read-next section" : "Missing references/read-next",
   });
 
+  // 7–10. Discipline-specific structural checks
+  if (skillType === "discipline") {
+    const hasRationalization = /\|\s*Excuse\s*\|\s*Reality\s*\|/i.test(content);
+    checks.push({
+      name: "rationalization-table",
+      pass: hasRationalization,
+      message: hasRationalization
+        ? "Has rationalization table (Excuse / Reality)"
+        : "Missing rationalization table",
+    });
+
+    const hasRedFlags = /## Red Flags/i.test(content);
+    checks.push({
+      name: "red-flags",
+      pass: hasRedFlags,
+      message: hasRedFlags ? "Has Red Flags section" : "Missing Red Flags section",
+    });
+
+    const hasExplicitNegation = /\*\*No exceptions:\*\*/i.test(content);
+    checks.push({
+      name: "explicit-negation",
+      pass: hasExplicitNegation,
+      message: hasExplicitNegation
+        ? "Has explicit negation (No exceptions)"
+        : "Missing explicit negation clause",
+    });
+
+    const hasFoundationalPrinciple = /Violating the letter/i.test(content);
+    checks.push({
+      name: "foundational-principle",
+      pass: hasFoundationalPrinciple,
+      message: hasFoundationalPrinciple
+        ? "Has foundational principle"
+        : "Missing foundational principle (e.g. 'Violating the letter')",
+    });
+  }
+
   const passCount = checks.filter((c) => c.pass).length;
   const maxScore = checks.length * 10;
   const score = passCount * 10;
 
-  return { skill: skillPath, score, maxScore, checks };
+  return { skill: skillPath, score, maxScore, checks, type: skillType };
 }
 
 function listSkills(): string[] {
@@ -119,7 +185,7 @@ function formatReport(results: EvalResult[], asJson: boolean): string {
   for (const r of results) {
     const pct = Math.round((r.score / r.maxScore) * 100);
     const icon = pct >= 80 ? "✓" : pct >= 50 ? "~" : "✗";
-    lines.push(`${icon} ${r.skill}: ${r.score}/${r.maxScore} (${pct}%)`);
+    lines.push(`${icon} ${r.skill}: ${r.score}/${r.maxScore} (${pct}%) [type: ${r.type}]`);
     for (const c of r.checks) {
       const cicon = c.pass ? "  ✓" : "  ✗";
       lines.push(`${cicon} ${c.name}: ${c.message}`);

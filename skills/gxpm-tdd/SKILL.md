@@ -13,6 +13,86 @@ description: Test-driven development with red-green-refactor loop via vertical s
 
 **Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means. The warning sign: your test breaks when you refactor, but behavior hasn't changed.
 
+**Violating the letter of the rules is violating the spirit of the rules.**
+
+## The Iron Law
+
+```
+NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+```
+
+Write code before the test? Delete it. Start over.
+
+**No exceptions:**
+- Don't keep it as "reference"
+- Don't "adapt" it while writing tests
+- Don't look at it
+- Delete means delete
+
+Implement fresh from tests. Period.
+
+## Red-Green-Refactor
+
+Each vertical slice follows this cycle. No skips. No shortcuts.
+
+### RED — Write Failing Test
+
+Write one minimal test showing what should happen.
+
+**Requirements:**
+- One behavior
+- Clear name
+- Real code (no mocks unless unavoidable)
+
+### Verify RED — Watch It Fail (MANDATORY. Never skip.)
+
+```bash
+bun test path/to/test.test.ts
+```
+
+Confirm:
+- Test fails (not errors)
+- Failure message is expected
+- Fails because feature missing (not typos)
+
+**Test passes?** You're testing existing behavior. Fix test.
+
+**Test errors?** Fix error, re-run until it fails correctly.
+
+### GREEN — Minimal Code
+
+Write simplest code to pass the test.
+
+Don't add features, refactor other code, or "improve" beyond the test.
+
+### Verify GREEN — Watch It Pass (MANDATORY)
+
+```bash
+bun test path/to/test.test.ts
+```
+
+Confirm:
+- Test passes
+- Other tests still pass
+- Output pristine (no errors, warnings)
+
+**Test fails?** Fix code, not test.
+
+**Other tests fail?** Fix now.
+
+### REFACTOR — Clean Up
+
+After green only:
+- Remove duplication
+- Improve names
+- Extract helpers
+
+Keep tests green. Don't add behavior.
+
+### Repeat
+
+Next failing test for next feature.
+
 ## Anti-Pattern: Horizontal Slices
 
 **DO NOT write all tests first, then all implementation.** This is "horizontal slicing" — treating RED as "write all tests" and GREEN as "write all code."
@@ -55,8 +135,8 @@ Before writing any code:
 Write ONE test that confirms ONE thing about the system:
 
 ```
-RED:   Write test for first behavior → test fails
-GREEN: Write minimal code to pass → test passes
+RED:   Write test for first behavior → verify it fails correctly
+GREEN: Write minimal code to pass → verify it passes
 ```
 
 This is your tracer bullet — proves the path works end-to-end.
@@ -66,8 +146,8 @@ This is your tracer bullet — proves the path works end-to-end.
 For each remaining behavior:
 
 ```
-RED:   Write next test → fails
-GREEN: Minimal code to pass → passes
+RED:   Write next test → verify it fails correctly
+GREEN: Minimal code to pass → verify it passes + all other tests pass
 ```
 
 Rules:
@@ -75,6 +155,7 @@ Rules:
 - Only enough code to pass current test
 - Don't anticipate future tests
 - Keep tests focused on observable behavior
+- **Never skip Verify RED or Verify GREEN**
 
 ### 4. Refactor
 
@@ -86,6 +167,70 @@ After all tests pass, look for refactor candidates:
 
 **Never refactor while RED.** Get to GREEN first.
 
+## Common Rationalizations
+
+| Excuse | Reality |
+|--------|---------|
+| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+| "I'll test after" | Tests passing immediately prove nothing. |
+| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
+| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
+| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
+| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
+| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
+| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
+| "Existing code has no tests" | You're improving it. Add tests for existing code. |
+
+## Red Flags — STOP and Start Over
+
+- Code before test
+- Test after implementation
+- Test passes immediately
+- Can't explain why test failed
+- Tests added "later"
+- Rationalizing "just this once"
+- "I already manually tested it"
+- "Tests after achieve the same purpose"
+- "It's about spirit not ritual"
+- "Keep as reference" or "adapt existing code"
+- "Already spent X hours, deleting is wasteful"
+- "TDD is dogmatic, I'm being pragmatic"
+- "This is different because..."
+
+**All of these mean: Delete code. Start over with TDD.**
+
+## When Stuck
+
+| Problem | Solution |
+|---------|----------|
+| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
+| Test too complicated | Design too complicated. Simplify interface. |
+| Must mock everything | Code too coupled. Use dependency injection. |
+| Test setup huge | Extract helpers. Still complex? Simplify design. |
+
+## Debugging Integration
+
+Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
+
+Never fix bugs without a test.
+
+## Verification Checklist
+
+Before marking work complete:
+
+- [ ] Every new function/method has a test
+- [ ] Watched each test fail before implementing
+- [ ] Each test failed for expected reason (feature missing, not typo)
+- [ ] Wrote minimal code to pass each test
+- [ ] All tests pass
+- [ ] Output pristine (no errors, warnings)
+- [ ] Tests use real code (mocks only if unavoidable)
+- [ ] Edge cases and errors covered
+
+Can't check all boxes? You skipped TDD. Start over.
+
 ## Checklist Per Cycle
 
 ```
@@ -94,11 +239,25 @@ After all tests pass, look for refactor candidates:
 [ ] Test would survive internal refactor
 [ ] Code is minimal for this test
 [ ] No speculative features added
+[ ] Verify RED executed (test failed for expected reason)
+[ ] Verify GREEN executed (test passes + all others pass + output clean)
 ```
+
+## Final Rule
+
+```
+Production code → test exists and failed first
+Otherwise → not TDD
+```
+
+No exceptions without your human partner's permission.
 
 ## gxpm integration
 
 - During `implement`, treat the first sub-task as the **tracer bullet**.
 - Use `gxpm run event <issue-id> <run-id> --type test-passed` to record test milestones.
-- Before leaving `implement`, the `local-verify` artifact should list all vertical slices completed.
-- If a bug is found during TDD, switch to `/diagnose` skill before fixing.
+- Before leaving `implement`, the `local-verify` artifact must include:
+  - List of all vertical slices completed
+  - Verification evidence for each slice (command run, exit code, output summary)
+  - Confirmation that Verify RED and Verify GREEN were executed for each slice
+- If a bug is found during TDD, write a failing test reproducing it first. Switch to `/diagnose` skill only if root cause is unclear.

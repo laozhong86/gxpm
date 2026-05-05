@@ -14,6 +14,13 @@ export function initializeTriage(input: TriageInput) {
       criteria: [],
       notes: "Fill criteria during triage before planning work.",
       status: "draft",
+      capabilities: {
+        new: [],
+        modified: [],
+        removed: [],
+      },
+      affectedCapabilities: [],
+      breaking: false,
     },
   });
 }
