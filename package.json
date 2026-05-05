@@ -26,6 +26,7 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
-    "playwright": "^1.59.1"
+    "playwright": "^1.59.1",
+    "yaml": "^2.8.4"
   }
 }
