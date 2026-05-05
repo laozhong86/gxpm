@@ -108,6 +108,29 @@
 
 长时间测试、E2E、浏览器验证和部署验证必须持续轮询到结束。不能把“后台会通知”当作完成证据。每次轮询只汇报新进展、失败和下一步。
 
+## 规格驱动开发（SDD）宪法
+
+gxpm 采用 Spec-Driven Development 方法论。`templates/constitution-template.md` 定义 Nine Articles，以下为可直接映射到 gxpm 的条款：
+
+| Article | gxpm 映射 | 检查点 |
+|---------|----------|--------|
+| Capability-First | `core/capabilities.ts` 必须先声明 capability slice | plan phase `constitutionCheck.capabilityDeclared` |
+| Test-First | 红-绿-重构，`bun test` 为 fast gate | plan phase `constitutionCheck.testStrategyDefined` |
+| Simplicity Gate | 最多 3 个模块/特性，MVP 优先 | plan phase `constitutionCheck.simplicityJustified` |
+| Anti-Abstraction | 直接使用框架特性，不造 wrapper | code review 时检查 |
+| Integration-First | 集成测试用真实环境，单元测试才 mock | plan phase `constitutionCheck.integrationPathClear` |
+
+### Phase -1 Gates
+
+在 `triage -> plan` 推进前，implementation-plan artifact 自动包含 `constitutionCheck` 字段：
+
+- `capabilityDeclared` — 是否已在 capabilities registry 声明
+- `testStrategyDefined` — 实现计划是否包含测试策略
+- `simplicityJustified` — 复杂度是否最小可行
+- `integrationPathClear` — 集成测试是否计划用真实环境
+
+Spike/调查类 issue（`type=spike`）可跳过 Phase -1 Gates。Feature 交付类 issue（默认类型）必须全部通过。
+
 ## 文档边界
 
 - `AGENTS.md` 只放不可推断的执行边界。

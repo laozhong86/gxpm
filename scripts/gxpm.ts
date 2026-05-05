@@ -18,6 +18,7 @@ import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
 import { runDagCommand } from "./commands/dag";
 import { runHookCommand } from "./commands/hook";
+import { runPresetCommand } from "./commands/preset";
 
 async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
@@ -148,6 +149,11 @@ async function main(argv: string[]) {
 
   if (command === "hook") {
     await runHookCommand(argv);
+    return;
+  }
+
+  if (command === "preset") {
+    runPresetCommand(argv, subcommand, issueId);
     return;
   }
 

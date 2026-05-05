@@ -32,6 +32,16 @@ gxpm 的 skill 和 capability 文档会逐步由模板生成。本文件规定�
 - 不把 PMC/gstack 原始命令直接搬进 gxpm，除非明确标注为上游参考或迁移 adapter。
 - 不在默认 skill 里塞大段架构背景；需要深入时链接 `docs/architecture/`。
 
+## Preset 集成
+
+template-authoring.md 定义的占位符在 `gen:skill-docs` 中解析后，还会经过 PresetResolver 的 Override > Preset > Core 三层解析。这意味着：
+
+- 预设可以通过 `replace` 策略完全覆盖生成产物
+- 预设可以通过 `append`/`prepend` 策略在生成产物前后注入团队规范
+- 覆盖层可以通过 `.gxpm/overrides/` 完全绕过模板系统
+
+预设规则的目标路径是生成产物的输出路径（如 `skills/gxpm/SKILL.md`），不是 `.tmpl` 路径。
+
 ## 验证
 
 修改模板后运行：
