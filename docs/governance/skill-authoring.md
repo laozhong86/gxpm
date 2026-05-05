@@ -17,6 +17,23 @@ skills/<category>/<name>/
 
 ## Two Types of Skills
 
+Skills are also classified by **type** for quality governance. The type determines what structural elements are required and how the skill is tested.
+
+### Skill Type Taxonomy
+
+| Type | Purpose | Required Elements | Test Strategy | Examples |
+|------|---------|-------------------|---------------|----------|
+| **Discipline** | Enforce rules/requirements that agents may rationalize away | Rationalization Table, Red Flags, Explicit Negation, Foundational Principle | Pressure scenarios with subagents; must resist 3+ combined pressures under maximum stress | `tdd`, `triage` |
+| **Technique** | How-to guides for specific methods | Step-by-step workflow, concrete examples | Application scenarios + variation scenarios | `diagnose`, `debug-issue`, `refactor-safely` |
+| **Pattern** | Mental models and ways of thinking | Recognition criteria, counter-examples, when NOT to apply | Recognition scenarios + counter-example tests | `architecture`, `planning` |
+| **Reference** | API docs, syntax guides, tool documentation | Accurate syntax, complete flag coverage, quick lookup tables | Retrieval scenarios + gap testing | `eval`, `browser` |
+
+**Discipline skills are the highest-risk category.** If they fail, agents bypass critical governance. They MUST include:
+- A `## Red Flags` section listing STOP conditions
+- A rationalization table (`| Excuse | Reality |`) preempting common workarounds
+- Explicit negation under rules (`**No exceptions:** ...`)
+- A foundational principle like `**Violating the letter of the rules is violating the spirit of the rules.**`
+
 ### 1. Generated skills (`.tmpl`)
 
 Use `.tmpl` when the skill needs host-specific injection or references/ loading:
