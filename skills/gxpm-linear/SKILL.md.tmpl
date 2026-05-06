@@ -1,0 +1,65 @@
+---
+name: gxpm-linear
+description: Linear CLI integration for gxpm issue lifecycle. Use when creating, updating, or querying Linear issues via command line. Replaces unstable MCP with stable CLI.
+status: stable
+---
+
+# gxpm-linear
+
+Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** — 所有操作走 `linear` 命令。
+
+## When to trigger
+
+- 需要创建/更新/查询 Linear issue
+- gxpm issue 需要同步到 Linear（`maybeSyncIssue` 的替代路径）
+- Sprint 规划、backlog 分类、批量操作
+- 需要读取 issue 评论获取上下文
+
+## Prerequisites
+
+```bash
+# CLI 已安装在
+/opt/homebrew/bin/linear
+
+# 如不在 PATH
+export PATH="/opt/homebrew/bin:$PATH"
+```
+
+## Auth
+
+```bash
+linear auth login    # 首次使用或 token 过期
+linear config        # 查看默认 team/workspace
+```
+
+## Global flags
+
+| Flag | 说明 |
+|------|------|
+| `--json` | 机器可读输出（默认使用） |
+| `--text` | 人类可读输出 |
+| `--dry-run` | 预览不执行 |
+| `--team <KEY>` | 指定 team（如 `GXG`） |
+
+{{REFERENCE:commands}}
+
+{{REFERENCE:workflows}}
+
+## Core Principles
+
+1. **Issue 是单一真相源** — 所有需求、bug、变更都先落地 Linear issue
+2. **创建前先查重** — `linear issue list --query "keyword"` 避免重复
+3. **写操作需确认** — 批量操作先呈现表格，等用户点头再执行
+4. **状态完整性** — 子 issue 全 Done 才能关父 issue
+
+## Tips
+
+- `--json` 优先于 `--text`，方便脚本解析
+- `issue list` 默认只显示分配给当前用户的，加 `-A` 看全部
+- `issue list` 必须加 `--sort`（`manual` 或 `priority`）
+- GraphQL escape hatch: `linear api '{ issues { nodes { id title } } }'`
+
+## Read Next
+
+- `docs/governance/development-contract.md`
+- Main `/gxpm` skill for phase gate details
