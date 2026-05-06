@@ -32,6 +32,10 @@ linear auth login    # 首次使用或 token 过期
 linear config        # 查看默认 team/workspace
 ```
 
+> **认证收敛**：gxpm 内置 issue-sync 直接调用 `linear` CLI，**不再单独配置 API key**。
+> 只需确保 `linear auth login` 已完成，gxpm 会自动复用其认证状态。
+> 旧配置 `sync.linearApiKey` 和 `GXPM_LINEAR_API_KEY` 已废弃，可安全移除。
+
 ## Global flags
 
 | Flag | 说明 |

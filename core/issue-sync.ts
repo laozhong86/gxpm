@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { getIssuePaths, type GxpmPhase, type IssueState } from "./state";
 import { type ArtifactRecord } from "./artifacts";
@@ -134,195 +135,121 @@ function getRepoName(root?: string): string {
 }
 
 function createLinearProvider(root?: string): SyncProvider | null {
-  const configApiKey = String(getConfigValue({ root, key: "sync.linearApiKey" }).value ?? "");
-  const apiKey = configApiKey || (process.env.GXPM_LINEAR_API_KEY ?? "");
-  if (!apiKey) return null;
-
-  const teamId = String(getConfigValue({ root, key: "sync.linearTeamId" }).value ?? "");
-  const teamKey = String(getConfigValue({ root, key: "sync.linearTeamKey" }).value ?? "");
-  const assigneeId = String(getConfigValue({ root, key: "sync.linearAssigneeId" }).value ?? "");
-
-  const graphQL = async (query: string, variables?: Record<string, unknown>) => {
-    const res = await fetch("https://api.linear.app/graphql", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey,
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-    const json = (await res.json()) as Record<string, unknown>;
-    if (json.errors) {
-      const errors = Array.isArray(json.errors)
-        ? json.errors.map((e: unknown) => (e as { message?: string }).message ?? String(e)).join("; ")
-        : String(json.errors);
-      throw new Error(`Linear API error: ${errors}`);
-    }
-    return json.data as Record<string, unknown>;
-  };
-
-  const workflowStatesCache = new Map<string, Array<{ id: string; name: string; type: string }>>();
-  const labelCache = new Map<string, string>();
-
-  const getWorkflowStates = async (): Promise<Array<{ id: string; name: string; type: string }>> => {
-    if (!teamId) return [];
-    if (workflowStatesCache.has(teamId)) return workflowStatesCache.get(teamId)!;
-    const data = await graphQL(`
-      query WorkflowStates($teamId: ID!) {
-        team(id: $teamId) {
-          states {
-            nodes { id name type }
-          }
-        }
-      }
-    `, { teamId });
-    const states = ((data?.team as Record<string, unknown>)?.states as Record<string, unknown>)?.nodes as
-      | Array<{ id: string; name: string; type: string }>
-      | undefined;
-    const result = states ?? [];
-    workflowStatesCache.set(teamId, result);
-    return result;
-  };
-
-  const resolveStateId = async (phase: GxpmPhase): Promise<string | null> => {
-    const states = await getWorkflowStates();
-    const mapping = GXPM_PHASE_TO_LINEAR_STATE[phase];
-    if (!mapping) return null;
-    const match = states.find((s) => s.type === mapping.type);
-    return match?.id ?? null;
-  };
-
-  async function getLabelId(name: string): Promise<string | undefined> {
-    if (labelCache.has(name)) return labelCache.get(name);
-    try {
-      const data = await graphQL(`
-        query IssueLabels($filter: IssueLabelFilter) {
-          issueLabels(filter: $filter) { nodes { id name } }
-        }
-      `, { filter: { name: { eq: name } } });
-      const labels = (data?.issueLabels as Record<string, unknown>)?.nodes as
-        | Array<{ id: string; name: string }>
-        | undefined;
-      const id = labels?.[0]?.id;
-      if (id) labelCache.set(name, id);
-      return id;
-    } catch {
-      return undefined;
-    }
+  // Verify linear CLI is available
+  try {
+    execSync("linear --version", { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"], env: { ...process.env, PATH: process.env.PATH } });
+  } catch {
+    return null;
   }
 
-  async function ensureLabelExists(name: string) {
+  const teamKey = String(getConfigValue({ root, key: "sync.linearTeamKey" }).value ?? "");
+  if (!teamKey) return null;
+
+  const assigneeId = String(getConfigValue({ root, key: "sync.linearAssigneeId" }).value ?? "");
+
+  const runLinear = (args: string[]): Record<string, unknown> => {
+    const cmd = `linear ${args.map((a) => (a.includes(" ") || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ")}`;
+    const output = execSync(cmd, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, PATH: process.env.PATH },
+    });
+    return JSON.parse(output) as Record<string, unknown>;
+  };
+
+  const ensureLabel = (name: string) => {
     try {
-      await graphQL(`
-        mutation LabelCreate($input: IssueLabelCreateInput!) {
-          issueLabelCreate(input: $input) { success }
-        }
-      `, { input: { name, color: "#6B7280" } });
+      execSync(`linear label create --name "${name.replace(/"/g, '\\"')}" --color "#6B7280" --team ${teamKey}`, {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "ignore"],
+        env: { ...process.env, PATH: process.env.PATH },
+      });
     } catch {
       // Label may already exist; ignore error
     }
-  }
+  };
+
+  const withTempFile = <T>(content: string, fn: (path: string) => T): T => {
+    const path = join(tmpdir(), `gxpm-${Date.now()}-${Math.random().toString(36).slice(2)}.md`);
+    writeFileSync(path, content);
+    try {
+      return fn(path);
+    } finally {
+      try {
+        unlinkSync(path);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+  };
 
   return {
     name: "linear",
 
     async createIssue(issueId: string, issueType: string, title: string): Promise<SyncTarget> {
-      const stateId = teamId ? await resolveStateId("triage") : undefined;
+      const stateType = GXPM_PHASE_TO_LINEAR_STATE["triage"].type;
       const repoName = getRepoName(root);
-      const repoLabelName = `repo:${repoName}`;
-      await ensureLabelExists(repoLabelName);
-      const repoLabelId = await getLabelId(repoLabelName);
+      const repoLabel = `repo:${repoName}`;
 
-      const data = await graphQL(`
-        mutation IssueCreate($input: IssueCreateInput!) {
-          issueCreate(input: $input) {
-            success
-            issue {
-              id
-              identifier
-              url
-              state { id name }
-            }
-          }
-        }
-      `, {
-        input: {
-          teamId: teamId || undefined,
-          title: title || `[${issueId}] ${issueType} issue`,
-          description: buildLinearDescription({ issueId, issueType, phase: "triage", artifacts: [], repoName, root }),
-          ...(stateId ? { stateId } : {}),
-          ...(repoLabelId ? { labelIds: [repoLabelId] } : {}),
-          ...(assigneeId ? { assigneeId } : {}),
-        },
+      ensureLabel(repoLabel);
+
+      const description = buildLinearDescription({
+        issueId,
+        issueType,
+        phase: "triage",
+        artifacts: [],
+        repoName,
+        root,
       });
-      const issue = (data?.issueCreate as Record<string, unknown>)?.issue as Record<string, unknown>;
+
+      const result = withTempFile(description, (descPath) => {
+        const args = [
+          "issue", "create",
+          "--json",
+          "--title", title || `[${issueId}] ${issueType} issue`,
+          "--team", teamKey,
+          "--state", stateType,
+          "--label", repoLabel,
+          "--description-file", descPath,
+        ];
+        if (assigneeId) {
+          args.push("--assignee", assigneeId);
+        }
+        return runLinear(args);
+      });
+
+      const success = result.success !== false;
+      if (!success) {
+        const error = (result.error as Record<string, unknown>)?.message ?? "Linear CLI issue create failed";
+        throw new Error(`Linear CLI error: ${error}`);
+      }
+
       return {
         provider: "linear",
-        externalId: String(issue?.id ?? ""),
-        displayId: String(issue?.identifier ?? ""),
-        url: String(issue?.url ?? ""),
+        externalId: String(result.id ?? ""),
+        displayId: String(result.identifier ?? ""),
+        url: String(result.url ?? ""),
         syncedAt: new Date().toISOString(),
       };
     },
 
     async updatePhase(target: SyncTarget, phase: GxpmPhase): Promise<void> {
-      const stateId = await resolveStateId(phase);
-      const labelName = GXPM_PHASE_TO_LINEAR_LABEL[phase];
-
-      // Update state
-      if (stateId) {
-        await graphQL(`
-          mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
-            issueUpdate(id: $id, input: $input) {
-              success
-            }
-          }
-        `, { id: target.externalId, input: { stateId } });
-      }
-
-      // Manage phase label
-      if (labelName) {
-        const shortName = labelName.replace("gxpm:phase/", "");
-        await ensureLabelExists(shortName);
-        const labelId = await getLabelId(shortName);
-        if (labelId) {
-          await graphQL(`
-            mutation IssueLabel($id: String!, $labelIds: [String!]!) {
-              issueUpdate(id: $id, input: { labelIds: $labelIds }) {
-                success
-              }
-            }
-          `, {
-            id: target.externalId,
-            labelIds: [labelId],
-          });
-        }
+      const stateType = GXPM_PHASE_TO_LINEAR_STATE[phase]?.type;
+      if (stateType) {
+        runLinear(["issue", "move", target.displayId, stateType, "--json"]);
       }
     },
 
     async updateDescription(target: SyncTarget, description: string): Promise<void> {
-      await graphQL(`
-        mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
-          issueUpdate(id: $id, input: $input) {
-            success
-          }
-        }
-      `, { id: target.externalId, input: { description } });
+      withTempFile(description, (descPath) => {
+        runLinear(["issue", "update", target.displayId, "--description-file", descPath, "--json"]);
+      });
     },
 
     async archiveIssue(target: SyncTarget, archived: boolean): Promise<void> {
-      const states = await getWorkflowStates();
-      const type = archived ? "canceled" : "completed";
-      const match = states.find((s) => s.type === type);
-      if (match) {
-        await graphQL(`
-          mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
-            issueUpdate(id: $id, input: $input) {
-              success
-            }
-          }
-        `, { id: target.externalId, input: { stateId: match.id } });
-      }
+      const stateType = archived ? "canceled" : "completed";
+      runLinear(["issue", "move", target.displayId, stateType, "--json"]);
     },
   };
 }

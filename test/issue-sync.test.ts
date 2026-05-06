@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -16,38 +16,119 @@ import {
   maybeSyncIssue,
 } from "../core/issue-sync";
 
+// Fake Linear CLI that reads responses from a JSON file.
+// The test writes responses to a file, then the fake CLI matches commands against them.
+function setupFakeLinearCLI(): { binDir: string; logFile: string; responsesFile: string } {
+  const binDir = mkdtempSync(join(tmpdir(), "gxpm-fake-linear-"));
+  const logFile = join(binDir, "calls.jsonl");
+  const responsesFile = join(binDir, "responses.json");
+
+  // Initialize empty files
+  writeFileSync(logFile, "");
+  writeFileSync(responsesFile, JSON.stringify([]));
+
+  const scriptPath = join(binDir, "linear");
+  const jsPath = join(binDir, "linear.js");
+
+  const jsCode = `
+const fs = require("fs");
+const responsesFile = process.env.GXPM_TEST_LINEAR_RESPONSES;
+const logFile = process.env.GXPM_TEST_LINEAR_LOG;
+const args = process.argv.slice(2);
+const cmd = args.join(" ");
+
+// Log the call
+if (logFile) {
+  fs.appendFileSync(logFile, JSON.stringify({ cmd, args }) + "\\n");
+}
+
+// Load responses
+let responses = [];
+try {
+  responses = JSON.parse(fs.readFileSync(responsesFile, "utf8"));
+} catch {}
+
+// Find matching response
+for (const r of responses) {
+  if (r.matcher && typeof r.matcher === "string") {
+    // Simple substring match
+    if (cmd.includes(r.matcher)) {
+      process.stdout.write(r.output);
+      process.exit(r.exitCode ?? 0);
+    }
+  } else if (r.matchArgs) {
+    // Match specific args
+    const allMatch = r.matchArgs.every((expected, i) => args[i] === expected);
+    if (allMatch && args.length >= r.matchArgs.length) {
+      process.stdout.write(r.output);
+      process.exit(r.exitCode ?? 0);
+    }
+  }
+}
+
+// Default fallback
+process.stdout.write('{}');
+process.exit(0);
+`;
+  writeFileSync(jsPath, jsCode);
+
+  const shellScript = `#!/bin/bash
+node "${jsPath}" "$@"
+`;
+  writeFileSync(scriptPath, shellScript);
+  chmodSync(scriptPath, 0o755);
+
+  return { binDir, logFile, responsesFile };
+}
+
+function setFakeResponses(responsesFile: string, responses: Array<{ matcher?: string; matchArgs?: string[]; output: string; exitCode?: number }>) {
+  writeFileSync(responsesFile, JSON.stringify(responses));
+}
+
+function readCallLog(logFile: string): Array<{ cmd: string; args: string[] }> {
+  const raw = readFileSync(logFile, "utf8").trim();
+  if (!raw) return [];
+  return raw.split("\n").map((line) => JSON.parse(line));
+}
+
 describe("issue sync", () => {
-  let originalFetch: typeof fetch;
-  let originalEnv: string | undefined;
-  let fetchCalls: Array<{ url: string; init: RequestInit }>;
+  let originalPath: string | undefined;
+  let originalGxpmHome: string | undefined;
+  let originalResponsesEnv: string | undefined;
+  let originalLogEnv: string | undefined;
 
   beforeEach(() => {
-    originalFetch = globalThis.fetch;
-    originalEnv = process.env.GXPM_LINEAR_API_KEY;
-    fetchCalls = [];
+    originalPath = process.env.PATH;
+    originalGxpmHome = process.env.GXPM_HOME;
+    originalResponsesEnv = process.env.GXPM_TEST_LINEAR_RESPONSES;
+    originalLogEnv = process.env.GXPM_TEST_LINEAR_LOG;
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
-    if (originalEnv !== undefined) {
-      process.env.GXPM_LINEAR_API_KEY = originalEnv;
+    if (originalPath !== undefined) {
+      process.env.PATH = originalPath;
+    }
+    if (originalGxpmHome !== undefined) {
+      process.env.GXPM_HOME = originalGxpmHome;
     } else {
-      delete process.env.GXPM_LINEAR_API_KEY;
+      delete process.env.GXPM_HOME;
+    }
+    if (originalResponsesEnv !== undefined) {
+      process.env.GXPM_TEST_LINEAR_RESPONSES = originalResponsesEnv;
+    } else {
+      delete process.env.GXPM_TEST_LINEAR_RESPONSES;
+    }
+    if (originalLogEnv !== undefined) {
+      process.env.GXPM_TEST_LINEAR_LOG = originalLogEnv;
+    } else {
+      delete process.env.GXPM_TEST_LINEAR_LOG;
     }
   });
 
-  function mockFetch(responses: Array<{ matcher: (url: string, body: string) => boolean; data: Record<string, unknown> }>) {
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const body = String(init?.body ?? "{}");
-      fetchCalls.push({ url, init: init ?? {} });
-      const match = responses.find((r) => r.matcher(url, body));
-      const data = match?.data ?? {};
-      return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
-    };
-  }
+  test("resolveSyncProvider returns null when linear CLI is not available", () => {
+    process.env.PATH = "/usr/bin:/bin";
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
 
-  test("resolveSyncProvider returns null when not configured", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-none-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(join(root, ".gxpm", "config.json"), JSON.stringify({}));
@@ -56,39 +137,55 @@ describe("issue sync", () => {
   });
 
   test("resolveSyncProvider returns null when autoSync is disabled", () => {
+    const { binDir } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-disabled-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
       JSON.stringify({ sync: { provider: "linear", autoSync: false } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "test-key";
     const provider = resolveSyncProvider(root);
     expect(provider).toBeNull();
   });
 
-  test("resolveSyncProvider uses sync.linearApiKey from config.json when env var is absent", () => {
-    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-config-apikey-"));
+  test("resolveSyncProvider returns linear provider when CLI and teamKey are configured", () => {
+    const { binDir } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+
+    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-config-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1", linearApiKey: "config-key" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    delete process.env.GXPM_LINEAR_API_KEY;
-
-    mockFetch([
-      {
-        matcher: (_url, body) => body.includes("WorkflowStates"),
-        data: { data: { team: { states: { nodes: [{ id: "st-triage", name: "Triage", type: "triage" }] } } } },
-      },
-    ]);
 
     const provider = resolveSyncProvider(root);
     expect(provider).not.toBeNull();
     expect(provider?.name).toBe("linear");
   });
 
+  test("resolveSyncProvider returns null when linearTeamKey is missing", () => {
+    const { binDir } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+
+    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-no-team-"));
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(root, ".gxpm", "config.json"),
+      JSON.stringify({ sync: { provider: "linear" } }),
+    );
+
+    const provider = resolveSyncProvider(root);
+    expect(provider).toBeNull();
+  });
+
   test("readSyncState returns empty state when file does not exist", () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-read-"));
     const state = readSyncState({ root, issueId: "GXPM-SYNC-1" });
     expect(state.schemaVersion).toBe(1);
@@ -96,6 +193,7 @@ describe("issue sync", () => {
   });
 
   test("writeSyncState persists sync data", () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-write-"));
     const state = {
       schemaVersion: 1,
@@ -115,63 +213,83 @@ describe("issue sync", () => {
     expect(read.targets[0].displayId).toBe("ENG-1");
   });
 
-  test("createIssueState triggers sync when Linear is configured", async () => {
+  test("createIssueState triggers sync when Linear CLI is configured", async () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    const { binDir, logFile, responsesFile } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_TEST_LINEAR_RESPONSES = responsesFile;
+    process.env.GXPM_TEST_LINEAR_LOG = logFile;
+
+    setFakeResponses(responsesFile, [
+      { matcher: "--version", output: "3.1.0\n", exitCode: 0 },
+      { matcher: "label create", output: "✓ Created label\n", exitCode: 0 },
+      {
+        matcher: "issue create",
+        output: JSON.stringify({
+          id: "lin-1",
+          identifier: "ENG-99",
+          url: "https://linear.app/ENG-99",
+          success: true,
+        }),
+        exitCode: 0,
+      },
+    ]);
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-create-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1", linearTeamKey: "ENG" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "lin_test";
-
-    mockFetch([
-      {
-        matcher: (_url, body) => body.includes("WorkflowStates"),
-        data: { data: { team: { states: { nodes: [{ id: "st-triage", name: "Triage", type: "triage" }] } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueCreate"),
-        data: { data: { issueCreate: { success: true, issue: { id: "lin-1", identifier: "ENG-99", url: "https://linear.app/ENG-99" } } } },
-      },
-    ]);
 
     createIssueState({ root, issueId: "GXPM-SYNC-3" });
 
-    // Wait for dynamic import + async sync
+    // Wait for async sync
     await new Promise((r) => setTimeout(r, 100));
 
     const syncState = readSyncState({ root, issueId: "GXPM-SYNC-3" });
     expect(syncState.targets).toHaveLength(1);
     expect(syncState.targets[0].provider).toBe("linear");
     expect(syncState.targets[0].displayId).toBe("ENG-99");
+
+    const calls = readCallLog(logFile);
+    const createCalls = calls.filter((c) => c.cmd.includes("issue create"));
+    expect(createCalls.length).toBe(1);
   });
 
-  test("transitionIssuePhase triggers sync update", async () => {
+  test("transitionIssuePhase triggers sync update via linear CLI move", async () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    const { binDir, logFile, responsesFile } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_TEST_LINEAR_RESPONSES = responsesFile;
+    process.env.GXPM_TEST_LINEAR_LOG = logFile;
+
+    setFakeResponses(responsesFile, [
+      { matcher: "--version", output: "3.1.0\n", exitCode: 0 },
+      { matcher: "label create", output: "✓ Created label\n", exitCode: 0 },
+      {
+        matcher: "issue create",
+        output: JSON.stringify({
+          id: "lin-2",
+          identifier: "ENG-2",
+          url: "https://linear.app/ENG-2",
+          success: true,
+        }),
+        exitCode: 0,
+      },
+      {
+        matcher: "issue move",
+        output: JSON.stringify({ identifier: "ENG-2", state: "Backlog" }),
+        exitCode: 0,
+      },
+    ]);
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-transition-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "lin_test";
-
-    mockFetch([
-      {
-        matcher: (_url, body) => body.includes("WorkflowStates"),
-        data: { data: { team: { states: { nodes: [
-          { id: "st-triage", name: "Triage", type: "triage" },
-          { id: "st-backlog", name: "Backlog", type: "backlog" },
-        ] } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueCreate"),
-        data: { data: { issueCreate: { success: true, issue: { id: "lin-2", identifier: "ENG-2", url: "https://linear.app/ENG-2" } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueUpdate"),
-        data: { data: { issueUpdate: { success: true } } },
-      },
-    ]);
 
     createIssueState({ root, issueId: "GXPM-SYNC-4" });
     await new Promise((r) => setTimeout(r, 100));
@@ -182,36 +300,44 @@ describe("issue sync", () => {
     transitionIssuePhase({ root, issueId: "GXPM-SYNC-4", nextPhase: "plan" });
     await new Promise((r) => setTimeout(r, 100));
 
-    const updateCalls = fetchCalls.filter((c) => String(c.init.body).includes("IssueUpdate"));
-    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    const calls = readCallLog(logFile);
+    const moveCalls = calls.filter((c) => c.cmd.includes("issue move"));
+    expect(moveCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("setIssueArchived triggers sync archive", async () => {
+  test("setIssueArchived triggers sync archive via linear CLI move", async () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    const { binDir, logFile, responsesFile } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_TEST_LINEAR_RESPONSES = responsesFile;
+    process.env.GXPM_TEST_LINEAR_LOG = logFile;
+
+    setFakeResponses(responsesFile, [
+      { matcher: "--version", output: "3.1.0\n", exitCode: 0 },
+      { matcher: "label create", output: "✓ Created label\n", exitCode: 0 },
+      {
+        matcher: "issue create",
+        output: JSON.stringify({
+          id: "lin-3",
+          identifier: "ENG-3",
+          url: "https://linear.app/ENG-3",
+          success: true,
+        }),
+        exitCode: 0,
+      },
+      {
+        matcher: "issue move",
+        output: JSON.stringify({ identifier: "ENG-3", state: "Canceled" }),
+        exitCode: 0,
+      },
+    ]);
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-archive-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "lin_test";
-
-    mockFetch([
-      {
-        matcher: (_url, body) => body.includes("WorkflowStates"),
-        data: { data: { team: { states: { nodes: [
-          { id: "st-triage", name: "Triage", type: "triage" },
-          { id: "st-canceled", name: "Canceled", type: "canceled" },
-        ] } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueCreate"),
-        data: { data: { issueCreate: { success: true, issue: { id: "lin-3", identifier: "ENG-3", url: "https://linear.app/ENG-3" } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueUpdate"),
-        data: { data: { issueUpdate: { success: true } } },
-      },
-    ]);
 
     createIssueState({ root, issueId: "GXPM-SYNC-5" });
     await new Promise((r) => setTimeout(r, 100));
@@ -221,23 +347,35 @@ describe("issue sync", () => {
 
     const syncState = readSyncState({ root, issueId: "GXPM-SYNC-5" });
     expect(syncState.targets[0].lastError).toBeUndefined();
+
+    const calls = readCallLog(logFile);
+    const moveCalls = calls.filter((c) => c.cmd.includes("issue move") && c.cmd.includes("canceled"));
+    expect(moveCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   test("sync failure is silently recorded without blocking local ops", async () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    const { binDir, logFile, responsesFile } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_TEST_LINEAR_RESPONSES = responsesFile;
+    process.env.GXPM_TEST_LINEAR_LOG = logFile;
+
+    setFakeResponses(responsesFile, [
+      { matcher: "--version", output: "3.1.0\n", exitCode: 0 },
+      { matcher: "label create", output: "✓ Created label\n", exitCode: 0 },
+      {
+        matcher: "issue create",
+        output: "error",
+        exitCode: 1,
+      },
+    ]);
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-fail-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "lin_test";
-
-    globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ errors: [{ message: "rate limited" }] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    };
 
     const state = createIssueState({ root, issueId: "GXPM-SYNC-6" });
     expect(state.issueId).toBe("GXPM-SYNC-6");
@@ -250,49 +388,43 @@ describe("issue sync", () => {
   });
 
   test("createIssue includes repo label and description with repo info", async () => {
+    process.env.GXPM_HOME = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    const { binDir, logFile, responsesFile } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_TEST_LINEAR_RESPONSES = responsesFile;
+    process.env.GXPM_TEST_LINEAR_LOG = logFile;
+
+    setFakeResponses(responsesFile, [
+      { matcher: "--version", output: "3.1.0\n", exitCode: 0 },
+      { matcher: "label create", output: "✓ Created label\n", exitCode: 0 },
+      {
+        matcher: "issue create",
+        output: JSON.stringify({
+          id: "lin-7",
+          identifier: "ENG-7",
+          url: "https://linear.app/ENG-7",
+          success: true,
+        }),
+        exitCode: 0,
+      },
+    ]);
+
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-repo-"));
     mkdirSync(join(root, ".gxpm"), { recursive: true });
     writeFileSync(
       join(root, ".gxpm", "config.json"),
-      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1", linearTeamKey: "ENG" } }),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
     );
-    process.env.GXPM_LINEAR_API_KEY = "lin_test";
-
-    mockFetch([
-      {
-        matcher: (_url, body) => body.includes("WorkflowStates"),
-        data: { data: { team: { states: { nodes: [{ id: "st-triage", name: "Triage", type: "triage" }] } } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("issueLabelCreate"),
-        data: { data: { issueLabelCreate: { success: true } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("issueLabels"),
-        data: { data: { issueLabels: { nodes: [{ id: "lbl-repo", name: "repo:gxpm-sync-repo-" }] } } },
-      },
-      {
-        matcher: (_url, body) => body.includes("IssueCreate"),
-        data: { data: { issueCreate: { success: true, issue: { id: "lin-7", identifier: "ENG-7", url: "https://linear.app/ENG-7" } } } },
-      },
-    ]);
 
     createIssueState({ root, issueId: "GXPM-SYNC-7" });
     await new Promise((r) => setTimeout(r, 100));
 
-    const createCall = fetchCalls.find((c) => String(c.init.body).includes("IssueCreate"));
+    const calls = readCallLog(logFile);
+    const createCall = calls.find((c) => c.cmd.includes("issue create"));
     expect(createCall).toBeDefined();
-    const createBody = JSON.parse(String(createCall!.init.body));
-    const input = createBody.variables.input;
-
-    // Repo label is attached
-    expect(input.labelIds).toBeDefined();
-    expect(input.labelIds).toContain("lbl-repo");
-
-    // Description contains repo info (fallback to directory basename since no git remote)
-    expect(input.description).toContain("Repository:");
-    expect(input.description).toContain("Local Path:");
-    expect(input.description).toContain(root);
+    expect(createCall!.cmd).toContain("--label");
+    expect(createCall!.cmd).toContain("repo:");
+    expect(createCall!.cmd).toContain("--description-file");
 
     const syncState = readSyncState({ root, issueId: "GXPM-SYNC-7" });
     expect(syncState.targets).toHaveLength(1);
