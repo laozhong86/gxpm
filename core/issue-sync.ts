@@ -134,7 +134,8 @@ function getRepoName(root?: string): string {
 }
 
 function createLinearProvider(root?: string): SyncProvider | null {
-  const apiKey = process.env.GXPM_LINEAR_API_KEY ?? "";
+  const configApiKey = String(getConfigValue({ root, key: "sync.linearApiKey" }).value ?? "");
+  const apiKey = configApiKey || (process.env.GXPM_LINEAR_API_KEY ?? "");
   if (!apiKey) return null;
 
   const teamId = String(getConfigValue({ root, key: "sync.linearTeamId" }).value ?? "");

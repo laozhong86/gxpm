@@ -141,6 +141,11 @@ const CONFIG_REGISTRY = {
     description: "Linear user ID to assign as default assignee for synced issues.",
     normalize: (value: unknown) => (typeof value === "string" ? value : ""),
   },
+  "sync.linearApiKey": {
+    defaultValue: "",
+    description: "Linear API key for issue sync. Falls back to GXPM_LINEAR_API_KEY env var if empty.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
   "agent.name": {
     defaultValue: "",
     description: "Human-readable agent identity used as issue creator/assignee name. Falls back to host name if empty.",

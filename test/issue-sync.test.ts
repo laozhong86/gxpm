@@ -57,14 +57,35 @@ describe("issue sync", () => {
 
   test("resolveSyncProvider returns null when autoSync is disabled", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-sync-disabled-"));
-    const configPath = join(root, ".gxpm", "config.json");
-    import("node:fs").then(({ mkdirSync, writeFileSync }) => {
-      mkdirSync(join(root, ".gxpm"), { recursive: true });
-      writeFileSync(configPath, JSON.stringify({ sync: { provider: "linear", autoSync: false } }));
-    });
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(root, ".gxpm", "config.json"),
+      JSON.stringify({ sync: { provider: "linear", autoSync: false } }),
+    );
     process.env.GXPM_LINEAR_API_KEY = "test-key";
     const provider = resolveSyncProvider(root);
     expect(provider).toBeNull();
+  });
+
+  test("resolveSyncProvider uses sync.linearApiKey from config.json when env var is absent", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-config-apikey-"));
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(root, ".gxpm", "config.json"),
+      JSON.stringify({ sync: { provider: "linear", linearTeamId: "team-1", linearApiKey: "config-key" } }),
+    );
+    delete process.env.GXPM_LINEAR_API_KEY;
+
+    mockFetch([
+      {
+        matcher: (_url, body) => body.includes("WorkflowStates"),
+        data: { data: { team: { states: { nodes: [{ id: "st-triage", name: "Triage", type: "triage" }] } } } },
+      },
+    ]);
+
+    const provider = resolveSyncProvider(root);
+    expect(provider).not.toBeNull();
+    expect(provider?.name).toBe("linear");
   });
 
   test("readSyncState returns empty state when file does not exist", () => {
