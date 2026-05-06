@@ -141,11 +141,6 @@ const CONFIG_REGISTRY = {
     description: "Linear user ID to assign as default assignee for synced issues.",
     normalize: (value: unknown) => (typeof value === "string" ? value : ""),
   },
-  "sync.linearApiKey": {
-    defaultValue: "",
-    description: "Linear API key for issue sync. Falls back to GXPM_LINEAR_API_KEY env var if empty.",
-    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
-  },
   "agent.name": {
     defaultValue: "",
     description: "Human-readable agent identity used as issue creator/assignee name. Falls back to host name if empty.",
@@ -214,7 +209,7 @@ export function getConfigValue(input: { root?: string; home?: string; key: strin
   const repo = readConfig(repoConfigPath(root));
   const repoVal = lookup(repo, input.key);
   if (repoVal !== undefined) return { value: repoVal, source: "config-repo" };
-  const global = readConfig(globalConfigPath(input.home ?? homedir()));
+  const global = readConfig(globalConfigPath(input.home ?? getGxpmHome()));
   const globalVal = lookup(global, input.key);
   if (globalVal !== undefined) return { value: globalVal, source: "config-global" };
   return { value: undefined, source: "unset" };
