@@ -243,7 +243,8 @@ flowchart TB
         TDD["tdd<br/>(Matt absorbed)"]
         DIAGNOSE["diagnose<br/>(Matt + gxpm)"]
         ARCH["architecture<br/>(Matt absorbed)"]
-        GITNEXUS_SKILLS["gitnexus<br/>(code intelligence skills)"]
+        GITNEXUS_SKILLS["gitnexus<br/>(agent code intelligence)"]
+        HUMAN_WIKI["gxpm wiki<br/>(optional human docs)"]
     end
 
     subgraph "Phase Pipeline"
@@ -283,6 +284,11 @@ flowchart TB
     DIAGNOSE --> QA
     ARCH --> SELF_REVIEW
     ARCH --> LAND
+    GITNEXUS_SKILLS -.-> IMPLEMENT
+    GITNEXUS_SKILLS -.-> SELF_REVIEW
+    GITNEXUS_SKILLS -.-> PR_CHECK
+    HUMAN_WIKI -.-> TRIAGE
+    HUMAN_WIKI -.-> PLAN
 
     style GXPM fill:#e3f2fd
     style TRIAGE_SKILL fill:#e8f5e9
@@ -291,6 +297,7 @@ flowchart TB
     style TDD fill:#e8f5e9
     style DIAGNOSE fill:#e8f5e9
     style ARCH fill:#e8f5e9
+    style HUMAN_WIKI fill:#f3e5f5
 ```
 
 ### 映射规则

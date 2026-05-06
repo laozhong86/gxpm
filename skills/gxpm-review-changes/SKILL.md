@@ -6,14 +6,14 @@ description: Perform a structured code review using change detection and impact
 
 ## Review Changes
 
-Perform a thorough, risk-aware code review using the knowledge graph.
+Perform a thorough, risk-aware code review using GitNexus.
 
 ### Steps
 
-1. Run `detect_changes` to get risk-scored change analysis.
-2. Run `get_affected_flows` to find impacted execution paths.
-3. For each high-risk function, run `query_graph` with pattern="tests_for" to check test coverage.
-4. Run `get_impact_radius` to understand the blast radius.
+1. Run `detect_changes` to map the diff to affected symbols and execution flows.
+2. For high-risk symbols, run `impact` with `direction: "upstream"` and `includeTests: true` when useful.
+3. Use `context` on key symbols to understand callers, callees, and process participation.
+4. Use `query` for broader execution-flow questions raised by the diff.
 5. For any untested changes, suggest specific test cases.
 
 ### Output Format
@@ -25,6 +25,6 @@ Provide findings grouped by risk level (high/medium/low) with:
 - Overall merge recommendation
 
 ## Token Efficiency Rules
-- ALWAYS start with `get_minimal_context(task="<your task>")` before any other graph tool.
-- Use `detail_level="minimal"` on all calls. Only escalate to "standard" when minimal is insufficient.
-- Target: complete any review/debug/refactor task in ≤5 tool calls and ≤800 total output tokens.
+- Start with `detect_changes`, then inspect only the highest-risk symbols.
+- Use `impact`/`context` before raw `cypher`.
+- Target: complete any review/debug/refactor task in ≤5 graph tool calls.

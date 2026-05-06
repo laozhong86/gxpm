@@ -265,7 +265,7 @@ flowchart LR
     GIT --> |"hook events"| ISSUE_DIR
     GITNEXUS -.-> |"code nav<br/>debug/refactor/review"| CLAUDE
 
-    WIKI_DIR --> |"native wiki<br/>query/context"| CODEX
+    WIKI_DIR --> |"optional human docs<br/>manual wiki query/update"| CODEX
     CONFIG --> |"worktree policy<br/>host config"| CODEX
 
     style SKILL_CLAUDE fill:#ffcdd2
@@ -273,6 +273,6 @@ flowchart LR
 
 ### 关键问题
 
-- **Claude Code** 用 graph MCP + 4 个 orphan skill
-- **Codex CLI** 用 gxpm CLI + 1 个 giant skill
-- 两条路径能力不对等：Codex 没有 graph 导航，Claude 没有完整的 phase gate 指引
+- **Agent 代码智能** 应统一走 GitNexus MCP，用于 code nav、debug、refactor、review。
+- **gxpm wiki** 是可选人类说明书，用于 onboarding 和治理/CLI 导览；不作为 SessionStart 默认上下文，也不替代 GitNexus。
+- **Codex CLI** 仍通过 gxpm CLI 读写 issue state；代码理解能力应通过 GitNexus skills 暴露，而不是扩大 wiki 职责。

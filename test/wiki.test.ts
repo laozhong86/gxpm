@@ -265,11 +265,12 @@ describe("gxpm-native wiki engine", () => {
     const encoded = "file://core/source%20%28draft%29.ts";
     const overview = readFileSync(join(root, ".gxpm", "wiki", "content", "Overview.md"), "utf8");
     const fileIndex = readFileSync(join(root, ".gxpm", "wiki", "content", "File-Index.md"), "utf8");
-    const codeGraph = readFileSync(join(root, ".gxpm", "wiki", "content", "Code-Graph.md"), "utf8");
+    const importMap = readFileSync(join(root, ".gxpm", "wiki", "content", "Import-Map.md"), "utf8");
     const wikiDoc = readFileSync(join(root, ".gxpm", "wiki", "content", "Native-Wiki.md"), "utf8");
     expect(overview).toContain(`[core/source (draft).ts](${encoded})`);
     expect(fileIndex).toContain(`[core/source (draft).ts](${encoded}#L1)`);
-    expect(codeGraph).toContain(`[core/source (draft).ts](${encoded}#L1)`);
+    expect(importMap).toContain(`[core/source (draft).ts](${encoded}#L1)`);
+    expect(importMap).toContain("Use GitNexus for agent code intelligence");
     expect(wikiDoc).toContain(`[core/source (draft).ts](${encoded})`);
   });
 
@@ -381,12 +382,12 @@ describe("gxpm-native wiki engine", () => {
     const hostAdapters = result.suggestedDocs.indexOf(".gxpm/wiki/content/project-topics/host-adapters.md");
     const projectTopics = result.suggestedDocs.indexOf(".gxpm/wiki/content/Project-Topics.md");
     const fileIndex = result.suggestedDocs.indexOf(".gxpm/wiki/content/File-Index.md");
-    const codeGraph = result.suggestedDocs.indexOf(".gxpm/wiki/content/Code-Graph.md");
+    const importMap = result.suggestedDocs.indexOf(".gxpm/wiki/content/Import-Map.md");
     expect(hostAdapters).toBeGreaterThanOrEqual(0);
     expect(projectTopics).toBeGreaterThanOrEqual(0);
     expect(projectTopics).toBeGreaterThan(hostAdapters);
     expect(fileIndex === -1 || hostAdapters < fileIndex).toBe(true);
-    expect(codeGraph === -1 || hostAdapters < codeGraph).toBe(true);
+    expect(importMap === -1 || hostAdapters < importMap).toBe(true);
   });
 
   test("suggests the project topic map from raw dimensions even when the context file is not rendered", () => {
@@ -777,7 +778,7 @@ describe("gxpm native wiki CLI", () => {
 
     const human = runCli(root, ["wiki", "eval"]);
     expect(human.exitCode).toBe(0);
-    expect(output(human)).toContain("Native gxpm wiki eval: current");
+    expect(output(human)).toContain("Optional human wiki eval: current");
     expect(output(human)).toContain("Query scenarios:");
   });
 
@@ -796,13 +797,13 @@ describe("gxpm native wiki CLI", () => {
     expect(JSON.parse(output(query)).contextFiles).not.toContain("core/wiki.ts");
   });
 
-  test("post-commit hook template contains wiki update", () => {
+  test("post-commit hook template keeps wiki refresh manual", () => {
     const hookPath = join(process.cwd(), "templates", "hooks", "gxpm-post-commit");
     expect(existsSync(hookPath)).toBe(true);
     const content = readFileSync(hookPath, "utf8");
-    expect(content).toContain("wiki update");
+    expect(content).toContain("Wiki refresh is manual");
+    expect(content).not.toContain("wiki update");
     expect(content).toContain("set +e");
-    expect(content).toContain(".gxpm/wiki/state.json");
   });
 });
 

@@ -192,11 +192,6 @@ async function processSessionStart(
   const updateCtx = checkUpdate(cwd);
   if (updateCtx) parts.push(updateCtx);
 
-  const wikiCtx = getWikiContext(cwd);
-  if (wikiCtx) parts.push(wikiCtx);
-
-  triggerWikiUpdate(cwd);
-
   return {
     action: "allow",
     additionalContext: parts.join("\n\n"),
@@ -385,50 +380,6 @@ function checkUpdate(cwd: string): string | null {
     }
   }
   return null;
-}
-
-function getWikiContext(cwd: string): string | null {
-  try {
-    const out = execSync("gxpm wiki status --json", {
-      encoding: "utf8",
-      cwd,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    const wiki = JSON.parse(out);
-    if (typeof wiki !== "object" || wiki === null || Array.isArray(wiki)) {
-      return null;
-    }
-    const native = (wiki as Record<string, unknown>).native ?? wiki;
-    if (typeof native !== "object" || native === null) return null;
-    const n = native as Record<string, unknown>;
-    if (!n.detected) return null;
-    const parts: string[] = [];
-    const root = String(n.repoWikiRoot ?? "");
-    const stale = !!n.stale;
-    parts.push(`gxpm native wiki detected (${root}.gxpm/wiki${stale ? " stale" : ""}).`);
-    if (stale) {
-      parts.push("Auto-updating wiki in background. Results may be stale for the first query.");
-    }
-    const docs = Array.isArray(n.docs) ? n.docs : [];
-    if (docs.length > 0) {
-      parts.push(`Docs: ${docs.slice(0, 3).join(", ")}`);
-    }
-    return parts.join("\n");
-  } catch {
-    return null;
-  }
-}
-
-function triggerWikiUpdate(cwd: string): void {
-  try {
-    execSync("gxpm wiki update >/dev/null 2>&1 &", {
-      cwd,
-      stdio: "ignore",
-      shell: "/bin/bash",
-    });
-  } catch {
-    // ignore
-  }
 }
 
 function getSessionId(cwd: string): string | null {

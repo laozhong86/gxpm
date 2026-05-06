@@ -16,7 +16,8 @@
 | evidence | `bun test test/evidence.test.ts test/investigate.test.ts` | issue-local evidence store、browser/investigation/review 证据写入改动后 | 路径安全、partial failure evidence、截图/日志路径和 payload 保持兼容 |
 | runtime | `gxpm issue ready/claim/release/reconcile-claim`、`gxpm run start/list/status/event`、`gxpm workspace plan/ensure/cleanup`、`gxpm orchestrator tick --dry-run` | claim lifecycle、run ledger、workspace runtime、orchestrator dry-run 改动后 | 执行运行时原语、路径安全、只读派发判断 |
 | artifact | `gxpm triage init`、`gxpm plan init`、`gxpm dispatch init`、`gxpm implement verify`、`gxpm local-verify ac-check`、`gxpm ac-check self-review`、`gxpm self-review ship`、`gxpm ship pr-check`、`gxpm pr-check verify`、`gxpm verify qa`、`gxpm qa land`、`gxpm artifact list/read` | artifact store 或 phase gate 改动后 | 产物写入、读取、索引和 gate 验证 |
-| context | `gxpm wiki init`、`gxpm wiki update`、`gxpm wiki query <text>`、`gxpm wiki status` | 需要仓库知识库上下文、代码改动后刷新本地 wiki | 原生 wiki 上下文、本地索引/图谱刷新 |
+| human-docs | `gxpm wiki init`、`gxpm wiki update`、`gxpm wiki query <text>`、`gxpm wiki status` | 人类需要本地项目说明书、onboarding 或治理文档导航 | 可选原生 wiki、本地索引和 Markdown 概览 |
+| agent-code-intel | GitNexus MCP: `list_repos`、`query`、`context`、`impact`、`detect_changes`、`cypher` | Agent 需要代码理解、调试、重构影响面或 PR 风险判断 | 图谱驱动的代码智能、调用链、影响半径和 diff 影响分析 |
 | future-e2e | 待实现 | browser/runtime capability 落地后 | 真实浏览器和 agent workflow 证据 |
 | future-eval | 待实现 | 高风险 prompt/capability 改动 | LLM judge 或 paid eval，需先确认成本 |
 
@@ -96,12 +97,14 @@
 
 ## gxpm 原生 Wiki
 
+- `gxpm wiki` 是可选的人类文档面，不是 Agent 默认代码智能层；Agent 的代码理解、调试、重构和 review 默认使用 GitNexus。
 - `gxpm wiki init` 生成 gxpm 自有的 `.gxpm/wiki/index/files.json`、`.gxpm/wiki/index/graph.json`、`.gxpm/wiki/content/` 和 `.gxpm/wiki/state.json`。
-- `gxpm wiki update` 在代码变更后刷新本地 wiki；V1 是确定性本地索引、导入图谱和 Markdown 概览，不调用 IDE 或外部付费服务。
+- `gxpm wiki update` 只在人类需要刷新本地项目说明书时手动运行；V1 是确定性本地索引、导入图谱和 Markdown 概览，不调用 IDE 或外部付费服务。
 - `gxpm wiki status` 报告原生 wiki 的 absent/current/stale 状态。原生 wiki stale 的标准包括 state/index 缺失、`baseCommit` 落后当前 `HEAD`、或已索引的 git-tracked 文件发生变更。
 - 原生 wiki 优先使用 `git ls-files` 索引 git-tracked 文本文件；git 不可用时退回同样 skip-list 的本地扫描。`.codex/`、`.claude/`、`.gxpm/`、`.qoder/` 等 ignored/local/generated 内容以及未跟踪 scratch 文件不得进入仓库知识索引。
-- `gxpm wiki query <text>` 基于结构化索引返回 context files 和 suggested docs，适合作为 triage、plan、dispatch、implement 的第一层本地知识入口。
-- `gxpm wiki context <issue-id>` 基于 issue state/artifacts 生成查询并返回相关 context files 与 suggested docs；需要把结果落盘时使用 `--write-artifact` 写入 `wiki-context` artifact。
+- `gxpm wiki query <text>` 基于结构化索引返回 source files 和 suggested human docs，适合作为人工项目导览，不作为 Agent 深层代码导航替代。
+- `gxpm wiki context <issue-id>` 基于 issue state/artifacts 生成查询并返回相关 source files 与 suggested human docs；需要把结果落盘时使用 `--write-artifact` 写入非 gate 的 `wiki-context` artifact。
+- SessionStart、post-checkout 和 post-commit 不自动刷新或注入 wiki；如果人类需要最新 wiki，显式运行 `gxpm wiki update`。
 - `.gxpm/wiki/` 保持 git 外状态；需要提交的是生成逻辑、契约和测试，不提交具体仓库 wiki 内容。
 
 ## 长任务规则

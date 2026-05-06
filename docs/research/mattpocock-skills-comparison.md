@@ -113,7 +113,7 @@
 **集成方案**：
 1. **将 improve-codebase-architecture 作为 gxpm 的独立 skill**：定期（如每 sprint）运行，产出 deepening 候选列表写入 `gxpm artifact`。
 2. ** refactor-safely 执行前，先过 architecture 审视**：对于大重构，先问"这符合 deep module 原则吗？"
-3. **在 refactor-safely 中注入 Matt 的词汇**：将 `get_impact_radius` 的结果解释为"seam 影响范围"，将 `find_large_functions` 解释为"shallow module 候选"。
+3. **在 refactor-safely 中注入 Matt 的词汇**：将 GitNexus `impact` 的结果解释为"seam 影响范围"，将大函数/浅模块候选解释为"shallow module 候选"。
 
 ---
 

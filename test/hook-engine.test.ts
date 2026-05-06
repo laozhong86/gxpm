@@ -160,6 +160,25 @@ describe("processHook SessionStart", () => {
     expect(result.additionalContext).toContain("gxpm issue list");
   });
 
+  test("with optional wiki state → does not inject or auto-update wiki context", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-human-wiki-"));
+    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    mkdirSync(join(cwd, ".gxpm", "wiki"), { recursive: true });
+    writeFileSync(join(cwd, ".gxpm", "wiki", "state.json"), JSON.stringify({
+      schemaVersion: 1,
+      provider: "gxpm",
+      status: "idle",
+      generatedAt: "2026-05-06T00:00:00.000Z",
+    }));
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).toContain("schema v");
+    expect(result.additionalContext).not.toContain("wiki");
+    expect(readFileSync(join(cwd, ".gxpm", "wiki", "state.json"), "utf8")).toContain("2026-05-06T00:00:00.000Z");
+  });
+
   test("on main branch in canonical checkout → no worktree warning", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-main-"));
     mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
