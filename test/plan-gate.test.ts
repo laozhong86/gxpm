@@ -27,6 +27,13 @@ describe("plan gate", () => {
       scope: "",
       nonGoals: "",
       approach: "",
+      constitutionCheck: {
+        capabilityDeclared: false,
+        testStrategyDefined: false,
+        simplicityJustified: false,
+        integrationPathClear: false,
+        status: "pending",
+      },
       steps: [],
       risks: [],
       validation: [],

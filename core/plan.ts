@@ -16,10 +16,19 @@ export function initializePlan(input: PlanInput) {
 
   const rigor = state.rigorLevel ?? "standard";
 
+  const constitutionCheck = {
+    capabilityDeclared: false,
+    testStrategyDefined: false,
+    simplicityJustified: false,
+    integrationPathClear: false,
+    status: "pending",
+  };
+
   const litePayload = {
     objective: "",
     scope: "",
     nonGoals: "",
+    constitutionCheck,
     steps: [],
     status: "draft",
   };
@@ -29,6 +38,7 @@ export function initializePlan(input: PlanInput) {
     scope: "",
     nonGoals: "",
     approach: "",
+    constitutionCheck,
     steps: [],
     risks: [],
     validation: [],
@@ -47,6 +57,7 @@ export function initializePlan(input: PlanInput) {
     dataModel: "",
     alternativesConsidered: [],
     alternativesRejected: [],
+    constitutionCheck,
     steps: [],
     risks: [],
     validation: [],

@@ -137,6 +137,17 @@ After drafting, verify:
 - [ ] references/ files are `.md` and named without spaces
 - [ ] scripts/ are executable and documented in SKILL.md
 
+## Preset Layer Support
+
+Skills can be customized via the preset system without modifying core templates:
+
+1. Create a preset: `gxpm preset init my-team`
+2. Add rules to `.gxpm/presets/my-team/manifest.json` targeting skill output paths
+3. Activate: `gxpm preset add my-team`
+4. Regenerate: `bun run gen:skill-docs`
+
+Preset strategies (`replace`, `prepend`, `append`, `wrap`) apply to generated skill output. See `docs/architecture/preset-system.md` for full manifest schema.
+
 ## Installation
 
 All skills in `skills/` are discovered automatically:

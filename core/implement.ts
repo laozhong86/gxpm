@@ -10,6 +10,7 @@ export const initializeLocalVerify = createPhaseArtifactInitializer({
     results: [],
     risks: [],
     status: "draft",
+    verificationLog: [],
   },
   requiredPhase: "implement",
 });
