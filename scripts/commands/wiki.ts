@@ -104,11 +104,11 @@ export function runWikiCommand(argv: string[], subcommand: string | undefined) {
 }
 
 function formatNativeWikiStatus(status: NativeWikiStatus) {
-  const lines = [`Native gxpm wiki: ${status.state}`];
+  const lines = [`Optional human wiki: ${status.state}`];
   if (!status.detected) {
     lines.push(`state: ${status.paths.state} not initialized`);
     lines.push(`Reason: ${status.reason}`);
-    lines.push(`Run: ${status.commands.init}`);
+    lines.push(`Run when humans want local project docs: ${status.commands.init}`);
     return lines.join("\n");
   }
   lines.push(`generatedAt: ${status.generatedAt ?? "unknown"}`);
@@ -124,13 +124,13 @@ function formatNativeWikiStatus(status: NativeWikiStatus) {
     lines.push("Changed files:");
     for (const file of status.changedFiles.slice(0, 10)) lines.push(`- ${file}`);
   }
-  if (status.stale) lines.push(`Run: ${status.commands.update}`);
+  if (status.stale) lines.push(`Manual refresh: ${status.commands.update}`);
   return lines.join("\n");
 }
 
 function formatNativeWikiBuildResult(result: NativeWikiBuildResult) {
   return [
-    `Native gxpm wiki: ${result.mode}`,
+    `Optional human wiki: ${result.mode}`,
     `state: ${result.state.status}`,
     `baseCommit: ${result.state.baseCommit ?? "unknown"}`,
     `files: ${result.index.files.length}`,
@@ -142,7 +142,7 @@ function formatNativeWikiBuildResult(result: NativeWikiBuildResult) {
 
 function formatNativeWikiEvalReport(report: NativeWikiEvalReport) {
   const lines = [
-    `Native gxpm wiki eval: ${report.native.status.state}`,
+    `Optional human wiki eval: ${report.native.status.state}`,
     `generated docs: ${report.native.generatedDocs.count}`,
     `project topic clusters: ${report.native.projectTopics.clusterCount}`,
     `indexed files: ${report.native.sourceCoverage.indexedFiles}`,
@@ -163,17 +163,17 @@ function formatNativeWikiEvalReport(report: NativeWikiEvalReport) {
 }
 
 function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
-  const lines = [`Native gxpm wiki query: ${result.query}`];
+  const lines = [`Optional human wiki query: ${result.query}`];
   if (result.results.length === 0) {
     lines.push("No matches. Try `gxpm wiki init` if the index is stale.");
     return lines.join("\n");
   }
-  lines.push("Context files:");
+  lines.push("Source files:");
   for (const r of result.results) {
     lines.push(`- ${r.path}${r.line ? ` #L${r.line}` : ""}`);
   }
   if (result.suggestedDocs.length > 0) {
-    lines.push("Suggested docs:");
+    lines.push("Suggested human docs:");
     for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
   }
   return lines.join("\n");
@@ -181,7 +181,7 @@ function formatNativeWikiQueryResult(result: NativeWikiQueryResult) {
 
 function formatNativeWikiIssueContext(result: NativeWikiIssueContext, artifactWritten: boolean) {
   const lines = [
-    `Native gxpm wiki context: ${result.issueId}`,
+    `Optional human wiki context: ${result.issueId}`,
     `phase: ${result.phase} (current: ${result.currentPhase})`,
     `query: ${result.query}`,
   ];
@@ -190,15 +190,15 @@ function formatNativeWikiIssueContext(result: NativeWikiIssueContext, artifactWr
     for (const artifact of result.artifactsUsed) lines.push(`- ${artifact.type}`);
   }
   if (result.results.length === 0) {
-    lines.push("No context files matched. Try `gxpm wiki update` if the index is stale.");
+    lines.push("No source files matched. Try `gxpm wiki update` if humans need refreshed docs.");
   } else {
-    lines.push("Context files:");
+    lines.push("Source files:");
     for (const r of result.results) {
       lines.push(`- ${r.path}${r.line ? ` #L${r.line}` : ""}`);
     }
   }
   if (result.suggestedDocs.length > 0) {
-    lines.push("Suggested docs:");
+    lines.push("Suggested human docs:");
     for (const doc of result.suggestedDocs) lines.push(`- ${doc}`);
   }
   if (artifactWritten) lines.push("Artifact written: wiki-context");

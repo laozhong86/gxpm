@@ -6,15 +6,15 @@ description: Systematically debug issues using graph-powered code navigation
 
 ## Debug Issue
 
-Use the knowledge graph to systematically trace and debug issues.
+Use GitNexus to systematically trace and debug issues.
 
 ### Steps
 
-1. Use `semantic_search_nodes` to find code related to the issue.
-2. Use `query_graph` with `callers_of` and `callees_of` to trace call chains.
-3. Use `get_flow` to see full execution paths through suspected areas.
+1. Run `list_repos` and read `gitnexus://repo/{name}/context` when an index exists.
+2. Use `query` to find execution flows related to the symptom.
+3. Use `context` on suspected symbols to inspect callers, callees, and participating processes.
 4. Run `detect_changes` to check if recent changes caused the issue.
-5. Use `get_impact_radius` on suspected files to see what else is affected.
+5. Use `impact` on suspected symbols or files to see what else is affected.
 
 ### Tips
 
@@ -23,6 +23,6 @@ Use the knowledge graph to systematically trace and debug issues.
 - Recent changes are the most common source of new issues.
 
 ## Token Efficiency Rules
-- ALWAYS start with `get_minimal_context(task="<your task>")` before any other graph tool.
-- Use `detail_level="minimal"` on all calls. Only escalate to "standard" when minimal is insufficient.
-- Target: complete any review/debug/refactor task in ≤5 tool calls and ≤800 total output tokens.
+- Start with the narrowest GitNexus query that matches the symptom, then expand.
+- Prefer `query` and `context` before raw `cypher`.
+- Target: complete any review/debug/refactor task in ≤5 graph tool calls.

@@ -171,4 +171,5 @@ graph TB
 ### 2.4 外部系统集成是"可选依赖"模式
 
 - Linear：协作前门，同步 issue，但不替代本地 state
-- GitNexus：MCP 工具，代码知识图谱替代方案
+- GitNexus：MCP 工具，Agent 默认代码智能层，用于代码导航、调试、重构影响面和 review
+- gxpm wiki：可选人类文档层，用于 onboarding、phase/CLI/governance 导览；不替代 GitNexus

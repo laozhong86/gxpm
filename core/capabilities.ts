@@ -219,21 +219,21 @@ export const CAPABILITY_REGISTRY = [
   },
   {
     id: "knowledge.wiki-context",
-    title: "Native Wiki Context",
-    summary: "Generates and selects first-party wiki context for an issue without depending on Qoder runtime.",
+    title: "Optional Human Wiki",
+    summary: "Generates optional first-party project docs for human onboarding and review; agents should use GitNexus for code intelligence.",
     runtime: "knowledge",
     status: "active",
-    inputContract: "Repository git-tracked text files, wiki state, query text or issue id, phase, and limit.",
+    inputContract: "Repository git-tracked text files, optional wiki state, query text or issue id, phase, and limit.",
     outputContract: {
-      description: "Wiki status/query/context results and optional issue wiki-context artifact.",
+      description: "Human-readable wiki status/query/context results and optional issue wiki-context artifact.",
       artifacts: ["wiki-context"],
       evidence: [".gxpm/wiki/index/files.json", ".gxpm/wiki/index/graph.json", ".gxpm/wiki/content/*.md"],
     },
     mutationPolicy: {
       scope: "issue-local-files",
-      description: "init/update mutate .gxpm/wiki; context --write-artifact writes only the target issue wiki-context artifact.",
+      description: "Manual init/update mutate .gxpm/wiki; context --write-artifact writes only the target issue wiki-context artifact.",
     },
-    idempotency: "Index/update are deterministic for the same git tree; context selection is deterministic for the same query and index.",
+    idempotency: "Manual index/update are deterministic for the same git tree; context selection is deterministic for the same query and index.",
     failureModes: [
       { description: "Missing native wiki state", defaultType: "FATAL" },
       { description: "Stale wiki index", defaultType: "TRANSIENT" },

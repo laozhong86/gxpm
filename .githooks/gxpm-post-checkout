@@ -14,7 +14,6 @@ fi
 
 "$GXPM_BIN" gate branch-policy
 
-# Update wiki after branch switch so context stays current
-if [ -f ".gxpm/wiki/state.json" ]; then
-  "$GXPM_BIN" wiki update >/dev/null 2>&1 || true
-fi
+# gxpm wiki is an optional human-facing documentation surface. Keep branch
+# switching focused on policy enforcement; humans can refresh docs explicitly
+# with `gxpm wiki update` when they want an up-to-date wiki.

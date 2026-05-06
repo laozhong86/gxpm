@@ -1233,7 +1233,7 @@ function writeNativeWikiDocs(
   const docEntries: Array<readonly [string, () => string]> = [
     ["Overview.md", () => renderNativeOverview(state, index, graph, config)],
     ["File-Index.md", () => renderNativeFileIndex(index)],
-    ["Code-Graph.md", () => renderNativeCodeGraph(graph)],
+    ["Import-Map.md", () => renderNativeImportMap(graph)],
     ["Project-Topics.md", () => renderNativeProjectTopics(index, graph, dimensions, projectTopicClusters)],
     ["Architecture-Diagram.md", () => renderNativeArchitectureDiagram(graph)],
     ...projectTopicClusters.map(
@@ -1275,7 +1275,7 @@ function isDocAffected(
   projectTopicClusters: NativeWikiProjectTopicCluster[],
 ): boolean {
   // Global docs are always affected
-  if (["Overview.md", "File-Index.md", "Code-Graph.md", "Project-Topics.md"].includes(docName)) {
+  if (["Overview.md", "File-Index.md", "Import-Map.md", "Project-Topics.md"].includes(docName)) {
     return true;
   }
 
@@ -1404,7 +1404,7 @@ function renderNativeOverview(state: NativeWikiState, index: NativeWikiIndex, gr
     "",
     "- [Project Topics](file://.gxpm/wiki/content/Project-Topics.md)",
     "- [File Index](file://.gxpm/wiki/content/File-Index.md)",
-    "- [Code Graph](file://.gxpm/wiki/content/Code-Graph.md)",
+    "- [Import Map](file://.gxpm/wiki/content/Import-Map.md)",
     "- [Architecture Diagram](file://.gxpm/wiki/content/Architecture-Diagram.md)",
     "",
     "## High Signal Files",
@@ -1428,11 +1428,18 @@ function renderNativeFileIndex(index: NativeWikiIndex) {
   ].join("\n");
 }
 
-function renderNativeCodeGraph(graph: NativeWikiGraph) {
+function renderNativeImportMap(graph: NativeWikiGraph) {
   const edges = graph.edges
     .slice(0, 200)
     .map((edge) => `- [${edge.from}](${nativeFileUrl(edge.from, 1)}) -> [${edge.to}](${nativeFileUrl(edge.to, 1)})`);
-  return ["# Code Graph", "", ...edges, ""].join("\n");
+  return [
+    "# Import Map",
+    "",
+    "Lightweight import edges for human orientation. Use GitNexus for agent code intelligence, call chains, impact analysis, and refactoring decisions.",
+    "",
+    ...edges,
+    "",
+  ].join("\n");
 }
 
 function renderNativeArchitectureDiagram(graph: NativeWikiGraph) {
@@ -1758,7 +1765,7 @@ function renderNativeProjectTopicPage(cluster: NativeWikiProjectTopicCluster, gr
     "",
     "- [Project Topics](file://.gxpm/wiki/content/Project-Topics.md)",
     "- [File Index](file://.gxpm/wiki/content/File-Index.md)",
-    "- [Code Graph](file://.gxpm/wiki/content/Code-Graph.md)",
+    "- [Import Map](file://.gxpm/wiki/content/Import-Map.md)",
     "",
   ].join("\n");
 }
