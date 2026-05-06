@@ -261,3 +261,7 @@ No exceptions without your human partner's permission.
   - Verification evidence for each slice (command run, exit code, output summary)
   - Confirmation that Verify RED and Verify GREEN were executed for each slice
 - If a bug is found during TDD, write a failing test reproducing it first. Switch to `/diagnose` skill only if root cause is unclear.
+
+## When adding mocks or test utilities
+
+Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
