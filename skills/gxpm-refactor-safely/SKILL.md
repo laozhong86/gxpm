@@ -1,9 +1,9 @@
 ---
-name: Refactor Safely
+name: gxpm-refactor-safely
 description: Plan and execute safe refactoring and code simplification using dependency analysis
 ---
 
-## Refactor Safely
+## gxpm-refactor-safely
 
 Use GitNexus to plan and execute refactoring with confidence. When simplifying code, follow the scan-checklist-incremental-verify loop below.
 
