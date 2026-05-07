@@ -72,11 +72,20 @@ describe("installSkill", () => {
     expect(installed).toContain(grillRefPath);
     expect(existsSync(grillRefPath)).toBe(true);
 
-    // Current repository skill has no scripts/ assets; install should not invent a scripts directory.
-    const sourceScriptsDir = join(repoRoot, "skills", "gxpm-explore-codebase", "scripts");
-    expect(existsSync(sourceScriptsDir)).toBe(false);
+  });
 
-    const installedScriptsDir = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts");
+  test("does not create scripts/ when a skill has no script assets", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-install-skill-no-scripts-root-"));
+    mkdirSync(join(root, "skills", "my-skill"), { recursive: true });
+    writeFileSync(
+      join(root, "skills", "my-skill", "SKILL.md"),
+      "---\nname: my-skill\ndescription: fixture skill\n---\n# My Skill\n",
+    );
+
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-no-scripts-"));
+    const installed = installSkill({ hostName: "codex", root, home: fakeHome });
+
+    const installedScriptsDir = join(fakeHome, ".codex", "skills", "my-skill", "scripts");
     expect(installed).not.toContain(installedScriptsDir);
     expect(existsSync(installedScriptsDir)).toBe(false);
   });
