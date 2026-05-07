@@ -281,6 +281,12 @@ export function createGitProvider(): IIsolationProvider {
           stdout: "pipe",
           stderr: "pipe",
         });
+        Bun.spawnSync({
+          cmd: ["git", "branch", "-D", branchName],
+          cwd: request.canonicalRepoPath,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
         throw error;
       }
 
