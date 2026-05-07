@@ -72,10 +72,13 @@ describe("installSkill", () => {
     expect(installed).toContain(grillRefPath);
     expect(existsSync(grillRefPath)).toBe(true);
 
-    // Current repository skills do not include scripts/ assets; install should not invent stale files.
-    const staleScriptPath = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts", "summarize-communities.ts");
-    expect(installed).not.toContain(staleScriptPath);
-    expect(existsSync(staleScriptPath)).toBe(false);
+    // Current repository skill has no scripts/ assets; install should not invent a scripts directory.
+    const sourceScriptsDir = join(repoRoot, "skills", "gxpm-explore-codebase", "scripts");
+    expect(existsSync(sourceScriptsDir)).toBe(false);
+
+    const installedScriptsDir = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts");
+    expect(installed).not.toContain(installedScriptsDir);
+    expect(existsSync(installedScriptsDir)).toBe(false);
   });
 
   test("installs scripts/ alongside SKILL.md when a skill owns script assets", () => {

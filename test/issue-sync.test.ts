@@ -17,6 +17,7 @@ import {
 } from "../core/issue-sync";
 
 const SYNC_ENV_KEYS = [
+  "NODE_ENV",
   "GXPM_SYNC_PROVIDER",
   "GXPM_AUTO_SYNC",
   "GXPM_SYNC_ARTIFACTS",
