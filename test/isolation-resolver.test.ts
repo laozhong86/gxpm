@@ -1,11 +1,12 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { lstatSync, mkdtempSync, mkdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   IsolationResolver,
   createFileSystemStore,
   createGitProvider,
+  ensureSharedGxpmLink,
   type IIsolationStore,
   type IIsolationProvider,
   type IsolationEnvironment,
@@ -14,6 +15,21 @@ import {
 } from "../core/isolation-resolver";
 import { createIssueState } from "../core/state";
 import { writeArtifact } from "../core/artifacts";
+
+let originalAutoSync: string | undefined;
+
+beforeEach(() => {
+  originalAutoSync = process.env.GXPM_AUTO_SYNC;
+  process.env.GXPM_AUTO_SYNC = "false";
+});
+
+afterEach(() => {
+  if (originalAutoSync === undefined) {
+    delete process.env.GXPM_AUTO_SYNC;
+  } else {
+    process.env.GXPM_AUTO_SYNC = originalAutoSync;
+  }
+});
 
 function makeMockStore(overrides: Partial<IIsolationStore> = {}): IIsolationStore {
   return {
@@ -189,6 +205,7 @@ describe("IsolationResolver six-layer strategy", () => {
     });
     expect(result.status).toBe("resolved");
     expect(result.method).toEqual({ type: "branch_adoption", branch: branchName });
+    expectSharedGxpmLink(root, worktreePath);
   });
 
   test("Layer 6: creates new environment when nothing matches", async () => {
@@ -297,8 +314,14 @@ describe("IsolationResolver six-layer strategy", () => {
   });
 });
 
+function expectSharedGxpmLink(root: string, workspacePath: string) {
+  const linkPath = join(workspacePath, ".gxpm");
+  expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
+  expect(realpathSync(linkPath)).toBe(realpathSync(join(root, ".gxpm")));
+}
+
 describe("createFileSystemStore", () => {
-  test("getById returns env from dispatch-handoff artifact", () => {
+  test("getById returns env from dispatch-handoff artifact", async () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-iso-store-"));
     createIssueState({ root, issueId: "GXPM-20" });
     writeArtifact({
@@ -309,8 +332,8 @@ describe("createFileSystemStore", () => {
     });
 
     const store = createFileSystemStore(root);
-    const env = store.getById("GXPM-20");
-    expect(env).resolves.toMatchObject({
+    const env = await store.getById("GXPM-20");
+    expect(env).toMatchObject({
       issueId: "GXPM-20",
       workspacePath: "/ws/GXPM-20",
       branchName: "gxpm-20-feat",
@@ -318,12 +341,12 @@ describe("createFileSystemStore", () => {
     });
   });
 
-  test("getById returns undefined when no dispatch-handoff", () => {
+  test("getById returns undefined when no dispatch-handoff", async () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-iso-store-miss-"));
     createIssueState({ root, issueId: "GXPM-21" });
 
     const store = createFileSystemStore(root);
-    expect(store.getById("GXPM-21")).resolves.toBeUndefined();
+    await expect(store.getById("GXPM-21")).resolves.toBeUndefined();
   });
 
   test("create returns env with createdAt", async () => {
@@ -342,5 +365,25 @@ describe("createFileSystemStore", () => {
 describe("createGitProvider", () => {
   test("createGitProvider is exported", () => {
     expect(typeof createGitProvider).toBe("function");
+  });
+});
+
+describe("ensureSharedGxpmLink", () => {
+  test("links to the resolved canonical .gxpm when the current repo already has a .gxpm symlink", () => {
+    const mainRoot = mkdtempSync(join(tmpdir(), "gxpm-main-root-"));
+    mkdirSync(join(mainRoot, ".gxpm"));
+    const currentWorktree = mkdtempSync(join(tmpdir(), "gxpm-current-wt-"));
+    symlinkSync(join(mainRoot, ".gxpm"), join(currentWorktree, ".gxpm"), "dir");
+    const childWorktree = mkdtempSync(join(tmpdir(), "gxpm-child-wt-"));
+
+    const warnings = ensureSharedGxpmLink({
+      canonicalRepoPath: currentWorktree,
+      worktreePath: childWorktree,
+    });
+
+    expect(warnings).toEqual([]);
+    expect(lstatSync(join(childWorktree, ".gxpm")).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(join(childWorktree, ".gxpm"))).toBe(realpathSync(join(mainRoot, ".gxpm")));
+    expectSharedGxpmLink(mainRoot, childWorktree);
   });
 });
