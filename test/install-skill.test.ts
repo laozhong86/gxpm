@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { installSkill } from "../scripts/install-skill";
@@ -63,7 +63,7 @@ describe("installSkill", () => {
     ).toThrow("Unknown gxpm host");
   });
 
-  test("installs references/ and scripts/ alongside SKILL.md", () => {
+  test("installs references/ alongside SKILL.md from repository skills", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-refs-"));
     const installed = installSkill({ hostName: "codex", root: repoRoot, home: fakeHome });
 
@@ -72,9 +72,27 @@ describe("installSkill", () => {
     expect(installed).toContain(grillRefPath);
     expect(existsSync(grillRefPath)).toBe(true);
 
-    // gxpm-explore-codebase should have scripts installed
-    const scriptPath = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts", "summarize-communities.ts");
+    // Current repository skills do not include scripts/ assets; install should not invent stale files.
+    const staleScriptPath = join(fakeHome, ".codex", "skills", "gxpm-explore-codebase", "scripts", "summarize-communities.ts");
+    expect(installed).not.toContain(staleScriptPath);
+    expect(existsSync(staleScriptPath)).toBe(false);
+  });
+
+  test("installs scripts/ alongside SKILL.md when a skill owns script assets", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-install-skill-script-root-"));
+    mkdirSync(join(root, "skills", "my-skill", "scripts"), { recursive: true });
+    writeFileSync(
+      join(root, "skills", "my-skill", "SKILL.md"),
+      "---\nname: my-skill\ndescription: fixture skill\n---\n# My Skill\n",
+    );
+    writeFileSync(join(root, "skills", "my-skill", "scripts", "helper.ts"), "console.log('helper');\n");
+
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-scripts-"));
+    const installed = installSkill({ hostName: "codex", root, home: fakeHome });
+
+    const scriptPath = join(fakeHome, ".codex", "skills", "my-skill", "scripts", "helper.ts");
     expect(installed).toContain(scriptPath);
     expect(existsSync(scriptPath)).toBe(true);
+    expect(readFileSync(scriptPath, "utf8")).toBe("console.log('helper');\n");
   });
 });

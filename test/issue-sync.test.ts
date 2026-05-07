@@ -16,6 +16,16 @@ import {
   maybeSyncIssue,
 } from "../core/issue-sync";
 
+const SYNC_ENV_KEYS = [
+  "GXPM_SYNC_PROVIDER",
+  "GXPM_AUTO_SYNC",
+  "GXPM_SYNC_ARTIFACTS",
+  "GXPM_LINEAR_TEAM_ID",
+  "GXPM_LINEAR_TEAM_KEY",
+  "GXPM_LINEAR_ASSIGNEE_ID",
+  "GXPM_TEST_ALLOW_LIVE_SYNC",
+] as const;
+
 // Fake Linear CLI that reads responses from a JSON file.
 // The test writes responses to a file, then the fake CLI matches commands against them.
 function setupFakeLinearCLI(): { binDir: string; logFile: string; responsesFile: string } {
@@ -96,12 +106,16 @@ describe("issue sync", () => {
   let originalGxpmHome: string | undefined;
   let originalResponsesEnv: string | undefined;
   let originalLogEnv: string | undefined;
+  let originalSyncEnv: Record<(typeof SYNC_ENV_KEYS)[number], string | undefined>;
 
   beforeEach(() => {
     originalPath = process.env.PATH;
     originalGxpmHome = process.env.GXPM_HOME;
     originalResponsesEnv = process.env.GXPM_TEST_LINEAR_RESPONSES;
     originalLogEnv = process.env.GXPM_TEST_LINEAR_LOG;
+    originalSyncEnv = Object.fromEntries(
+      SYNC_ENV_KEYS.map((key) => [key, process.env[key]]),
+    ) as Record<(typeof SYNC_ENV_KEYS)[number], string | undefined>;
   });
 
   afterEach(() => {
@@ -122,6 +136,14 @@ describe("issue sync", () => {
       process.env.GXPM_TEST_LINEAR_LOG = originalLogEnv;
     } else {
       delete process.env.GXPM_TEST_LINEAR_LOG;
+    }
+    for (const key of SYNC_ENV_KEYS) {
+      const value = originalSyncEnv[key];
+      if (value !== undefined) {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
     }
   });
 
@@ -179,6 +201,30 @@ describe("issue sync", () => {
       join(root, ".gxpm", "config.json"),
       JSON.stringify({ sync: { provider: "linear" } }),
     );
+
+    const provider = resolveSyncProvider(root);
+    expect(provider).toBeNull();
+  });
+
+  test("resolveSyncProvider ignores env and global sync config during tests", () => {
+    const { binDir } = setupFakeLinearCLI();
+    process.env.PATH = `${binDir}:${originalPath}`;
+    process.env.GXPM_SYNC_PROVIDER = "linear";
+    process.env.GXPM_LINEAR_TEAM_KEY = "ENG";
+    process.env.GXPM_AUTO_SYNC = "true";
+    delete process.env.GXPM_TEST_ALLOW_LIVE_SYNC;
+
+    const home = mkdtempSync(join(tmpdir(), "gxpm-home-"));
+    process.env.GXPM_HOME = home;
+    mkdirSync(join(home, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(home, ".gxpm", "config.json"),
+      JSON.stringify({ sync: { provider: "linear", linearTeamKey: "ENG" } }),
+    );
+
+    const root = mkdtempSync(join(tmpdir(), "gxpm-sync-test-isolated-"));
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(join(root, ".gxpm", "config.json"), JSON.stringify({}));
 
     const provider = resolveSyncProvider(root);
     expect(provider).toBeNull();
