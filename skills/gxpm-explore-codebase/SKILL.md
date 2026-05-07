@@ -1,9 +1,9 @@
 ---
-name: Explore Codebase
+name: gxpm-explore-codebase
 description: Navigate and understand codebase structure using the knowledge graph
 ---
 
-## Explore Codebase
+## gxpm-explore-codebase
 
 Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to explore and understand the codebase.
 

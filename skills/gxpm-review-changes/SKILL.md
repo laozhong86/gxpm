@@ -1,10 +1,10 @@
 ---
-name: Review Changes
+name: gxpm-review-changes
 description: Perform a structured code review using change detection and impact
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
-## Review Changes
+## gxpm-review-changes
 
 Perform a thorough, risk-aware code review using GitNexus.
 

@@ -1,5 +1,5 @@
 ---
-name: grill
+name: gxpm-grill
 description: Grilling session that challenges plans against the existing domain model, sharpens terminology, and updates CONTEXT.md and ADRs inline as decisions crystallise. Use when user wants to stress-test a plan, align on requirements, or make architecture decisions.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +8,7 @@ description: Grilling session that challenges plans against the existing domain 
 
 Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
 
-## When to trigger
+## gxpm-grill
 
 - Before leaving `triage` — when issue scope is unclear or involves new domain concepts.
 - During `plan` — when implementation decisions need fleshing out.

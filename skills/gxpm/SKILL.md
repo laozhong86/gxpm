@@ -4,7 +4,7 @@ description: Second-generation project management runtime for agent-executed del
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
-## Host Preamble
+## gxpm
 
 Target host: OpenAI Codex CLI.
 

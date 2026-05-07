@@ -1,5 +1,5 @@
 ---
-name: diagnose
+name: gxpm-diagnose
 description: Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', 'debug this', reports a bug, or describes a performance regression. Integrates feedback-loop discipline with graph-powered code navigation.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +8,7 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 
 A discipline for hard bugs. Skip phases only when explicitly justified.
 
-## Phase 1 — Build a feedback loop
+## gxpm-diagnose
 
 **This is the skill.** Everything else is mechanical. If you have a fast, deterministic, agent-runnable pass/fail signal for the bug, you will find the cause.
 

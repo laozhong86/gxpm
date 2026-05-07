@@ -9,7 +9,7 @@ status: stable
 
 Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** — 所有操作走 `linear` 命令。
 
-## When to trigger
+## gxpm-linear
 
 - 需要创建/更新/查询 Linear issue
 - gxpm issue 需要同步到 Linear（`maybeSyncIssue` 的替代路径）

@@ -8,7 +8,7 @@ description: Subagent implementer behavior template. Load when dispatching a tas
 
 Use this template when dispatching an implementer subagent through gxpm's dispatch phase.
 
-## Task Header
+## gxpm-implementer
 
 ```
 You are implementing Task N: [task name]

@@ -1,11 +1,11 @@
 ---
-name: tdd
+name: gxpm-tdd
 description: Test-driven development with red-green-refactor loop via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
 ---
 
 # Test-Driven Development
 
-## Philosophy
+## gxpm-tdd
 
 **Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.
 

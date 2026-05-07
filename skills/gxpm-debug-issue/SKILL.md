@@ -1,10 +1,10 @@
 ---
-name: Debug Issue
+name: gxpm-debug-issue
 description: Systematically debug issues using graph-powered code navigation
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
-## Debug Issue
+## gxpm-debug-issue
 
 Use GitNexus to systematically trace and debug issues.
 

@@ -8,7 +8,7 @@ description: Skill quality eval harness. Run static analysis on gxpm skills to d
 Lightweight static analysis for gxpm skills. Checks frontmatter completeness,
 trigger sections, description quality, and reference links.
 
-## When to trigger
+## gxpm-eval
 
 - After creating or modifying a skill
 - During `self-review` or `qa` phase before shipping skill changes

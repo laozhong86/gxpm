@@ -1,5 +1,5 @@
 ---
-name: triage
+name: gxpm-triage
 description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
 ---
 
@@ -7,7 +7,7 @@ description: Triage issues through a state machine of triage roles. Use when use
 
 Move issues through a small state machine of triage roles.
 
-## Roles
+## gxpm-triage
 
 Two **category** roles:
 - `bug` — something is broken

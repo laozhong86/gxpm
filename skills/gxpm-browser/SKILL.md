@@ -10,7 +10,7 @@ status: stable
 Minimal headless browser CLI built on Playwright. Designed for gxpm evidence
 capture and QA automation, not general web scraping.
 
-## When to trigger
+## gxpm-browser
 
 - User asks to "test the site", "open in browser", "take a screenshot"
 - QA phase needs browser/runtime proof
