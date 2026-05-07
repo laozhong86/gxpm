@@ -151,6 +151,30 @@ gxpm-init --install --target /path/to/repo
 
 Escape hatch: `GXPM_GATE_DISABLE=1 git commit ...`
 
+### PR Wait-State Polling
+
+Use a bounded polling script when a `ship`, `pr-check`, or `verify` step is
+waiting on CodeRabbit, GitHub checks, or mergeability and the agent should keep
+the current Codex CLI turn alive.
+
+```bash
+bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval-sec 60
+```
+
+Exit code contract:
+
+- `0`: review, checks, and merge state are ready. Re-read current-head PR state
+  before writing findings or taking the next phase action.
+- `1`: blocked by failed checks, conflicts, or requested changes. Write the
+  blocker into the current phase artifact.
+- `124`: timeout or still pending. Report the latest observed state and stop
+  cleanly instead of waiting forever.
+
+Use `--allow-review-required` only when the repository does not require an
+approving review decision. Do not use hooks as the wake-up source; hooks only
+run after Codex lifecycle events. Do not merge or land from a successful poll
+unless the user has explicitly authorized the irreversible action.
+
 ### Cleanup After Land
 
 Default: `gxpm cleanup land <issue-id> --execute`.
