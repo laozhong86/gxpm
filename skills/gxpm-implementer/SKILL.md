@@ -1,6 +1,6 @@
 ---
 name: gxpm-implementer
-description: Subagent implementer behavior template. Load when dispatching a task to an implementer subagent to enforce four-dimension self-review, structured reporting, and escalation rules.
+description: 子代理实现者行为模板。强制执行四维自审、结构化报告和升级规则。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

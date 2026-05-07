@@ -1,6 +1,6 @@
 ---
 name: gxpm-planning
-description: Break plans into independently-grabbable issues using vertical slices, and synthesize PRDs from conversation context. Use when user wants to convert a plan into issues, create implementation tickets, or turn discussion into a structured PRD.
+description: 将计划拆分为可独立抓取的问题（垂直切片），从对话上下文合成 PRD。
 ---
 
 # Planning

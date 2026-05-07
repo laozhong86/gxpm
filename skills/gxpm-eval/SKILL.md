@@ -1,6 +1,6 @@
 ---
 name: gxpm-eval
-description: Skill quality eval harness. Run static analysis on gxpm skills to detect structure regressions, missing frontmatter, or description drift. Use when adding a new skill, modifying skill structure, or auditing skill quality.
+description: skill 质量评估工具。静态分析检测结构回归、缺失 frontmatter、描述漂移。
 ---
 
 # gxpm-eval

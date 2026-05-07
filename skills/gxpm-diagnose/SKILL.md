@@ -1,6 +1,6 @@
 ---
 name: gxpm-diagnose
-description: Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', 'debug this', reports a bug, or describes a performance regression. Integrates feedback-loop discipline with graph-powered code navigation.
+description: 硬 bug 和性能回归的纪律性诊断循环。反馈回路纪律 + 图驱动代码导航。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

@@ -1,6 +1,6 @@
 ---
 name: gxpm-triage
-description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
+description: 通过分类角色状态机处理问题。创建 issue、审查 bug/功能请求、管理工作流。
 ---
 
 # Triage

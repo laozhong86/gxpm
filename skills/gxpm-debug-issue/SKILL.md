@@ -1,6 +1,6 @@
 ---
 name: gxpm-debug-issue
-description: Systematically debug issues using graph-powered code navigation
+description: 基于图驱动代码导航的系统性问题调试。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

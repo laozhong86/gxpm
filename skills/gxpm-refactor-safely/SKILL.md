@@ -1,6 +1,6 @@
 ---
 name: gxpm-refactor-safely
-description: Plan and execute safe refactoring and code simplification using dependency analysis
+description: 基于依赖分析的安全重构和代码简化。
 ---
 
 ## gxpm-refactor-safely

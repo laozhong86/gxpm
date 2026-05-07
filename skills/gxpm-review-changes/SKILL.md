@@ -1,6 +1,6 @@
 ---
 name: gxpm-review-changes
-description: Perform a structured code review using change detection and impact
+description: 基于变更检测和影响分析的结构化代码审查。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

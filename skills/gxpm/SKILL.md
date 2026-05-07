@@ -1,6 +1,6 @@
 ---
 name: gxpm
-description: Second-generation project management runtime for agent-executed delivery. State graph, capability runtime, and gate-enforced phase progression.
+description: 第二代代理项目管理运行时。状态图、能力运行时、阶段门控推进。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

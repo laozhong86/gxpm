@@ -1,6 +1,6 @@
 ---
 name: gxpm-tdd
-description: Test-driven development with red-green-refactor loop via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
+description: 垂直切片红绿重构循环的测试驱动开发。
 ---
 
 # Test-Driven Development
