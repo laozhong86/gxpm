@@ -25,6 +25,20 @@ interface InstallResult {
 }
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
+const LEGACY_GXPM_CODEX_HOOK_MARKERS: Record<string, string[]> = {
+  SessionStart: [
+    ".codex/hooks/gxpm-session-start.sh",
+    "gxpm-session-start.sh",
+  ],
+  UserPromptSubmit: [
+    ".codex/hooks/gxpm-user-prompt-submit.sh",
+    "gxpm-user-prompt-submit.sh",
+  ],
+  PreToolUse: [
+    ".codex/hooks/gxpm-pre-tool-use.sh",
+    "gxpm-pre-tool-use.sh",
+  ],
+};
 
 export function installCodexHooks(options: InstallCodexHooksOptions = {}): InstallResult {
   const scope = options.scope ?? "repo";
@@ -134,7 +148,9 @@ function mergeWithExisting(path: string, fresh: Record<string, any>) {
     );
     const otherEntries: any[] = [];
     for (const entry of existingHooks[event] ?? []) {
-      const filteredHooks = (entry.hooks ?? []).filter((h: any) => !ourCommands.has(h.command));
+      const filteredHooks = (entry.hooks ?? []).filter(
+        (h: any) => !isGxpmOwnedCodexHook(event, h.command, ourCommands),
+      );
       if (filteredHooks.length > 0) {
         otherEntries.push({ ...entry, hooks: filteredHooks });
       }
@@ -143,6 +159,14 @@ function mergeWithExisting(path: string, fresh: Record<string, any>) {
   }
 
   return { ...existing, hooks: existingHooks };
+}
+
+function isGxpmOwnedCodexHook(event: string, command: unknown, currentCommands: Set<unknown>) {
+  if (currentCommands.has(command)) return true;
+  if (typeof command !== "string") return false;
+  return (LEGACY_GXPM_CODEX_HOOK_MARKERS[event] ?? []).some((marker) =>
+    command.includes(marker),
+  );
 }
 
 function parseArgs(argv: string[]): InstallCodexHooksOptions {

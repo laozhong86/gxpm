@@ -138,4 +138,61 @@ describe("installCodexHooks", () => {
     expect(allCommands).toContain("/usr/local/bin/my-other-hook");
     expect(allCommands).toContain("gxpm hook SessionStart --host codex");
   });
+
+  test("replaces legacy gxpm shell hooks on reinstall", () => {
+    const fakeRepo = mkdtempSync(join(tmpdir(), "gxpm-codex-hooks-legacy-"));
+    const codexDir = join(fakeRepo, ".codex");
+    mkdirSync(codexDir, { recursive: true });
+    writeFileSync(
+      join(codexDir, "hooks.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: "command", command: join(fakeRepo, ".codex/hooks/gxpm-session-start.sh") },
+                { type: "command", command: "/usr/local/bin/my-other-hook", timeout: 5 },
+              ],
+            },
+          ],
+          UserPromptSubmit: [
+            {
+              hooks: [
+                { type: "command", command: join(fakeRepo, ".codex/hooks/gxpm-user-prompt-submit.sh") },
+              ],
+            },
+          ],
+          PreToolUse: [
+            {
+              hooks: [
+                { type: "command", command: join(fakeRepo, ".codex/hooks/gxpm-pre-tool-use.sh") },
+              ],
+            },
+          ],
+          Stop: [
+            { hooks: [{ type: "command", command: "/usr/local/bin/notify-slack", timeout: 5 }] },
+          ],
+        },
+      }),
+    );
+
+    installCodexHooks({ scope: "repo", target: fakeRepo, enableFeatureFlag: false });
+
+    const cfg = JSON.parse(readFileSync(join(codexDir, "hooks.json"), "utf8"));
+    const commands = Object.fromEntries(
+      ["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"].map((event) => [
+        event,
+        (cfg.hooks[event] ?? []).flatMap((entry: any) =>
+          (entry.hooks ?? []).map((hook: any) => hook.command),
+        ),
+      ]),
+    );
+
+    expect(commands.SessionStart).toContain("/usr/local/bin/my-other-hook");
+    expect(commands.SessionStart).toContain("gxpm hook SessionStart --host codex");
+    expect(commands.SessionStart).not.toContain(join(fakeRepo, ".codex/hooks/gxpm-session-start.sh"));
+    expect(commands.UserPromptSubmit).toEqual(["gxpm hook UserPromptSubmit --host codex"]);
+    expect(commands.PreToolUse).toEqual(["gxpm hook PreToolUse --host codex"]);
+    expect(commands.Stop).toEqual(["/usr/local/bin/notify-slack"]);
+  });
 });
