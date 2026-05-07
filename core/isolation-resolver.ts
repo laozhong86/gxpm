@@ -10,7 +10,7 @@
  * 6. Create new worktree
  */
 
-import { existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, realpathSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { classifyIsolationError, isKnownIsolationError } from "./isolation-errors";
 import { readArtifact } from "./artifacts";
@@ -267,12 +267,22 @@ export function createGitProvider(): IIsolationProvider {
       if (!hasRemote) {
         warnings.push(`Remote '${remoteRef}' not found; worktree created from local HEAD.`);
       }
-      warnings.push(
-        ...ensureSharedGxpmLink({
-          canonicalRepoPath: request.canonicalRepoPath,
-          worktreePath,
-        }),
-      );
+      try {
+        warnings.push(
+          ...ensureSharedGxpmLink({
+            canonicalRepoPath: request.canonicalRepoPath,
+            worktreePath,
+          }),
+        );
+      } catch (error) {
+        Bun.spawnSync({
+          cmd: ["git", "worktree", "remove", "--force", worktreePath],
+          cwd: request.canonicalRepoPath,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        throw error;
+      }
 
       return { workingPath: resolve(worktreePath), branchName, warnings };
     },
@@ -470,15 +480,15 @@ export class IsolationResolver {
         if (branchLine && branchLine.includes(`refs/heads/${prBranch}`)) {
           if (existsSync(path)) {
             const workingPath = resolve(path);
+            const warnings = ensureSharedGxpmLink({
+              canonicalRepoPath,
+              worktreePath: workingPath,
+            });
             const env = await this.store.create({
               issueId: workflowId,
               workspacePath: workingPath,
               branchName: prBranch,
               status: "active",
-            });
-            const warnings = ensureSharedGxpmLink({
-              canonicalRepoPath,
-              worktreePath: workingPath,
             });
             return {
               status: "resolved",
@@ -646,9 +656,16 @@ export function ensureSharedGxpmLink(input: {
       pointsToCanonical = false;
     }
     if (!pointsToCanonical) {
-      warnings.push(
-        `Worktree .gxpm symlink points to ${existingTarget}; expected ${canonicalGxpmPath}; leaving unchanged.`,
-      );
+      try {
+        rmSync(linkPath, { force: true });
+        symlinkSync(canonicalGxpmPath, linkPath, "dir");
+        warnings.push(`Worktree .gxpm symlink pointed to ${existingTarget}; rewrote to ${canonicalGxpmPath}.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        warnings.push(
+          `Worktree .gxpm symlink points to ${existingTarget}; expected ${canonicalGxpmPath}; rewrite failed: ${message}`,
+        );
+      }
     }
     return warnings;
   }

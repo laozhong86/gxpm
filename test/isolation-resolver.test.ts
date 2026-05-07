@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { lstatSync, mkdtempSync, mkdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readlinkSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -208,6 +217,50 @@ describe("IsolationResolver six-layer strategy", () => {
     expectSharedGxpmLink(root, worktreePath);
   });
 
+  test("Layer 5: does not persist branch adoption env when shared link setup fails", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-iso-adopt-fail-"));
+    const initResult = Bun.spawnSync({ cmd: ["git", "init"], cwd: root, stdout: "pipe", stderr: "pipe" });
+    if (initResult.exitCode !== 0) {
+      return;
+    }
+    Bun.spawnSync({ cmd: ["git", "config", "user.email", "test@test.com"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.name", "Test"], cwd: root });
+    writeFileSync(join(root, "file.txt"), "hello");
+    Bun.spawnSync({ cmd: ["git", "add", "."], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "commit", "-m", "init"], cwd: root });
+
+    const branchName = "gxpm-15-adopt-fail";
+    const worktreePath = mkdtempSync(join(tmpdir(), "gxpm-worktree-fail-"));
+    const addResult = Bun.spawnSync({
+      cmd: ["git", "worktree", "add", "-b", branchName, worktreePath],
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (addResult.exitCode !== 0) {
+      throw new Error(`git worktree add failed: ${addResult.stderr.toString()}`);
+    }
+    writeFileSync(join(root, ".gxpm"), "not a directory");
+
+    let createCalled = false;
+    const store = makeMockStore({
+      create: async (data) => {
+        createCalled = true;
+        return { ...data, createdAt: new Date().toISOString() };
+      },
+    });
+    const resolver = new IsolationResolver({ store, provider: makeMockProvider() });
+
+    await expect(
+      resolver.resolve({
+        issueId: "GXPM-15",
+        root,
+        hints: { prBranch: branchName },
+      }),
+    ).rejects.toThrow();
+    expect(createCalled).toBe(false);
+  });
+
   test("Layer 6: creates new environment when nothing matches", async () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-iso-create-"));
     // Initialize a git repo
@@ -385,5 +438,24 @@ describe("ensureSharedGxpmLink", () => {
     expect(lstatSync(join(childWorktree, ".gxpm")).isSymbolicLink()).toBe(true);
     expect(readlinkSync(join(childWorktree, ".gxpm"))).toBe(realpathSync(join(mainRoot, ".gxpm")));
     expectSharedGxpmLink(mainRoot, childWorktree);
+  });
+
+  test("rewrites stale .gxpm symlinks to the resolved canonical path", () => {
+    const mainRoot = mkdtempSync(join(tmpdir(), "gxpm-main-root-"));
+    mkdirSync(join(mainRoot, ".gxpm"));
+    const staleTarget = mkdtempSync(join(tmpdir(), "gxpm-stale-target-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "gxpm-stale-wt-"));
+    symlinkSync(staleTarget, join(worktreePath, ".gxpm"), "dir");
+
+    const warnings = ensureSharedGxpmLink({
+      canonicalRepoPath: mainRoot,
+      worktreePath,
+    });
+
+    expect(warnings.some((warning) => warning.includes("rewrote"))).toBe(true);
+    expect(lstatSync(join(worktreePath, ".gxpm")).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(join(worktreePath, ".gxpm"))).toBe(realpathSync(join(mainRoot, ".gxpm")));
+    expectSharedGxpmLink(mainRoot, worktreePath);
+    expect(existsSync(staleTarget)).toBe(true);
   });
 });
