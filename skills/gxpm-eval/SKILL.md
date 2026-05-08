@@ -25,18 +25,28 @@ gxpm-eval run --json                   # machine-readable output
 
 ## Scoring rubric
 
-Each skill is scored on 6 dimensions (10 points each):
+Each skill is scored on 9 dimensions. Pass threshold: ≥ 60%.
 
-| Check | Pass criteria |
-|-------|---------------|
-| frontmatter | Has YAML `---` block |
-| name | `name:` field present and non-empty |
-| description | 20-300 characters |
-| triggers | Has `## When to trigger` or `## Commands` |
-| length | 10-1000 lines |
-| references | Has `## Read Next` or `## References` |
+### Universal checks (all skill types)
 
-Overall pass threshold: ≥ 50%.
+| Check | Points | Pass criteria |
+|-------|--------|---------------|
+| frontmatter | 10 | Has YAML `---` block |
+| name | 10 | `name:` field present and non-empty |
+| description | 10 | 20-300 characters **and** contains "Use when" trigger phrase |
+| triggers | 10 | Has `## When to trigger` or `## Commands` |
+| length | 10 | 10-1000 lines (warn if >100 without `references/`) |
+| references | 10 | Has `## Read Next` or `## References` |
+
+### Type-specific checks
+
+| Check | Points | Pass criteria |
+|-------|--------|---------------|
+| **Discipline** skills | 10 | Has `## Red Flags` AND `## Rationalization Table` AND explicit negation (`**No exceptions:**`) |
+| **Pattern** skills | 10 | Has `## Recognition criteria` AND `## When NOT to apply` AND `## Counter-examples` |
+| **Reference** skills | 10 | Has concrete command examples with expected output |
+
+A skill missing its type-specific structures loses the full 10 points for that dimension.
 
 ## Integration
 

@@ -66,6 +66,19 @@ After each step, record:
 - **Evidence before transition.** `local-verify` artifact is incomplete without `verificationSteps`.
 - **Re-run discipline:** Only re-run a step if the code has changed since the last run. Re-running on unchanged code adds no information.
 
+## Failure → Skill Routing
+
+When a step fails, load the right skill to fix it:
+
+| Failed step | Root cause likely | Load this skill |
+|-------------|-------------------|-----------------|
+| `git diff --check` | Whitespace / trailing space | Fix directly, re-run from Step 1 |
+| `bun run check` | Type error, syntax error, lint violation | `/gxpm-build` |
+| `bun test` | Test failure, regression, missing coverage | `/gxpm-tdd` |
+| `bun run build` | Build script error, dependency issue | `/gxpm-build` |
+
+**Do not fix blindly.** Load the relevant skill, follow its discipline, then re-run the full pipeline from Step 1.
+
 ## gxpm Integration
 
 - Load this skill during `implement → local-verify` transition.

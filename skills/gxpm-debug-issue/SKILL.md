@@ -6,7 +6,12 @@ description: Systematic issue debugging using graph-powered code navigation. Use
 
 ## gxpm-debug-issue
 
-Use GitNexus to systematically trace and debug issues.
+**Skill boundary:**
+- If the root cause is **completely unknown** and you need a systematic diagnosis loop, load `/gxpm-diagnose` first.
+- If you need to **understand code structure** without debugging a specific bug, load `/gxpm-explore-codebase` first.
+- If you are **refactoring**, load `/gxpm-refactor-safely` instead.
+
+Use GitNexus to systematically trace and debug issues when you have a **specific symptom**.
 
 ### Steps
 

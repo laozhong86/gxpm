@@ -31,67 +31,7 @@ Write code before the test? Delete it. Start over.
 
 Implement fresh from tests. Period.
 
-## Red-Green-Refactor
-
-Each vertical slice follows this cycle. No skips. No shortcuts.
-
-### RED — Write Failing Test
-
-Write one minimal test showing what should happen.
-
-**Requirements:**
-- One behavior
-- Clear name
-- Real code (no mocks unless unavoidable)
-
-### Verify RED — Watch It Fail (MANDATORY. Never skip.)
-
-```bash
-bun test path/to/test.test.ts
-```
-
-Confirm:
-- Test fails (not errors)
-- Failure message is expected
-- Fails because feature missing (not typos)
-
-**Test passes?** You're testing existing behavior. Fix test.
-
-**Test errors?** Fix error, re-run until it fails correctly.
-
-### GREEN — Minimal Code
-
-Write simplest code to pass the test.
-
-Don't add features, refactor other code, or "improve" beyond the test.
-
-### Verify GREEN — Watch It Pass (MANDATORY)
-
-```bash
-bun test path/to/test.test.ts
-```
-
-Confirm:
-- Test passes
-- Other tests still pass
-- Output pristine (no errors, warnings)
-
-**Test fails?** Fix code, not test.
-
-**Other tests fail?** Fix now.
-
-### REFACTOR — Clean Up
-
-After green only:
-- Remove duplication
-- Improve names
-- Extract helpers
-
-Keep tests green. Don't add behavior.
-
-### Repeat
-
-Next failing test for next feature.
+See [references/red-green-refactor.md](references/red-green-refactor.md) for the full red-green-refactor cycle.
 
 ## Anti-Pattern: Horizontal Slices
 
@@ -116,56 +56,7 @@ RIGHT (vertical):
   ...
 ```
 
-## Workflow
-
-### 1. Planning
-
-Before writing any code:
-- [ ] Confirm with user what interface changes are needed
-- [ ] Confirm which behaviors to test (prioritise)
-- [ ] Identify opportunities for deep modules (small interface, deep implementation)
-- [ ] Design interfaces for testability
-- [ ] List the behaviors to test (not implementation steps)
-- [ ] Get user approval on the plan
-
-**You can't test everything.** Focus on critical paths and complex logic.
-
-### 2. Tracer Bullet
-
-Write ONE test that confirms ONE thing about the system:
-
-```
-RED:   Write test for first behavior → verify it fails correctly
-GREEN: Write minimal code to pass → verify it passes
-```
-
-This is your tracer bullet — proves the path works end-to-end.
-
-### 3. Incremental Loop
-
-For each remaining behavior:
-
-```
-RED:   Write next test → verify it fails correctly
-GREEN: Minimal code to pass → verify it passes + all other tests pass
-```
-
-Rules:
-- One test at a time
-- Only enough code to pass current test
-- Don't anticipate future tests
-- Keep tests focused on observable behavior
-- **Never skip Verify RED or Verify GREEN**
-
-### 4. Refactor
-
-After all tests pass, look for refactor candidates:
-- [ ] Extract duplication
-- [ ] Deepen modules (move complexity behind simple interfaces)
-- [ ] Apply SOLID principles where natural
-- [ ] Run tests after each refactor step
-
-**Never refactor while RED.** Get to GREEN first.
+See [references/workflow.md](references/workflow.md) for the full TDD workflow.
 
 ## Common Rationalizations
 

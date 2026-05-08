@@ -7,27 +7,22 @@ description: Pre-commit hygiene and atomic commit discipline. Use before every c
 
 ## Pre-Commit Checklist
 
-Run in order before every commit:
+Run in order before every commit. **Do not duplicate work already done by `gxpm-verify` or `gxpm-build`.**
 
 ```bash
 # 1. Review what you're about to commit
 git diff --staged
 
-# 2. Secret leak scan
-git diff --staged | grep -i "password\|secret\|api_key\|token"
+# 2. Secret leak scan (manual review)
+git diff --staged --name-only | xargs grep -l "\.env" 2>/dev/null || true
+# Also review diff for high-entropy strings that look like keys/tokens
 
-# 3. Static checks
-bun run check
-
-# 4. Tests
-bun test
-
-# 5. Build
-bun run build
-
-# 6. Confirm atomicity — one logical change
+# 3. Confirm atomicity — one logical change
 git diff --staged --stat
 ```
+
+**Why no `bun run check` / `bun test` / `bun run build` here?**
+These are the responsibility of `gxpm-build` (during development) and `gxpm-verify` (at the `local-verify` gate). Running them in hygiene creates redundant cycles and blurs accountability. Hygiene focuses on **git-layer discipline**: what you are about to commit, not whether the code works.
 
 ## Atomic Commit Rules
 

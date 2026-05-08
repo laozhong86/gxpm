@@ -5,6 +5,11 @@ description: Plan and execute safe refactoring using dependency analysis. Use wh
 
 ## gxpm-refactor-safely
 
+**Skill boundary:**
+- If you do **not yet understand** the target code, load `/gxpm-explore-codebase` first.
+- If you discover a **bug** during refactoring, stop refactoring and load `/gxpm-diagnose` or `/gxpm-debug-issue`.
+- If you need to **rename or move** symbols across the codebase, confirm the `rename` tool is available in your GitNexus MCP; otherwise use manual renaming with `detect_changes` validation.
+
 Use GitNexus to plan and execute refactoring with confidence. When simplifying code, follow the scan-checklist-incremental-verify loop below.
 
 ### Steps

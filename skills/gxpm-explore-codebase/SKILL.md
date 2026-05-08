@@ -5,6 +5,10 @@ description: Navigate and understand codebase structure using the knowledge grap
 
 ## gxpm-explore-codebase
 
+**Skill boundary:**
+- If you are debugging a **specific bug or error**, load `/gxpm-debug-issue` or `/gxpm-diagnose` instead.
+- If you are **refactoring** code you do not yet understand, load this skill first, then `/gxpm-refactor-safely`.
+
 Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to explore and understand the codebase.
 
 ### Steps

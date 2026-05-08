@@ -6,7 +6,14 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 
 # Diagnose
 
-A discipline for hard bugs. Skip phases only when explicitly justified.
+A discipline for hard bugs where the root cause is **not yet known**.
+
+**Skill boundary:**
+- If you have a **specific symptom, stack trace, or error message** and need to trace its root cause through the codebase, load `/gxpm-debug-issue` first.
+- If you need to **understand code structure** without debugging a specific bug, load `/gxpm-explore-codebase` first.
+- If you are **refactoring** and discover a bug mid-refactor, switch to `/gxpm-diagnose` or `/gxpm-debug-issue` instead of continuing.
+
+Skip phases only when explicitly justified.
 
 ## Phase 1 — Build a feedback loop
 
