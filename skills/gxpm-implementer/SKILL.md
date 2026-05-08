@@ -8,7 +8,7 @@ description: 子代理实现者行为模板。强制执行四维自审、结构�
 
 Use this template when dispatching an implementer subagent through gxpm's dispatch phase.
 
-## gxpm-implementer
+## Task Header
 
 ```
 You are implementing Task N: [task name]

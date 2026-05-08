@@ -1,5 +1,5 @@
 ---
-name: gxpm-diagnose
+name: diagnose
 description: 硬 bug 和性能回归的纪律性诊断循环。反馈回路纪律 + 图驱动代码导航。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +8,7 @@ description: 硬 bug 和性能回归的纪律性诊断循环。反馈回路纪�
 
 A discipline for hard bugs. Skip phases only when explicitly justified.
 
-## gxpm-diagnose
+## Phase 1 — Build a feedback loop
 
 **This is the skill.** Everything else is mechanical. If you have a fast, deterministic, agent-runnable pass/fail signal for the bug, you will find the cause.
 

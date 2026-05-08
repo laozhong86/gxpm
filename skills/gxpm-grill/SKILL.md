@@ -1,5 +1,5 @@
 ---
-name: gxpm-grill
+name: grill
 description: 对照领域模型质疑计划、精炼术语、内联更新 CONTEXT.md 和 ADR。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +8,7 @@ description: 对照领域模型质疑计划、精炼术语、内联更新 CONTEX
 
 Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
 
-## gxpm-grill
+## When to trigger
 
 - Before leaving `triage` — when issue scope is unclear or involves new domain concepts.
 - During `plan` — when implementation decisions need fleshing out.
