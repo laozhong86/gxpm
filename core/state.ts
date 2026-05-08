@@ -10,7 +10,6 @@ import { join, resolve } from "node:path";
 import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
 import { resolveAgentIdentity, resolveSessionId } from "./session";
 import { getWorkflowEventEmitter } from "./workflow-event-emitter";
-import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 import { getResolvedConfigValue } from "./config";
 
 export const CURRENT_SCHEMA_VERSION = 1;
@@ -246,19 +245,7 @@ export function createIssueState(input: IssueInput): IssueState {
     timestamp: now,
   });
 
-  // Fire-and-forget sync to external issue tracker
-  import("./issue-sync")
-    .then(({ maybeSyncIssue }) =>
-      maybeSyncIssue({
-        root,
-        issueId: input.issueId,
-        action: "created",
-        meta: { issueType: state.issueType },
-      }),
-    )
-    .catch(() => {
-      // Silently fail — local state is truth
-    });
+  fireAndForgetSync(root, input.issueId, "created", { issueType: state.issueType });
 
   return state;
 }
@@ -352,19 +339,7 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
     timestamp: now,
   });
 
-  // Fire-and-forget sync to external issue tracker
-  import("./issue-sync")
-    .then(({ maybeSyncIssue }) =>
-      maybeSyncIssue({
-        root,
-        issueId: input.issueId,
-        action: "transitioned",
-        meta: { fromPhase: state.currentPhase, toPhase: nextPhase },
-      }),
-    )
-    .catch(() => {
-      // Silently fail — local state is truth
-    });
+  fireAndForgetSync(root, input.issueId, "transitioned", { fromPhase: state.currentPhase, toPhase: nextPhase });
 
   return updated;
 }
@@ -387,19 +362,7 @@ export function setIssueArchived(input: IssueInput & { archived: boolean }): Iss
   };
   writeJson(paths.statePath, updated);
 
-  // Fire-and-forget sync to external issue tracker
-  import("./issue-sync")
-    .then(({ maybeSyncIssue }) =>
-      maybeSyncIssue({
-        root,
-        issueId: input.issueId,
-        action: "archived",
-        meta: { archived: input.archived },
-      }),
-    )
-    .catch(() => {
-      // Silently fail — local state is truth
-    });
+  fireAndForgetSync(root, input.issueId, "archived", { archived: input.archived });
 
   return updated;
 }
@@ -481,6 +444,19 @@ function writeJson(path: string, value: unknown) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function fireAndForgetSync(
+  root: string,
+  issueId: string,
+  action: string,
+  meta: Record<string, unknown>,
+) {
+  import("./issue-sync")
+    .then(({ maybeSyncIssue }) => maybeSyncIssue({ root, issueId, action, meta }))
+    .catch(() => {
+      // Silently fail — local state is truth
+    });
+}
+
 export function touchIssueOwnership(input: { state: IssueState; sessionId: string }): IssueState {
   const ownership = normalizeOwnership(input.state.ownership);
   const touchedAt = input.state.updatedAt;
@@ -542,21 +518,26 @@ function normalizeOwnership(value: unknown): IssueOwnership | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
-  const currentSession = (value as { currentSession?: unknown }).currentSession;
-  if (typeof currentSession !== "string" || !currentSession.trim()) {
+  const record = value as Record<string, unknown>;
+  const currentSession = typeof record.currentSession === "string" ? record.currentSession : "";
+  if (!currentSession.trim()) {
     return undefined;
   }
 
-  const history = normalizeOwnershipHistory((value as { history?: unknown }).history);
+  const history = normalizeOwnershipHistory(record.history);
   const lastTouchedAt =
-    typeof (value as { lastTouchedAt?: unknown }).lastTouchedAt === "string"
-      ? ((value as { lastTouchedAt?: string }).lastTouchedAt as string)
+    typeof record.lastTouchedAt === "string"
+      ? record.lastTouchedAt
       : history.find((entry) => entry.sessionId === currentSession)?.lastTouch;
 
   const ensuredHistory = ensureCurrentSessionHistory(history, currentSession, lastTouchedAt);
+  const fallbackLastTouch =
+    ensuredHistory.find((entry) => entry.sessionId === currentSession)?.lastTouch ??
+    new Date(0).toISOString();
+
   return {
     currentSession,
-    lastTouchedAt: lastTouchedAt ?? ensuredHistory.find((entry) => entry.sessionId === currentSession)?.lastTouch ?? new Date(0).toISOString(),
+    lastTouchedAt: lastTouchedAt ?? fallbackLastTouch,
     history: ensuredHistory,
   };
 }
@@ -667,45 +648,55 @@ function ensureCurrentSessionHistory(
   return [...history, { sessionId: currentSession, firstTouch: touch, lastTouch: touch }];
 }
 
-function assertPhaseGate(input: {
+function assertWorktreeGate(input: {
   issueId: string;
   fromPhase: GxpmPhase;
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
-  // Worktree gate: dispatch -> implement must not run in canonical main checkout on non-base branch
-  if (input.fromPhase === "dispatch" && input.nextPhase === "implement") {
-    const branch = getCurrentGitBranch();
-    const baseBranch = getResolvedConfigValue({ key: "worktree.baseBranch" }).value as string;
-    if (branch && branch !== baseBranch) {
-      const canonicalRoot = getCanonicalMainRoot();
-      const currentRoot = getCurrentGitRoot();
-      if (canonicalRoot && currentRoot && normalizePath(currentRoot) === normalizePath(canonicalRoot)) {
-        const now = new Date().toISOString();
-        appendIssueEvent({
-          issueDir: input.issueDir,
-          event: {
-            schemaVersion: 1,
-            type: "gate.blocked",
-            issueId: input.issueId,
-            timestamp: now,
-            sessionId: resolveSessionId(),
-            payload: {
-              fromPhase: input.fromPhase,
-              toPhase: input.nextPhase,
-              reason: `dispatch-to-implement blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
-            },
-          },
-        });
-        throw new Error(
-          `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
-          `Current directory is the canonical main checkout on branch '${branch}'. ` +
-          `Run: gxpm workspace ensure ${input.issueId}`
-        );
-      }
-    }
+  if (input.fromPhase !== "dispatch" || input.nextPhase !== "implement") {
+    return;
+  }
+  const branch = getCurrentGitBranch();
+  const baseBranch = getResolvedConfigValue({ key: "worktree.baseBranch" }).value as string;
+  if (!branch || branch === baseBranch) {
+    return;
+  }
+  const canonicalRoot = getCanonicalMainRoot();
+  const currentRoot = getCurrentGitRoot();
+  if (!canonicalRoot || !currentRoot || normalizePath(currentRoot) !== normalizePath(canonicalRoot)) {
+    return;
   }
 
+  const now = new Date().toISOString();
+  appendIssueEvent({
+    issueDir: input.issueDir,
+    event: {
+      schemaVersion: 1,
+      type: "gate.blocked",
+      issueId: input.issueId,
+      timestamp: now,
+      sessionId: resolveSessionId(),
+      payload: {
+        fromPhase: input.fromPhase,
+        toPhase: input.nextPhase,
+        reason: `dispatch-to-implement blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
+      },
+    },
+  });
+  throw new Error(
+    `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
+    `Current directory is the canonical main checkout on branch '${branch}'. ` +
+    `Run: gxpm workspace ensure ${input.issueId}`,
+  );
+}
+
+function assertArtifactGate(input: {
+  issueId: string;
+  fromPhase: GxpmPhase;
+  nextPhase: GxpmPhase;
+  issueDir: string;
+}) {
   const requiredArtifact = getRequiredArtifactForTransition(input.fromPhase, input.nextPhase);
   if (!requiredArtifact) {
     return;
@@ -751,6 +742,16 @@ function assertPhaseGate(input: {
   throw new Error(
     `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );
+}
+
+function assertPhaseGate(input: {
+  issueId: string;
+  fromPhase: GxpmPhase;
+  nextPhase: GxpmPhase;
+  issueDir: string;
+}) {
+  assertWorktreeGate(input);
+  assertArtifactGate(input);
 }
 
 function getCurrentGitBranch(): string | undefined {
