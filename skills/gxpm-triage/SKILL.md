@@ -22,6 +22,30 @@ Five **state** roles:
 
 Every triaged issue should carry exactly one category role and one state role.
 
+## Red Flags
+
+STOP and escalate if any of these appear:
+
+- **No reproduction, no `ready-for-agent`.** A bug without a reproduction attempt or clear "could not reproduce — insufficient detail" note must NOT be marked `ready-for-agent`.
+- **Scope creep in triage.** If the issue grows beyond its original description during triage, stop and ask the user to split it before assigning a state role.
+- **Conflicting triage roles.** If an issue carries more than one category role or more than one state role, reset to `needs-triage` and fix immediately.
+- **Bypassing `needs-info`.** Never guess a category or state when information is insufficient. Default to `needs-info`.
+
+## Rationalization Table
+
+| Excuse | Reality |
+|--------|---------|
+| "The bug is obvious, no need to reproduce." | Obvious bugs are the most dangerous to skip. Reproduction validates assumptions and provides the acceptance-contract entry. |
+| "The reporter is trusted, mark it ready-for-agent." | **No exceptions.** Every bug needs reproduction or a clear `needs-info` path, regardless of who reported it. |
+| "I'll just add both category roles to be safe." | Exactly one category role. Adding both destroys the state machine and makes routing impossible. |
+| "The user seems impatient, I'll skip grilling." | Skipping grilling when scope is unclear produces `ready-for-agent` issues that fail at `ac-check`. |
+
+## Foundational Principle
+
+**Violating the letter of the rules is violating the spirit of the rules.**
+
+The triage state machine exists to protect downstream phases from garbage-in-garbage-out. Every shortcut at triage becomes a blocker at `implement`, `local-verify`, or `land`. Discipline here is kindness to the future agent.
+
 ## Process
 
 ### 1. Show what needs attention
@@ -45,6 +69,7 @@ Show counts and a one-line summary per issue.
 4. **Grill (if needed).** If the issue needs fleshing out, run `/gxpm-grill`.
 
 5. **Apply the outcome:**
+   - **No exceptions:** category + state must both be assigned. Never leave an issue with only one dimension filled.
    - `ready-for-agent` — write an agent brief.
    - `ready-for-human` — same structure as agent brief, but note why it can't be delegated.
    - `needs-info` — post triage notes.

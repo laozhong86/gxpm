@@ -7,6 +7,30 @@ description: Grilling session that challenges plans against the domain model and
 
 Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
 
+## Recognition criteria
+
+Load this skill when you see:
+- User utterances: "grill me", "let's align", "challenge this plan", "does this make sense?"
+- A plan or design with unresolved dependencies, undefined terms, or implicit assumptions.
+- An issue moving from `triage` to `plan` without a written `acceptance-contract`.
+- Terminology drift: the user describes the same concept with multiple different names.
+
+## When NOT to apply
+
+Do NOT use grilling when:
+- The user asks for a quick code snippet or one-line fix. Use direct implementation instead.
+- The requirements are already fully specified with acceptance criteria and no ambiguity remains.
+- The user explicitly says "just do it" or "no need to discuss".
+- Time pressure is extreme and the cost of a wrong decision is lower than the cost of discussion.
+
+## Counter-examples
+
+**WRONG:** User says "Add a login button to the header." You respond with a 5-question grilling session about authentication philosophy.
+**RIGHT:** Acknowledge the clear request and implement it. Grill only if the login flow involves new domain concepts not in CONTEXT.md.
+
+**WRONG:** User says "Let's build a real-time sync system." You immediately start coding.
+**RIGHT:** Grill first. "Real-time" covers WebSockets, SSE, polling, and CRDTs. Which one? What consistency model? What failure mode?
+
 ## When to trigger
 
 - Before leaving `triage` — when issue scope is unclear or involves new domain concepts.

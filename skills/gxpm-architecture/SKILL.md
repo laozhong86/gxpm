@@ -7,6 +7,30 @@ description: Find deepening opportunities in a codebase using domain language an
 
 Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
 
+## Recognition criteria
+
+Load this skill when you see:
+- User asks to "improve architecture", "refactor", "make this more testable", or "reduce coupling".
+- A diagnosis surfaces an architectural root cause (tight coupling, shallow modules, missing seams).
+- A new module is introduced during `self-review` and its depth is questionable.
+- The codebase has grown and `CONTEXT.md` terms no longer map cleanly to file structure.
+
+## When NOT to apply
+
+Do NOT use architecture deepening when:
+- The user wants a purely cosmetic rename or formatting change. Use `gxpm-refactor-safely` instead.
+- The code is already deep, well-tested, and stable. If the deletion test shows the module earns its keep, leave it alone.
+- The change is urgent and tactical (hotfix, security patch). Architecture work is strategic; defer it to a dedicated issue.
+- You have not read `CONTEXT.md` and the relevant ADRs. Surfacing architectural friction without domain vocabulary produces shallow advice.
+
+## Counter-examples
+
+**WRONG:** User asks "Can we rename `UserService` to `UserManager`?" You propose a full seam extraction with adapter interfaces.
+**RIGHT:** Suggest the rename directly. Architecture skill is for structural depth, not naming preferences.
+
+**WRONG:** A module passes the deletion test (complexity reappears across callers), but you suggest splitting it anyway because it looks large.
+**RIGHT:** Size is not depth. A large deep module is preferable to many shallow ones. If deletion test passes, recommend leaving it.
+
 ## gxpm-architecture
 
 Use these terms exactly in every suggestion:
