@@ -1,6 +1,6 @@
 ---
 name: gxpm-explore-codebase
-description: 基于知识图谱导航和理解代码库结构。
+description: Navigate and understand codebase structure using the knowledge graph. Use when user asks how code works, wants to understand architecture, trace execution flows, or explore unfamiliar parts of the codebase.
 ---
 
 ## gxpm-explore-codebase

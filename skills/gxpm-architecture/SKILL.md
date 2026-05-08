@@ -1,6 +1,6 @@
 ---
 name: gxpm-architecture
-description: 基于领域语言和 ADR 寻找代码库深化机会，改善架构、发现重构点、提升可测试性。
+description: Find deepening opportunities in a codebase using domain language and ADRs. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
 # Improve Codebase Architecture
