@@ -216,20 +216,9 @@ Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix 
 
 Never fix bugs without a test.
 
-## Verification Checklist
+## Verification
 
-Before marking work complete:
-
-- [ ] Every new function/method has a test
-- [ ] Watched each test fail before implementing
-- [ ] Each test failed for expected reason (feature missing, not typo)
-- [ ] Wrote minimal code to pass each test
-- [ ] All tests pass
-- [ ] Output pristine (no errors, warnings)
-- [ ] Tests use real code (mocks only if unavoidable)
-- [ ] Edge cases and errors covered
-
-Can't check all boxes? You skipped TDD. Start over.
+Test verification is covered by `/gxpm-verify`. After TDD cycles complete, load `/gxpm-verify` to run the full verification pipeline and collect evidence for `local-verify`.
 
 ## Checklist Per Cycle
 
@@ -256,11 +245,8 @@ No exceptions without your human partner's permission.
 
 - During `implement`, treat the first sub-task as the **tracer bullet**.
 - Use `gxpm run event <issue-id> <run-id> --type test-passed` to record test milestones.
-- Before leaving `implement`, the `local-verify` artifact must include:
-  - List of all vertical slices completed
-  - Verification evidence for each slice (command run, exit code, output summary)
-  - Confirmation that Verify RED and Verify GREEN were executed for each slice
-- If a bug is found during TDD, write a failing test reproducing it first. Switch to `/diagnose` skill only if root cause is unclear.
+- After TDD cycles, load `/gxpm-verify` to execute the full verification pipeline and produce `local-verify` evidence.
+- If a bug is found during TDD, write a failing test reproducing it first. Switch to `/gxpm-diagnose` skill only if root cause is unclear.
 
 ## When adding mocks or test utilities
 

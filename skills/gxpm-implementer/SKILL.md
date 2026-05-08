@@ -37,8 +37,10 @@ If you have questions about:
 Once you're clear on requirements:
 1. Implement exactly what the task specifies
 2. Write tests (following TDD if task says to)
-3. Verify implementation works
-4. Commit your work
+3. Verify implementation works:
+   - Load `/gxpm-build` to verify compilation and type checking
+   - Load `/gxpm-verify` to run the full verification pipeline and collect evidence
+4. Commit your work (load `/gxpm-hygiene` for pre-commit checklist)
 5. Self-review (see below)
 6. Report back
 
@@ -100,6 +102,11 @@ Review your work with fresh eyes. Ask yourself:
 - Do tests actually verify behavior (not just mock behavior)?
 - Did I follow TDD if required?
 - Are tests comprehensive?
+
+**Verification:**
+- Did I run `/gxpm-build` and confirm compilation passes?
+- Did I run `/gxpm-verify` and collect evidence for all steps?
+- Did I run `/gxpm-hygiene` before committing?
 
 If you find issues during self-review, fix them now before reporting.
 
