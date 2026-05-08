@@ -1,0 +1,46 @@
+schema_version: "1.0"
+id: gxpm-standard
+name: "GXPM Standard Delivery Workflow"
+inputs:
+  issue_id: string
+  auto_land: boolean
+steps:
+  - id: triage
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} triage" }
+  - id: plan_gate
+    type: gate
+    config: { prompt: "计划已就绪，确认进入 dispatch？" }
+  - id: dispatch
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} dispatch" }
+  - id: implement_gate
+    type: gate
+    config: { prompt: "派发已就绪，确认进入 implement？" }
+  - id: implement
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} implement" }
+  - id: local_verify
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} local-verify" }
+  - id: ac_check
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} ac-check" }
+  - id: self_review
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} self-review" }
+  - id: ship
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} ship" }
+  - id: pr_check
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} pr-check" }
+  - id: verify
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} verify" }
+  - id: qa_gate
+    type: gate
+    config: { prompt: "QA 通过，确认进入 land？" }
+  - id: land
+    type: command
+    config: { command: "gxpm issue transition ${issue_id} land" }
