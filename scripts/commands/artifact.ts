@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../../core/artifacts";
 import { probeArtifactPayloadCommands } from "../../core/command-probe";
 import { readJsonPayloadFromArgs } from "./helpers";
+import { validateArtifact, formatValidationResult } from "../../core/artifact-validator";
 
 export function runArtifactCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, type: string | undefined) {
   if (subcommand === "list") {
@@ -96,6 +97,13 @@ function runArtifactWrite(argv: string[], issueId: string, type: string) {
     if (findings.length > 0) {
       const detail = findings.map((finding) => `${finding.command} (${finding.reason})`).join("\n");
       throw new Error(`gxpm artifact write: invalid command references\n${detail}`);
+    }
+  }
+  // Validate spec/plan/tasks artifacts
+  if (type === "spec" || type === "plan" || type === "tasks") {
+    const result = validateArtifact(type, payload as Record<string, unknown>);
+    if (!result.valid) {
+      throw new Error(`gxpm artifact write: ${formatValidationResult(result)}`);
     }
   }
   const record = writeArtifact({ issueId, type, payload });

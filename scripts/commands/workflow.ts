@@ -4,12 +4,12 @@
  * Lists, runs, checks status, and resumes YAML-defined workflows.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { WorkflowEngine } from "../../core/workflows/engine";
 
-const WORKFLOWS_DIR = ".gxpm/workflows";
-const RUNS_DIR = join(WORKFLOWS_DIR, "runs");
+const WORKFLOWS_DIR = "workflows";
+const RUNS_DIR = ".gxpm/workflow-runs";
 
 export function runWorkflowCommand(argv: string[]) {
   const subcommand = argv[1];
@@ -53,10 +53,8 @@ function listWorkflows() {
     return;
   }
 
-  const files = Array.from(Bun.file(dir).stream ? [] : []); // placeholder
-  // Simple directory listing
   try {
-    const entries = Array.from(new Bun.Glob("*.yml").scanSync(dir));
+    const entries = readdirSync(dir).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
     if (entries.length === 0) {
       console.log("No workflow definitions found.");
       return;

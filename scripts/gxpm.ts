@@ -18,6 +18,7 @@ import { runPostUpgradeCommand, runUpgradeCommand } from "./commands/upgrade";
 import { runVerifyCommand } from "./commands/verify";
 import { runDagCommand } from "./commands/dag";
 import { runHookCommand } from "./commands/hook";
+import { runWorkflowCommand } from "./commands/workflow";
 import { runPresetCommand } from "./commands/preset";
 
 async function main(argv: string[]) {
@@ -144,6 +145,11 @@ async function main(argv: string[]) {
 
   if (command === "dag") {
     runDagCommand(argv);
+    return;
+  }
+
+  if (command === "workflow") {
+    runWorkflowCommand(argv);
     return;
   }
 
