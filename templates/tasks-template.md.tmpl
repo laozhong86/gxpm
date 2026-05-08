@@ -1,0 +1,32 @@
+---
+name: gxpm-tasks
+description: Use when creating a task list artifact. Vertical slices that are independently grabbable and completable in a single focused session.
+---
+
+# Tasks: [Feature Name]
+
+## Task List
+
+- [ ] **Task 1:** [Description]
+  - **Acceptance:** [What must be true when done]
+  - **Verify:** [How to confirm]
+  - **Files:** [Which files will be touched]
+
+- [ ] **Task 2:** [Description]
+  - **Acceptance:**
+  - **Verify:**
+  - **Files:**
+
+## Dependency Graph
+
+```
+Task 1 ──→ Task 3
+Task 2 ──→ Task 3
+```
+
+## Verification Checklist
+
+- [ ] All tasks have explicit acceptance criteria
+- [ ] No task touches more than ~5 files
+- [ ] Tasks are ordered by dependency
+- [ ] Each task can be completed in one focused session
