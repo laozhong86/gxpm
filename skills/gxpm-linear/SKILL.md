@@ -1,6 +1,6 @@
 ---
 name: gxpm-linear
-description: Linear CLI 集成，用于 gxpm issue 生命周期管理。创建、更新、查询 Linear issue。
+description: Linear CLI integration for gxpm issue lifecycle management. Use when creating, updating, or querying Linear issues, syncing gxpm issues to Linear, or managing issue lifecycle via command line.
 status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->

@@ -1,6 +1,6 @@
 ---
 name: gxpm-eval
-description: skill 质量评估工具。静态分析检测结构回归、缺失 frontmatter、描述漂移。
+description: Skill quality evaluation harness for static analysis. Use when adding a new skill, modifying skill structure, auditing skill quality, or checking for governance compliance.
 ---
 
 # gxpm-eval

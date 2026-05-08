@@ -1,6 +1,6 @@
 ---
 name: diagnose
-description: 硬 bug 和性能回归的纪律性诊断循环。反馈回路纪律 + 图驱动代码导航。
+description: Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

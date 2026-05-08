@@ -1,6 +1,6 @@
 ---
 name: gxpm-browser
-description: 无头浏览器自动化，用于 QA 证据捕获。截图、验证元素、填表、捕获 issue 证据。
+description: Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
 status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->

@@ -1,6 +1,6 @@
 ---
 name: gxpm-refactor-safely
-description: 基于依赖分析的安全重构和代码简化。
+description: Plan and execute safe refactoring using dependency analysis. Use when user asks to rename, extract, split, move, or simplify code, or when a code review suggests refactoring.
 ---
 
 ## gxpm-refactor-safely

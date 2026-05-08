@@ -1,6 +1,6 @@
 ---
 name: gxpm-debug-issue
-description: 基于图驱动代码导航的系统性问题调试。
+description: Systematic issue debugging using graph-powered code navigation. Use when user asks to trace a bug, investigate a specific error, or find the root cause of a failing test or exception.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

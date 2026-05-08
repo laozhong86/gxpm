@@ -1,6 +1,6 @@
 ---
 name: gxpm-triage
-description: 通过分类角色状态机处理问题。创建 issue、审查 bug/功能请求、管理工作流。
+description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
 ---
 
 # Triage
@@ -42,7 +42,7 @@ Show counts and a one-line summary per issue.
 
 3. **Reproduce (bugs only).** Before grilling, attempt reproduction. Report what happened — successful repro, failed repro, or insufficient detail (a strong `needs-info` signal).
 
-4. **Grill (if needed).** If the issue needs fleshing out, run `/grill`.
+4. **Grill (if needed).** If the issue needs fleshing out, run `/gxpm-grill`.
 
 5. **Apply the outcome:**
    - `ready-for-agent` — write an agent brief.

@@ -1,6 +1,6 @@
 ---
 name: gxpm
-description: 第二代代理项目管理运行时。状态图、能力运行时、阶段门控推进。
+description: Second-generation agent project management runtime. Use when user mentions gxpm, issue phases, worktrees, artifacts, checkpoint recovery, or asks about project management workflow.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

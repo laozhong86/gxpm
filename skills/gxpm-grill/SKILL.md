@@ -1,6 +1,6 @@
 ---
-name: grill
-description: 对照领域模型质疑计划、精炼术语、内联更新 CONTEXT.md 和 ADR。
+name: gxpm-grill
+description: Grilling session that challenges plans against the domain model and sharpens terminology. Use when user wants to stress-test a plan, align on requirements, challenge assumptions, or make architecture decisions.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
