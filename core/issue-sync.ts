@@ -106,10 +106,10 @@ export function logSyncError(input: {
 }
 
 export function resolveSyncProvider(root?: string): SyncProvider | null {
-  const provider = getConfigValue({ root, key: "sync.provider" }).value;
+  const provider = getSyncConfigValue(root, "sync.provider");
   if (provider !== "linear" && provider !== "github") return null;
 
-  const autoSync = getConfigValue({ root, key: "sync.autoSync" }).value;
+  const autoSync = getSyncConfigValue(root, "sync.autoSync");
   if (autoSync === false) return null;
 
   if (provider === "linear") {
@@ -142,10 +142,10 @@ function createLinearProvider(root?: string): SyncProvider | null {
     return null;
   }
 
-  const teamKey = String(getConfigValue({ root, key: "sync.linearTeamKey" }).value ?? "");
+  const teamKey = String(getSyncConfigValue(root, "sync.linearTeamKey") ?? "");
   if (!teamKey) return null;
 
-  const assigneeId = String(getConfigValue({ root, key: "sync.linearAssigneeId" }).value ?? "");
+  const assigneeId = String(getSyncConfigValue(root, "sync.linearAssigneeId") ?? "");
 
   const runLinear = (args: string[]): Record<string, unknown> => {
     const cmd = `linear ${args.map((a) => (a.includes(" ") || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ")}`;
@@ -296,7 +296,7 @@ export async function maybeSyncIssue(input: {
     }
 
     if (input.action === "artifact-written") {
-      const syncArtifacts = getConfigValue({ root, key: "sync.syncArtifacts" }).value;
+      const syncArtifacts = getSyncConfigValue(root, "sync.syncArtifacts");
       if (syncArtifacts === false) return;
 
       const artifactIndexPath = getIssuePaths(root, input.issueId).artifactIndexPath;
@@ -336,6 +336,32 @@ export async function maybeSyncIssue(input: {
   } catch (error) {
     logSyncError({ root, issueId: input.issueId, provider: provider.name, error: error as Error });
     // Silently fail — local state is truth
+  }
+}
+
+function getSyncConfigValue(root: string | undefined, key: string): unknown {
+  if (!isTestSyncIsolated()) {
+    return getConfigValue({ root, key }).value;
+  }
+  const syncKey = key.replace(/^sync\./, "");
+  return readRepoSyncConfig(root ?? process.cwd())[syncKey];
+}
+
+function isTestSyncIsolated(): boolean {
+  return process.env.NODE_ENV === "test" && process.env.GXPM_TEST_ALLOW_LIVE_SYNC !== "1";
+}
+
+function readRepoSyncConfig(root: string): Record<string, unknown> {
+  const configPath = join(root, ".gxpm", "config.json");
+  if (!existsSync(configPath)) return {};
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as { sync?: unknown };
+    if (!config.sync || typeof config.sync !== "object" || Array.isArray(config.sync)) {
+      return {};
+    }
+    return config.sync as Record<string, unknown>;
+  } catch {
+    return {};
   }
 }
 
