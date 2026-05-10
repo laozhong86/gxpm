@@ -1,0 +1,77 @@
+---
+name: gxpm-autopilot
+description: 开启 gxpm 自动驾驶模式。使用 Autopilot Grant 持久化用户授权，让代理在授权 profile 内自主完成 issue delivery。
+---
+<!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
+
+## Host Preamble
+
+Target host: OpenAI Codex CLI.
+
+```bash
+GXPM_ROOT="${GXPM_ROOT:-$PWD}"
+GXPM_STATE_DIR="${GXPM_STATE_DIR:-$GXPM_ROOT/.gxpm}"
+export GXPM_ROOT GXPM_STATE_DIR
+```
+
+# gxpm Autopilot
+
+当用户明确要求“自动驾驶模式”、选择 autopilot command prompt，或授权代理不再逐步确认而完成整个 gxpm 工作流时使用。
+
+## 核心原则
+
+Autopilot 的核心不是跳过治理，而是把用户授权落到 `autopilot-grant` artifact。active grant 允许代理在 profile 范围内自主规划、实施、验证、开 PR、merge/land 和清理；phase gate、artifact、验证证据仍然必须完整保留。
+
+## 启动
+
+若用户已给出 issue：
+
+```bash
+gxpm autopilot start <issue-id> --profile full-delivery --prompt "<user prompt>"
+gxpm issue status <issue-id>
+gxpm issue next <issue-id>
+```
+
+若用户只给任务，没有 issue：
+
+```bash
+gxpm autopilot start --auto-id --profile full-delivery --prompt "<user prompt>"
+gxpm issue list
+```
+
+随后按 `gxpm issue next <issue-id>` 推进。不要停在“我可以继续”的确认话术里。
+
+## 授权边界
+
+`full-delivery` 授权以下动作：
+
+- 创建/推进 issue phases
+- 写入和更新 gxpm artifacts
+- 创建或使用 worktree
+- 修改代码和文档
+- 运行本地验证、lint、测试、浏览器 QA
+- 创建 commit、push branch、创建或更新 PR
+- 在验证通过后 merge/land
+- land 后执行 cleanup
+
+## Hard Stop
+
+遇到以下情况必须停止自动驾驶，并先把阻塞写入当前阶段 artifact：
+
+- 用户明确停止或撤销授权
+- 需要密钥、账号登录、付费外部 API 或用户私密输入
+- 涉及生产数据、破坏性迁移或无法自动回滚的操作
+- merge conflict、验证失败或安全/权限边界无法自主解决
+- 当前 repo 明确规则与 Autopilot Grant 冲突
+
+## Hook 行为
+
+UserPromptSubmit hook 会注入 active grant 的 issue、profile、phase 和 run id。Stop hook 在 active grant 且 issue 未到 terminal phase 时，会阻止提前结束并要求继续执行。`stop_hook_active` 已经为 true 时不再重复阻止，避免无限循环。
+
+## 命令
+
+```bash
+gxpm autopilot status <issue-id>
+gxpm autopilot list
+gxpm autopilot stop <issue-id> --reason "<reason>"
+```

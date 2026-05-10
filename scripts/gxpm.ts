@@ -138,6 +138,12 @@ async function main(argv: string[]) {
     return;
   }
 
+  if (command === "autopilot") {
+    const { runAutopilotCommand } = await import("./commands/autopilot");
+    runAutopilotCommand(argv, subcommand, issueId);
+    return;
+  }
+
   if (command === "gate") {
     runGateCommand(argv, subcommand, issueId);
     return;

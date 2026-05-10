@@ -28,7 +28,15 @@ function seedInstall(home: string, target: string) {
           {
             hooks: [
               { type: "command", command: "/tmp/gxpm-session-start.sh" },
+              { type: "command", command: "gxpm hook SessionStart --host codex" },
               { type: "command", command: "/tmp/other-hook" },
+            ],
+          },
+        ],
+        Stop: [
+          {
+            hooks: [
+              { type: "command", command: "gxpm hook Stop --host codex" },
             ],
           },
         ],
@@ -78,6 +86,7 @@ describe("gxpm-uninstall", () => {
     expect(existsSync(join(target, ".codex", "hooks", "gxpm-session-start.sh"))).toBe(false);
     expect(existsSync(join(home, ".gxpm", "last-update-check"))).toBe(true);
     expect(hooksJson.hooks.SessionStart[0].hooks).toEqual([{ type: "command", command: "/tmp/other-hook" }]);
+    expect(hooksJson.hooks.Stop).toBeUndefined();
   });
 
   test("--purge removes ~/.gxpm state directory", () => {

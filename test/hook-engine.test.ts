@@ -10,6 +10,8 @@ import {
   processHook,
   type HookInput,
 } from "../core/hook-engine";
+import { startAutopilotGrant } from "../core/autopilot";
+import { createIssueState } from "../core/state";
 
 const repoRoot = resolve(import.meta.dir, "..");
 
@@ -257,6 +259,55 @@ describe("processHook UserPromptSubmit", () => {
     }));
     expect(result.action).toBe("allow");
     expect(result.additionalContext).toBeUndefined();
+  });
+
+  test("prompt without issue ref injects active autopilot grant context", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ups-autopilot-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+    startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+    const result = await processHook("codex", "UserPromptSubmit", baseInput({
+      hook_event_name: "UserPromptSubmit",
+      prompt: "继续",
+      cwd,
+    }));
+
+    expect(result.action).toBe("allow");
+    expect(result.additionalContext).toContain("gxpm autopilot grant active");
+    expect(result.additionalContext).toContain("GXPM-1");
+    expect(result.additionalContext).toContain("Do not ask for confirmation");
+  });
+});
+
+describe("processHook Stop", () => {
+  test("active autopilot grant blocks stop with continuation instruction", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-autopilot-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+    startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+    const result = await processHook("codex", "Stop", baseInput({
+      hook_event_name: "Stop",
+      cwd,
+      stop_hook_active: false,
+    }));
+
+    expect(result.action).toBe("block");
+    expect(result.reason).toContain("Continue the gxpm workflow now");
+    expect(result.exitCode).toBe(2);
+  });
+
+  test("already active stop hook fails open", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-active-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+    startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+    const result = await processHook("codex", "Stop", baseInput({
+      hook_event_name: "Stop",
+      cwd,
+      stop_hook_active: true,
+    }));
+
+    expect(result.action).toBe("allow");
   });
 });
 

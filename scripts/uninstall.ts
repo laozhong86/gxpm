@@ -28,6 +28,8 @@ const GIT_HOOKS = [
 const CODEX_HOOK_SCRIPTS = [
   "gxpm-session-start.sh",
   "gxpm-user-prompt-submit.sh",
+  "gxpm-pre-tool-use.sh",
+  "gxpm-stop.sh",
 ];
 
 export function planUninstall(options: UninstallOptions = {}): PlannedAction[] {
@@ -97,7 +99,7 @@ function removeCodexHookEntries(path: string) {
         const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
         const kept = hooks.filter((hook: any) => {
           const command = typeof hook?.command === "string" ? hook.command : "";
-          return !CODEX_HOOK_SCRIPTS.some((script) => command.includes(script));
+          return !isGxpmOwnedCodexHookCommand(command);
         });
         return { ...entry, hooks: kept };
       })
@@ -111,6 +113,11 @@ function removeCodexHookEntries(path: string) {
   }
 
   writeFileSync(path, JSON.stringify(parsed, null, 2) + "\n");
+}
+
+function isGxpmOwnedCodexHookCommand(command: string) {
+  if (CODEX_HOOK_SCRIPTS.some((script) => command.includes(script))) return true;
+  return /^gxpm hook \S+ --host codex(?:\s|$)/.test(command.trim());
 }
 
 function describeAction(action: PlannedAction, dryRun: boolean) {

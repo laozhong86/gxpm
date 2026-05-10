@@ -29,6 +29,9 @@ const ARTIFACT_SCHEMAS: Record<ArtifactType, ArtifactSchema> = {
   "triage-report": {
     requiredFields: [],
   },
+  "autopilot-grant": {
+    requiredFields: ["profile", "status", "allowedActions", "hardStops"],
+  },
   "acceptance-contract": {
     requiredFields: ["criteria"],
   },
