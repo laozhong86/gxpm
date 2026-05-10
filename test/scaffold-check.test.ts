@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { runScaffoldCheck } from "../scripts/scaffold-check";
+import { runScaffoldCheck, validateLayeredWorkflowContracts } from "../scripts/scaffold-check";
 import { output, runScript } from "./helpers/workflow";
 
 const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
@@ -10,6 +10,10 @@ const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
 describe("scaffold check", () => {
   test("reports the shared scaffold check result", () => {
     expect(runScaffoldCheck()).toBe("gxpm scaffold check passed (3 hosts)");
+  });
+
+  test("keeps layered workflow contracts aligned", () => {
+    expect(validateLayeredWorkflowContracts()).toEqual([]);
   });
 
   test("keeps gxpm check and gxpm-check entrypoints aligned", () => {

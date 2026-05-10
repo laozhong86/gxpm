@@ -19,10 +19,10 @@ interface PhaseArtifactCommand {
   successMessage: (issueId: string) => string;
 }
 
-const PHASE_ARTIFACT_HANDLERS: Record<
+const PHASE_ARTIFACT_HANDLERS: Partial<Record<
   ArtifactType,
   Pick<PhaseArtifactCommand, "initialize" | "successMessage">
-> = {
+>> = {
   "acceptance-contract": {
     initialize: initializeTriage,
     successMessage: (issueId) => `initialized triage artifacts for ${issueId}`,
@@ -69,11 +69,18 @@ const PHASE_ARTIFACT_HANDLERS: Record<
   },
 };
 
-export const PHASE_ARTIFACT_COMMANDS: PhaseArtifactCommand[] = PHASE_GATE_RULES.map((rule) => ({
-  artifactType: rule.requiredArtifact,
-  command: rule.command,
-  ...PHASE_ARTIFACT_HANDLERS[rule.requiredArtifact],
-}));
+export const PHASE_ARTIFACT_COMMANDS: PhaseArtifactCommand[] = PHASE_GATE_RULES.map((rule) => {
+  const handler = PHASE_ARTIFACT_HANDLERS[rule.requiredArtifact];
+  if (!handler) {
+    throw new Error(`Missing phase artifact handler for ${rule.requiredArtifact}`);
+  }
+
+  return {
+    artifactType: rule.requiredArtifact,
+    command: rule.command,
+    ...handler,
+  };
+});
 
 export function findPhaseArtifactCommand(command: string, subcommand: string | undefined) {
   return PHASE_ARTIFACT_COMMANDS.find((item) => {

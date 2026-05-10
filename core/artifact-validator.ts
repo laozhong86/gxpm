@@ -1,11 +1,12 @@
 /**
- * Artifact Validator — structure checker for spec/plan/tasks artifacts.
+ * Artifact Validator — structure checker for gxpm issue artifacts.
  *
- * Validates that artifacts written via `gxpm artifact write` contain
- * required frontmatter and sections.
+ * This validates the current `.gxpm/issues/<id>/artifacts/*.json`
+ * contract. It intentionally uses a small required-field surface so older
+ * hand-authored artifacts remain readable while new writes still expose drift.
  */
 
-export type ArtifactType = "spec" | "plan" | "tasks";
+import { ARTIFACT_TYPES, type ArtifactType } from "./artifacts";
 
 export interface ValidationError {
   field: string;
@@ -19,36 +20,66 @@ export interface ValidationResult {
 
 interface ArtifactSchema {
   requiredFields: string[];
-  requiredSections?: string[];
 }
 
 const ARTIFACT_SCHEMAS: Record<ArtifactType, ArtifactSchema> = {
-  spec: {
-    requiredFields: ["problem", "scope", "successCriteria"],
-    requiredSections: ["Objective", "Tech Stack", "Success Criteria"],
+  "issue-intake": {
+    requiredFields: [],
   },
-  plan: {
-    requiredFields: ["summary", "approach", "validationCommands"],
-    requiredSections: ["Approach", "Validation"],
+  "triage-report": {
+    requiredFields: [],
   },
-  tasks: {
-    requiredFields: ["tasks"],
-    requiredSections: ["Tasks"],
+  "acceptance-contract": {
+    requiredFields: ["criteria"],
+  },
+  "implementation-plan": {
+    requiredFields: ["objective", "approach", "validation"],
+  },
+  "dispatch-handoff": {
+    requiredFields: ["status", "inputArtifacts", "workerTasks"],
+  },
+  "wiki-context": {
+    requiredFields: [],
+  },
+  "local-verify": {
+    requiredFields: ["status", "commands", "results"],
+  },
+  "acceptance-check": {
+    requiredFields: ["status", "criteria", "findings"],
+  },
+  "self-review": {
+    requiredFields: ["status", "reviewedArtifacts", "findings"],
+  },
+  "ship-readiness": {
+    requiredFields: ["status", "checklist", "rollbackPlan"],
+  },
+  "pr-check": {
+    requiredFields: ["status", "pullRequest", "reviewFindings"],
+  },
+  "verify-findings": {
+    requiredFields: ["status", "findings", "risks"],
+  },
+  "qa-findings": {
+    requiredFields: ["status", "browserEvidence", "findings"],
+  },
+  "land-findings": {
+    requiredFields: ["status", "landReady", "mergePlan"],
   },
 };
+
+export function listValidatedArtifactTypes(): ArtifactType[] {
+  return [...ARTIFACT_TYPES];
+}
 
 /**
  * Validate an artifact payload against its type schema.
  */
-export function validateArtifact(
-  type: ArtifactType,
-  payload: Record<string, unknown>
-): ValidationResult {
-  const schema = ARTIFACT_SCHEMAS[type];
-  if (!schema) {
-    return { valid: false, errors: [{ field: "type", message: `Unknown artifact type: ${type}` }] };
+export function validateArtifact(type: string, payload: Record<string, unknown>): ValidationResult {
+  if (!isArtifactType(type)) {
+    return { valid: false, errors: [{ field: "type", message: `Invalid artifact type: ${type}` }] };
   }
 
+  const schema = ARTIFACT_SCHEMAS[type];
   const errors: ValidationError[] = [];
 
   for (const field of schema.requiredFields) {
@@ -74,7 +105,7 @@ export function validateRawArtifact(raw: Record<string, unknown>): ValidationRes
   }
 
   const payload = raw.payload;
-  if (!payload || typeof payload !== "object") {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { valid: false, errors: [{ field: "payload", message: "Missing or invalid payload" }] };
   }
 
@@ -82,7 +113,7 @@ export function validateRawArtifact(raw: Record<string, unknown>): ValidationRes
 }
 
 function isArtifactType(value: string): value is ArtifactType {
-  return value === "spec" || value === "plan" || value === "tasks";
+  return ARTIFACT_TYPES.includes(value as ArtifactType);
 }
 
 /**

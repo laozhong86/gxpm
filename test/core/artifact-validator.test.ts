@@ -3,69 +3,94 @@ import {
   validateArtifact,
   validateRawArtifact,
   formatValidationResult,
-  type ArtifactType,
+  listValidatedArtifactTypes,
 } from "../../core/artifact-validator";
+import { ARTIFACT_TYPES } from "../../core/artifacts";
+import { GATE_ARTIFACT_TYPES } from "../../core/phase-gates";
 
 describe("validateArtifact", () => {
-  it("accepts valid spec payload", () => {
-    const result = validateArtifact("spec", {
-      problem: "Something is broken",
-      scope: "Core module",
-      successCriteria: ["Fix it"],
+  it("covers every gxpm artifact type", () => {
+    expect(listValidatedArtifactTypes()).toEqual([...ARTIFACT_TYPES]);
+  });
+
+  it("covers every phase-gate artifact", () => {
+    const validated = new Set(listValidatedArtifactTypes());
+    for (const artifactType of GATE_ARTIFACT_TYPES) {
+      expect(validated).toContain(artifactType);
+    }
+  });
+
+  it("accepts valid acceptance-contract payload", () => {
+    const result = validateArtifact("acceptance-contract", {
+      status: "finalized",
+      criteria: ["Must document the behavior"],
+      summary: "Scope is clear",
     });
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("rejects spec payload missing required fields", () => {
-    const result = validateArtifact("spec", {
-      problem: "Something is broken",
+  it("rejects acceptance-contract payload missing required fields", () => {
+    const result = validateArtifact("acceptance-contract", {
+      status: "finalized",
     });
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
     const fields = result.errors.map((e) => e.field);
-    expect(fields).toContain("scope");
-    expect(fields).toContain("successCriteria");
+    expect(fields).toContain("criteria");
   });
 
-  it("accepts valid plan payload", () => {
-    const result = validateArtifact("plan", {
-      summary: "Refactor auth",
+  it("accepts valid implementation-plan payload", () => {
+    const result = validateArtifact("implementation-plan", {
+      objective: "Refactor auth",
       approach: "Extract service",
-      validationCommands: ["bun test"],
+      validation: ["bun test"],
+      status: "finalized",
     });
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("rejects plan payload missing required fields", () => {
-    const result = validateArtifact("plan", {
-      summary: "Refactor auth",
+  it("rejects implementation-plan payload missing required fields", () => {
+    const result = validateArtifact("implementation-plan", {
+      objective: "Refactor auth",
     });
     expect(result.valid).toBe(false);
     const fields = result.errors.map((e) => e.field);
     expect(fields).toContain("approach");
-    expect(fields).toContain("validationCommands");
+    expect(fields).toContain("validation");
   });
 
-  it("accepts valid tasks payload", () => {
-    const result = validateArtifact("tasks", {
-      tasks: [{ id: "t1", description: "Do something" }],
+  it("accepts permissive support artifacts", () => {
+    const result = validateArtifact("triage-report", {
+      summary: "Research notes",
     });
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("rejects tasks payload missing tasks field", () => {
-    const result = validateArtifact("tasks", {});
-    expect(result.valid).toBe(false);
-    expect(result.errors.map((e) => e.field)).toContain("tasks");
+  it("accepts gate artifact initializer payloads", () => {
+    const cases = [
+      ["dispatch-handoff", { status: "draft", inputArtifacts: [], workerTasks: [] }],
+      ["local-verify", { status: "draft", commands: [], results: [] }],
+      ["acceptance-check", { status: "draft", criteria: [], findings: [] }],
+      ["self-review", { status: "draft", reviewedArtifacts: [], findings: [] }],
+      ["ship-readiness", { status: "draft", checklist: [], rollbackPlan: {} }],
+      ["pr-check", { status: "draft", pullRequest: "", reviewFindings: [] }],
+      ["verify-findings", { status: "draft", findings: [], risks: [] }],
+      ["qa-findings", { status: "draft", browserEvidence: [], findings: [] }],
+      ["land-findings", { status: "draft", landReady: false, mergePlan: "" }],
+    ] as const;
+
+    for (const [type, payload] of cases) {
+      expect(validateArtifact(type, payload).valid).toBe(true);
+    }
   });
 
   it("rejects unknown artifact type", () => {
-    const result = validateArtifact("unknown" as ArtifactType, {});
+    const result = validateArtifact("unknown", {});
     expect(result.valid).toBe(false);
-    expect(result.errors[0].message).toContain("Unknown artifact type");
+    expect(result.errors[0].message).toContain("Invalid artifact type");
   });
 });
 
@@ -74,11 +99,10 @@ describe("validateRawArtifact", () => {
     const result = validateRawArtifact({
       schemaVersion: "1.0",
       issueId: "GXPM-114",
-      type: "spec",
+      type: "acceptance-contract",
       payload: {
-        problem: "Something is broken",
-        scope: "Core module",
-        successCriteria: ["Fix it"],
+        status: "finalized",
+        criteria: ["Fix it"],
       },
     });
     expect(result.valid).toBe(true);
@@ -103,7 +127,7 @@ describe("validateRawArtifact", () => {
 
   it("rejects raw artifact missing payload", () => {
     const result = validateRawArtifact({
-      type: "spec",
+      type: "acceptance-contract",
     });
     expect(result.valid).toBe(false);
     expect(result.errors[0].message).toContain("Missing or invalid payload");

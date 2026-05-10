@@ -99,13 +99,17 @@ function runArtifactWrite(argv: string[], issueId: string, type: string) {
       throw new Error(`gxpm artifact write: invalid command references\n${detail}`);
     }
   }
-  // Validate spec/plan/tasks artifacts
-  if (type === "spec" || type === "plan" || type === "tasks") {
-    const result = validateArtifact(type, payload as Record<string, unknown>);
-    if (!result.valid) {
-      throw new Error(`gxpm artifact write: ${formatValidationResult(result)}`);
-    }
+  const result = validateArtifact(type, asPayloadRecord(payload));
+  if (!result.valid) {
+    throw new Error(`gxpm artifact write: ${formatValidationResult(result)}`);
   }
   const record = writeArtifact({ issueId, type, payload });
   console.log(`wrote ${record.type} for ${issueId} at ${record.path}`);
+}
+
+function asPayloadRecord(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+  return payload as Record<string, unknown>;
 }

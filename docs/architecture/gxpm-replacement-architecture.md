@@ -139,6 +139,19 @@ Skill Surface 是代理入口，不是业务真值。
 
 底层都调用同一套 state graph 和 capability runtime。
 
+### 6. Layered Workflow Boundaries
+
+gxpm 的 Command / Agent / Skill / Artifact / Hook 边界以
+`docs/architecture/layered-workflow-boundaries.md` 为准。
+
+核心约束：
+
+- Command 只负责路由 phase、初始化 artifact 和触发 transition。
+- Agent 是责任视角，不是 persona；它必须通过 capability contract 暴露输入、输出、证据、失败模式和 mutation policy。
+- Skill 是 host-facing 入口，不替代 state graph、artifact store 或 capability registry。
+- Artifact 保存 phase 结论和可恢复事实；原始日志、截图和调查过程进入 evidence store。
+- Hook / Validate 只负责防漂移，不替代验收判断。
+
 ## PMC 能力替代表
 
 | PMC 能力 | gxpm 原生模块 | 替代方式 |
