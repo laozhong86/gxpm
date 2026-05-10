@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createIssueState } from "../core/state";
@@ -77,6 +77,35 @@ describe("ensureIssueWorkspaceWithResolver", () => {
     expect(result.resolution?.status).toBe("resolved");
     expect(result.method?.type).toBe("created");
     expect(result.exists).toBe(true);
+    expectSharedGxpmLink(root, result.workspacePath);
+  });
+
+  test("creates new worktree from configured local base branch when remote is absent", async () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-wiso-create-develop-"));
+    Bun.spawnSync({ cmd: ["git", "init", "-b", "main"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.email", "test@test.com"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "config", "user.name", "Test"], cwd: root });
+    writeFileSync(join(root, "file.txt"), "main\n");
+    Bun.spawnSync({ cmd: ["git", "add", "."], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "commit", "-m", "init"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "switch", "-c", "develop"], cwd: root });
+    writeFileSync(join(root, "file.txt"), "develop\n");
+    Bun.spawnSync({ cmd: ["git", "commit", "-am", "develop"], cwd: root });
+    Bun.spawnSync({ cmd: ["git", "switch", "main"], cwd: root });
+
+    mkdirSync(join(root, ".gxpm"), { recursive: true });
+    writeFileSync(
+      join(root, ".gxpm", "config.json"),
+      JSON.stringify({ worktree: { baseBranch: "develop" } }, null, 2) + "\n",
+    );
+    createIssueState({ root, issueId: "GXPM-520" });
+
+    const result = await ensureIssueWorkspaceWithResolver({ root, issueId: "GXPM-520" });
+
+    expect(result.resolution?.status).toBe("resolved");
+    expect(result.method?.type).toBe("created");
+    expect(result.warnings).toContain("Remote 'origin/develop' not found; worktree created from local 'develop'.");
+    expect(readFileSync(join(result.workspacePath, "file.txt"), "utf8")).toBe("develop\n");
     expectSharedGxpmLink(root, result.workspacePath);
   });
 

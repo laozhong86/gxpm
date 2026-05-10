@@ -226,7 +226,9 @@ export function createGitProvider(): IIsolationProvider {
         }
       }
 
-      // Determine base branch for worktree creation
+      // Determine base branch for worktree creation. Prefer the configured
+      // remote branch, then a local branch, and only fall back to HEAD when
+      // neither exists.
       const baseBranch = request.fromBranch ?? "main";
       const remoteRef = `origin/${baseBranch}`;
 
@@ -247,11 +249,23 @@ export function createGitProvider(): IIsolationProvider {
       });
       const hasRemote = remoteCheck.exitCode === 0;
 
-      // Create worktree based on remote branch if available, else fall back to local HEAD
+      const localCheck = Bun.spawnSync({
+        cmd: ["git", "rev-parse", "--verify", baseBranch],
+        cwd: request.canonicalRepoPath,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const hasLocal = localCheck.exitCode === 0;
+
+      const startPoint = hasRemote ? remoteRef : hasLocal ? baseBranch : undefined;
+
+      // Create worktree based on configured branch if available, else fall back to local HEAD.
       const createResult = Bun.spawnSync({
         cmd: hasRemote
           ? ["git", "worktree", "add", "-b", branchName, "--track", worktreePath, remoteRef]
-          : ["git", "worktree", "add", "-b", branchName, worktreePath],
+          : startPoint
+            ? ["git", "worktree", "add", "-b", branchName, worktreePath, startPoint]
+            : ["git", "worktree", "add", "-b", branchName, worktreePath],
         cwd: request.canonicalRepoPath,
         stdout: "pipe",
         stderr: "pipe",
@@ -264,8 +278,10 @@ export function createGitProvider(): IIsolationProvider {
       }
 
       const warnings: string[] = [];
-      if (!hasRemote) {
-        warnings.push(`Remote '${remoteRef}' not found; worktree created from local HEAD.`);
+      if (!hasRemote && !hasLocal) {
+        warnings.push(`Base branch '${baseBranch}' not found locally or as '${remoteRef}'; worktree created from local HEAD.`);
+      } else if (!hasRemote) {
+        warnings.push(`Remote '${remoteRef}' not found; worktree created from local '${baseBranch}'.`);
       }
       try {
         warnings.push(

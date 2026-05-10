@@ -182,6 +182,7 @@ function getEnvConfigValue(key: string): unknown | undefined {
     "sync.syncArtifacts": "GXPM_SYNC_ARTIFACTS",
     "worktree.enforcement": "GXPM_WORKTREE_ENFORCEMENT",
     "worktree.default": "GXPM_WORKTREE_DEFAULT",
+    "worktree.baseBranch": "GXPM_WORKTREE_BASE_BRANCH",
     "workspace.root": "GXPM_WORKSPACE_ROOT",
     "workspace.basePort": "GXPM_WORKSPACE_BASE_PORT",
     update_check: "GXPM_UPDATE_CHECK",
