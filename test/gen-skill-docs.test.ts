@@ -49,22 +49,22 @@ describe("generateSkillDocs", () => {
     const root = join(import.meta.dir, "..");
     const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
 
-    expect(generated).toContain("## Phase Map");
-    expect(generated).toContain("`triage`: clarify issue");
-    expect(generated).toContain("`land`: merge/deploy handoff gate");
-    expect(generated).toContain("## Required Habit");
-    expect(generated).toContain("Never infer phase from chat memory");
-    expect(generated).toContain("Never skip artifact writeback");
+    expect(generated).toContain("## 阶段地图");
+    expect(generated).toContain("`triage`: 澄清 issue");
+    expect(generated).toContain("`land`: 合并/部署交接门");
+    expect(generated).toContain("## 必需习惯");
+    expect(generated).toContain("绝不从聊天记忆推断阶段");
+    expect(generated).toContain("绝不跳过 artifact 回写");
   });
 
   test("generated gxpm skill keeps key rules and related skills", () => {
     const root = join(import.meta.dir, "..");
     const generated = renderSkillContentForHost(root, getHostConfig("codex"), "skills/gxpm/SKILL.md.tmpl");
 
-    expect(generated).toContain("## Key Rules");
-    expect(generated).toContain("### State First");
-    expect(generated).toContain("### Artifact Discipline");
-    expect(generated).toContain("## Related Skills");
+    expect(generated).toContain("## 关键规则");
+    expect(generated).toContain("### 状态优先");
+    expect(generated).toContain("### Artifact 纪律");
+    expect(generated).toContain("## 相关 Skills");
     expect(generated).toContain("`/gxpm-diagnose`");
     expect(generated).toContain("`/gxpm-grill`");
     expect(generated).toContain("`/gxpm-tdd`");

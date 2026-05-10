@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { ARTIFACT_TYPES } from "../core/artifacts";
+import { ARTIFACT_TYPES, type ArtifactType } from "../core/artifacts";
 import {
   CAPABILITY_MUTATION_SCOPES,
   CAPABILITY_REGISTRY,
@@ -11,6 +11,7 @@ import {
   listCapabilities,
   requireCapability,
 } from "../core/capabilities";
+import { PHASE_GATE_RULES } from "../core/phase-gates";
 import { output, runCli } from "./helpers/workflow";
 
 describe("capability registry", () => {
@@ -19,7 +20,7 @@ describe("capability registry", () => {
 
     expect(capabilities.length).toBeGreaterThan(0);
     expect(new Set(capabilities.map((capability) => capability.id)).size).toBe(capabilities.length);
-    expect(capabilities).toEqual(CAPABILITY_REGISTRY);
+    expect(capabilities).toEqual([...CAPABILITY_REGISTRY]);
   });
 
   test("requires contract fields for every capability", () => {
@@ -50,6 +51,16 @@ describe("capability registry", () => {
       for (const sourceFile of capability.sourceFiles) {
         expect(existsSync(join(root, sourceFile))).toBe(true);
       }
+    }
+  });
+
+  test("covers every phase-gate artifact with a capability contract", () => {
+    const coveredArtifacts = new Set<ArtifactType>(
+      listCapabilities().flatMap((capability) => capability.outputContract.artifacts),
+    );
+
+    for (const rule of PHASE_GATE_RULES) {
+      expect(coveredArtifacts.has(rule.requiredArtifact)).toBe(true);
     }
   });
 
