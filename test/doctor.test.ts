@@ -65,6 +65,7 @@ describe("doctor", () => {
     writeFileSync(join(fakeRepo, ".githooks", "gxpm-commit-msg"), "#!/bin/bash\n");
     writeFileSync(join(fakeRepo, ".githooks", "gxpm-pre-push"), "#!/bin/bash\n");
     writeFileSync(join(fakeRepo, ".githooks", "gxpm-post-merge"), "#!/bin/bash\n");
+    writeFileSync(join(fakeRepo, ".githooks", "gxpm-post-checkout"), "#!/bin/bash\n");
     execSync("git config core.hooksPath .githooks", { cwd: fakeRepo });
 
     const report = runDoctor({ home: fakeHome, cwd: fakeRepo });

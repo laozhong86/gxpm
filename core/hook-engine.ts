@@ -9,6 +9,10 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  formatProjectInitializationContext,
+  getProjectInitializationStatus,
+} from "./project-init-status";
 
 export type HookHostName = "claude" | "codex" | "cursor" | "kimi";
 
@@ -174,7 +178,18 @@ async function processSessionStart(
   input: HookInput,
 ): Promise<HookResult> {
   const cwd = input.cwd;
-  if (!cwd || !existsSync(join(cwd, ".gxpm", "issues"))) {
+  if (!cwd) {
+    return { action: "allow", exitCode: 0 };
+  }
+
+  const initStatus = getProjectInitializationStatus(cwd);
+  if (initStatus.kind !== "initialized") {
+    if (initStatus.kind === "partial" || hasRepoScopedGxpmHookConfig(cwd)) {
+      const context = formatProjectInitializationContext(initStatus);
+      if (context) {
+        return { action: "allow", additionalContext: context, exitCode: 0 };
+      }
+    }
     return { action: "allow", exitCode: 0 };
   }
 
@@ -280,6 +295,10 @@ async function processPreToolUse(
     return { action: "allow", exitCode: 0 };
   }
 
+  if (getProjectInitializationStatus(cwd).kind !== "initialized") {
+    return { action: "allow", exitCode: 0 };
+  }
+
   const args = JSON.stringify({
     tool_name: toolName,
     arguments: input.tool_input ?? input.arguments,
@@ -361,6 +380,23 @@ function getWorktreeContext(cwd: string): string | null {
   }
 
   return `WARNING: You are on branch '${branch}' in the canonical main checkout. gxpm worktree.enforcement is required. Create a worktree before editing code: gxpm workspace ensure <issue-id>`;
+}
+
+function hasRepoScopedGxpmHookConfig(cwd: string): boolean {
+  for (const file of [
+    join(cwd, ".codex", "hooks.json"),
+    join(cwd, ".claude", "settings.json"),
+    join(cwd, ".kimi", "config.toml"),
+  ]) {
+    try {
+      if (readFileSync(file, "utf8").includes("gxpm hook")) {
+        return true;
+      }
+    } catch {
+      // absent or unreadable host config; fail open
+    }
+  }
+  return false;
 }
 
 function readSchemaVersion(cwd: string): number {

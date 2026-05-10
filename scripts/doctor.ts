@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { ALL_HOST_CONFIGS } from "../hosts";
 import { getConfigValue, getResolvedConfigValue, type KnownConfigKey, KNOWN_CONFIG_KEYS } from "../core/config";
+import { REQUIRED_GXPM_GIT_HOOKS } from "../core/project-init-status";
 import { readGxpmVersion } from "./version";
 
 export interface SkillCheck {
@@ -54,12 +55,7 @@ interface RunDoctorInput {
   fix?: boolean;
 }
 
-const GXPM_HOOK_FILES = [
-  "gxpm-pre-commit",
-  "gxpm-commit-msg",
-  "gxpm-pre-push",
-  "gxpm-post-merge",
-];
+const GXPM_HOOK_FILES = REQUIRED_GXPM_GIT_HOOKS;
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
 
