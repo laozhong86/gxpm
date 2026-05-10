@@ -28,6 +28,9 @@ const HOOK_SPECS: { gxpmFile: string; topLevelFile: string; argsForwarding: stri
   { gxpmFile: "gxpm-post-checkout", topLevelFile: "post-checkout", argsForwarding: ' "$@"' },
 ];
 
+const GXPM_GITIGNORE_ENTRY = ".gxpm/";
+const GXPM_GITIGNORE_EQUIVALENTS = new Set([".gxpm", ".gxpm/", "/.gxpm", "/.gxpm/"]);
+
 function dispatcherScript(gxpmFile: string, argsForwarding: string): string {
   return `#!/bin/bash
 # gxpm dispatcher (installed by gxpm init)
@@ -86,6 +89,25 @@ function ensureGxpmDir(target: string): string[] {
     mkdirSync(dir, { recursive: true });
   }
   return dirs;
+}
+
+function ensureGxpmGitignore(target: string): string | null {
+  const gitignorePath = join(target, ".gitignore");
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, `${GXPM_GITIGNORE_ENTRY}\n`);
+    return gitignorePath;
+  }
+
+  const current = readFileSync(gitignorePath, "utf8");
+  const hasEntry = current
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => GXPM_GITIGNORE_EQUIVALENTS.has(line));
+  if (hasEntry) return null;
+
+  const prefix = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
+  writeFileSync(gitignorePath, `${current}${prefix}${GXPM_GITIGNORE_ENTRY}\n`);
+  return gitignorePath;
 }
 
 function ensureDefaultConfig(target: string): string | null {
@@ -246,11 +268,14 @@ export function runInitCommand(argv: string[]) {
     kimiHooks: [],
     skills: [],
     config: [],
+    gitignore: [],
     hostsConfigured: selectedHosts.join(",") || "none",
   };
 
   // 1. Ensure .gxpm/ directory structure
   results.dirs = ensureGxpmDir(target);
+  const gitignorePath = ensureGxpmGitignore(target);
+  if (gitignorePath) results.gitignore.push(gitignorePath);
 
   // 2. Git hooks (always, host-agnostic)
   if (!options.skipHooks) {
@@ -306,6 +331,11 @@ export function runInitCommand(argv: string[]) {
   console.log("");
   console.log(`Created directories: ${results.dirs.length}`);
   for (const d of results.dirs) console.log(`  ${d}`);
+  if (results.gitignore.length > 0) {
+    console.log("");
+    console.log(`Updated gitignore: ${results.gitignore.length}`);
+    for (const path of results.gitignore) console.log(`  ${path}`);
+  }
   console.log("");
   console.log(`Installed git hooks: ${results.hooks.length}`);
   for (const h of results.hooks) console.log(`  ${h}`);
