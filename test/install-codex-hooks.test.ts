@@ -27,9 +27,11 @@ describe("installCodexHooks", () => {
     expect(cfg.hooks.SessionStart).toBeDefined();
     expect(cfg.hooks.UserPromptSubmit).toBeDefined();
     expect(cfg.hooks.PreToolUse).toBeDefined();
+    expect(cfg.hooks.Stop).toBeDefined();
     expect(cfg.hooks.SessionStart[0].hooks[0].command).toBe("gxpm hook SessionStart --host codex");
     expect(cfg.hooks.UserPromptSubmit[0].hooks[0].command).toBe("gxpm hook UserPromptSubmit --host codex");
     expect(cfg.hooks.PreToolUse[0].hooks[0].command).toBe("gxpm hook PreToolUse --host codex");
+    expect(cfg.hooks.Stop[0].hooks[0].command).toBe("gxpm hook Stop --host codex");
   });
 
   test("repo scope: writes hooks.json to <target>/.codex/", () => {
@@ -73,7 +75,12 @@ describe("installCodexHooks", () => {
             },
           ],
           Stop: [
-            { hooks: [{ type: "command", command: "/usr/local/bin/cmux-stop", timeout: 5 }] },
+            {
+              hooks: [
+                { type: "command", command: "gxpm hook Stop --host codex" },
+                { type: "command", command: "/usr/local/bin/cmux-stop", timeout: 5 },
+              ],
+            },
           ],
         },
       }),
@@ -98,6 +105,7 @@ describe("installCodexHooks", () => {
     expect(repoCfg.hooks.SessionStart[0].hooks[0].command).toBe("gxpm hook SessionStart --host codex");
     expect(repoCfg.hooks.UserPromptSubmit[0].hooks[0].command).toBe("gxpm hook UserPromptSubmit --host codex");
     expect(repoCfg.hooks.PreToolUse[0].hooks[0].command).toBe("gxpm hook PreToolUse --host codex");
+    expect(repoCfg.hooks.Stop[0].hooks[0].command).toBe("gxpm hook Stop --host codex");
   });
 
   test("registers PreToolUse hook for update_plan recording", () => {
@@ -252,6 +260,6 @@ describe("installCodexHooks", () => {
     expect(commands.SessionStart).not.toContain(join(fakeRepo, ".codex/hooks/gxpm-session-start.sh"));
     expect(commands.UserPromptSubmit).toEqual(["gxpm hook UserPromptSubmit --host codex"]);
     expect(commands.PreToolUse).toEqual(["gxpm hook PreToolUse --host codex"]);
-    expect(commands.Stop).toEqual(["/usr/local/bin/notify-slack"]);
+    expect(commands.Stop).toEqual(["/usr/local/bin/notify-slack", "gxpm hook Stop --host codex"]);
   });
 });

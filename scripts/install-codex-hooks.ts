@@ -60,6 +60,17 @@ const GXPM_CODEX_HOOK_CONFIG = {
         ],
       },
     ],
+    Stop: [
+      {
+        hooks: [
+          {
+            type: "command",
+            command: "gxpm hook Stop --host codex",
+            statusMessage: "gxpm: checking autopilot grant",
+          },
+        ],
+      },
+    ],
   },
 };
 const LEGACY_GXPM_CODEX_HOOK_MARKERS: Record<string, string[]> = {
@@ -74,6 +85,10 @@ const LEGACY_GXPM_CODEX_HOOK_MARKERS: Record<string, string[]> = {
   PreToolUse: [
     ".codex/hooks/gxpm-pre-tool-use.sh",
     "gxpm-pre-tool-use.sh",
+  ],
+  Stop: [
+    ".codex/hooks/gxpm-stop.sh",
+    "gxpm-stop.sh",
   ],
 };
 

@@ -207,39 +207,58 @@ async function processUserPromptSubmit(
   const cwd = input.cwd;
 
   const match = prompt.match(/\b(GXG|GXPM)-\d+\b/i);
-  if (!match || !cwd) {
+  if (!cwd) {
     return { action: "allow", exitCode: 0 };
   }
-
-  const issueId = match[0].toUpperCase();
-  const statePath = join(cwd, ".gxpm", "issues", issueId, "state.json");
-  if (!existsSync(statePath)) {
+  if (!match && !existsSync(join(cwd, ".gxpm", "issues"))) {
     return { action: "allow", exitCode: 0 };
   }
 
   const lines: string[] = [];
-  lines.push(`gxpm context for ${issueId} (referenced in prompt):`);
+  if (match) {
+    const issueId = match[0].toUpperCase();
+    const statePath = join(cwd, ".gxpm", "issues", issueId, "state.json");
+    if (existsSync(statePath)) {
+      lines.push(`gxpm context for ${issueId} (referenced in prompt):`);
 
-  const sessionId = getSessionId(cwd);
-  const currentOwner = getCurrentOwner(cwd, issueId);
-  if (sessionId && currentOwner && currentOwner !== sessionId) {
-    const wasOwner = checkOwnershipHistory(cwd, issueId, sessionId);
-    if (wasOwner) {
+      const sessionId = getSessionId(cwd);
+      const currentOwner = getCurrentOwner(cwd, issueId);
+      if (sessionId && currentOwner && currentOwner !== sessionId) {
+        const wasOwner = checkOwnershipHistory(cwd, issueId, sessionId);
+        if (wasOwner) {
+          lines.push("");
+          lines.push(`ownership transferred: current owner is ${currentOwner}`);
+        }
+      }
+
       lines.push("");
-      lines.push(`ownership transferred: current owner is ${currentOwner}`);
+
+      const contextOutput = getIssueContext(cwd, issueId);
+      if (contextOutput) {
+        lines.push(contextOutput);
+      } else {
+        const statusOutput = getIssueStatus(cwd, issueId);
+        const nextOutput = getIssueNext(cwd, issueId);
+        if (statusOutput) lines.push(statusOutput);
+        if (nextOutput) lines.push(nextOutput);
+      }
     }
   }
 
-  lines.push("");
+  const { formatAutopilotGrantContext, listActiveAutopilotGrants } = await import("./autopilot");
+  const activeGrants = listActiveAutopilotGrants({
+    root: cwd,
+    issueId: match ? match[0].toUpperCase() : undefined,
+    limit: match ? 1 : 3,
+  });
+  const grantContext = formatAutopilotGrantContext(activeGrants);
+  if (grantContext) {
+    if (lines.length > 0) lines.push("");
+    lines.push(grantContext);
+  }
 
-  const contextOutput = getIssueContext(cwd, issueId);
-  if (contextOutput) {
-    lines.push(contextOutput);
-  } else {
-    const statusOutput = getIssueStatus(cwd, issueId);
-    const nextOutput = getIssueNext(cwd, issueId);
-    if (statusOutput) lines.push(statusOutput);
-    if (nextOutput) lines.push(nextOutput);
+  if (lines.length === 0) {
+    return { action: "allow", exitCode: 0 };
   }
 
   return {
@@ -282,8 +301,22 @@ async function processPreToolUse(
 
 async function processStop(
   _host: HookHostName,
-  _input: HookInput,
+  input: HookInput,
 ): Promise<HookResult> {
+  if (input.stop_hook_active) {
+    return { action: "allow", exitCode: 0 };
+  }
+  const cwd = input.cwd;
+  if (!cwd) {
+    return { action: "allow", exitCode: 0 };
+  }
+  const { buildAutopilotStopContinuation, listActiveAutopilotGrants } = await import("./autopilot");
+  const continuation = buildAutopilotStopContinuation(
+    listActiveAutopilotGrants({ root: cwd, limit: 3 }),
+  );
+  if (continuation) {
+    return { action: "block", reason: continuation, exitCode: 2 };
+  }
   return { action: "allow", exitCode: 0 };
 }
 

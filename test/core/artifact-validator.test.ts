@@ -69,6 +69,17 @@ describe("validateArtifact", () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  it("accepts valid autopilot-grant payload", () => {
+    const result = validateArtifact("autopilot-grant", {
+      profile: "full-delivery",
+      status: "active",
+      allowedActions: ["issue.triage", "pull-request.merge"],
+      hardStops: ["user.explicit_stop"],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
   it("accepts gate artifact initializer payloads", () => {
     const cases = [
       ["dispatch-handoff", { status: "draft", inputArtifacts: [], workerTasks: [] }],

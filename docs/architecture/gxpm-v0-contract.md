@@ -37,6 +37,7 @@ V0 已实现的本地目录：
     index.json
     acceptance-check.json
     acceptance-contract.json
+    autopilot-grant.json
     dispatch-handoff.json
     implementation-plan.json
     issue-intake.json
@@ -71,6 +72,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 
 - `issue-intake`
 - `triage-report`
+- `autopilot-grant`
 - `acceptance-contract`
 - `implementation-plan`
 - `dispatch-handoff`
@@ -85,6 +87,12 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `land-findings`
 
 V0 只写 JSON artifact，不渲染 markdown report。
+
+### Autopilot Grant
+
+Autopilot Grant 是 issue-local 的自动驾驶授权 artifact：`artifacts/autopilot-grant.json`。它不是新的 phase，也不绕过 phase gate；它只把用户对“无需逐步确认”的授权、profile、允许动作、hard stop 和生命周期状态持久化，让 hook 与 agent 在后续回合可恢复同一授权边界。
+
+V0 profile 只有 `full-delivery`：授权代理在同一 issue 内自主完成 triage、plan、dispatch、implement、local verification、review、PR、merge/land 和 cleanup。hard stop 包括用户显式停止、需要密钥/付费外部 API、生产数据或破坏性数据迁移、不可恢复冲突或验证失败、以及策略/权限边界。
 
 ### Evidence Store
 
@@ -268,6 +276,10 @@ gxpm workspace plan <issue-id>
 gxpm workspace ensure <issue-id>
 gxpm workspace cleanup <issue-id>
 gxpm orchestrator tick --dry-run
+gxpm autopilot start <issue-id>|--auto-id
+gxpm autopilot status <issue-id>
+gxpm autopilot list
+gxpm autopilot stop <issue-id>
 gxpm artifact list <issue-id>
 gxpm artifact read <issue-id> <type>
 gxpm triage init <issue-id>

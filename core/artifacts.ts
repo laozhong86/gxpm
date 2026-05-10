@@ -14,6 +14,7 @@ import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 export const ARTIFACT_TYPES = [
   "issue-intake",
   "triage-report",
+  "autopilot-grant",
   "acceptance-contract",
   "implementation-plan",
   "dispatch-handoff",
