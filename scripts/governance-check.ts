@@ -6,6 +6,7 @@ export interface GovernanceCheckOptions {
 }
 
 const REQUIRED_DOCS = [
+  "CANON.md",
   "AGENTS.md",
   "CLAUDE.md",
   "docs/governance/development-contract.md",
@@ -38,9 +39,14 @@ export function validateGovernanceDocs(options: GovernanceCheckOptions = {}): st
     errors.push("CLAUDE.md should stay a thin bootstrap under 80 lines");
   }
 
-  for (const heading of ["## Always", "## Ask First", "## Never"]) {
-    if (!agents.includes(heading)) {
-      errors.push(`AGENTS.md missing boundary heading: ${heading}`);
+  if (!agents.includes("CANON.md")) {
+    errors.push("AGENTS.md must reference CANON.md");
+  }
+
+  const canon = readText(root, "CANON.md");
+  for (const heading of ["## 1. 真值优先", "## 9. 安全门控", "## 10. 失败归因"]) {
+    if (!canon.includes(heading)) {
+      errors.push(`CANON.md missing boundary heading: ${heading}`);
     }
   }
 

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "gxpm": "42f2f8fb6399d7dde0cd97a5a285eaf41894455d1378c04979b0b111779e7ca2",
+    "gxpm-architecture": "d9df6f8ee1de6beb283c79038d3e592ef8f1dca5b6a3c5d9dbc58cbaea099cc2",
+    "gxpm-autopilot": "7811177039fd1bd86da292385c099c536eeb3bdc6a6d589baff4c15fe665744a",
+    "gxpm-browser": "a7f9cd6f1037e9c527b0aac3479a7ef188ead1a8a06cb267c7b98c140d7c1e95",
+    "gxpm-build": "37dde8c34996e4e34f3d3b7b34ce6615b3d0ccc3d6f0013475fe7bacce8055f1",
+    "gxpm-debug-issue": "013fea2fa5e2e77eb72e7720cfce6b205300209090cb274dcffc00f0821f5fb0",
+    "gxpm-diagnose": "fbf8ed4d76a8c0eac173aa9fe0fc323c001f8c6afe71a32cf11e4ce1d2cf93f0",
+    "gxpm-eval": "365b7fddb1a1c0c5c41ae8c2b98517ae9e567cd23901a432a0989925e9f7669f",
+    "gxpm-explore-codebase": "ac690583fed6b8871ee71acf63bd0078738b52bca56bf0726475c42bfd96011e",
+    "gxpm-grill": "ca3f56870b81c901f74ab390fb36be11618786062cbb0e5ebf0fa470464a410d",
+    "gxpm-hygiene": "1f3c23cc07ac518a39e1384ce2e6431b2ec4bda78578d3d600ad32977a2fd46c",
+    "gxpm-implementer": "0ebb97e9b7577442a49197fbc5e4e99a114a48d4e960ee73cd8f110b4cd4483c",
+    "gxpm-linear": "fa290851faea2138ed23c7463da2f126043018c7fdf9ac76c5f7e0068e43f19f",
+    "gxpm-planning": "0db3e720f9d27ec3c2bce630dd586b0e3eafa48cca3c77ec1857d238b0a685e0",
+    "gxpm-refactor-safely": "68236e4e1d0cf540864a6762bf5852cde562de5779a9df44a87ab2112b34929c",
+    "gxpm-review-changes": "764c1fe515d41779ae9dba8123b521cae81227ed830f92bd1f85c3140a506db4",
+    "gxpm-tdd": "72c62ff31ee46122bb14c7e756571bd39304d53ecc5d136314fc617284dc58ff",
+    "gxpm-triage": "5ec8458bdf95eb740afd0f93ed5fb09968d2b64e1f13917e4272a6506c978db6",
+    "gxpm-verify": "eaaa2503ca06e0f66a6bfca51391739ba103c86f4fa6e866f99d54fd59ff5489",
+    "maintain-hygiene-skills-lock": "0ea92b4a51b8f7d7152fcbccdc48b79629a512651a69908904b27600a27fda7b"
+  }
+}
