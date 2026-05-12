@@ -9,7 +9,7 @@
 | Tier | Command | 何时运行 | 目标 |
 | --- | --- | --- | --- |
 | fast | `bun test` | 每次实现后、提交前 | 免费静态验证和单元测试 |
-| gate | `bun run check` | 提交前、生成器或 governance 改动后 | host config、生成文档和治理文档检查 |
+| gate | `bun run check` | 提交前、生成器、governance、phase、artifact 或 capability 改动后 | host config、生成文档、治理文档、phase gate、capability output 和 artifact validator 一致性检查 |
 | generated | `bun run gen:skill-docs` | 修改 `*.tmpl`、host config、preamble 后 | 刷新生成的 skill surface |
 | state | `gxpm issue create/status/transition` | state graph 或 phase 规则改动后 | 本地 `.gxpm` 真值写回和恢复验证 |
 | capability | `gxpm capability list/show` | 新增或修改 runtime capability contract 后 | 检查 input/output、mutation、idempotency、failure mode 和 evidence metadata |
@@ -28,6 +28,7 @@
 - 生成物冲突只能通过模板和生成器解决，再重新生成。
 - `bun run check` 必须能发现生成物漂移。
 - scaffold check 流程的真值是 `scripts/scaffold-check.ts`；`gxpm check` 和 `gxpm-check.ts` 只能调用它。
+- scaffold check 必须能发现 layered workflow 漂移：phase gate required artifact、capability output artifact 和 artifact validator 覆盖必须一致。
 - skill 模板中的 gate command、artifact read list 和 transition summary 必须由 `scripts/gen-skill-docs.ts` 从 phase gate registry 生成。
 - README 只展示稳定入口命令，不复制完整 phase gate 链；完整 gate guidance 以生成的 `skills/gxpm/SKILL.md` 为准。
 - `docs/architecture/gxpm-v0-contract.md` 可保留人类可读列表，但必须由测试证明和 phase、artifact、gate registry 一致。
@@ -39,6 +40,7 @@
 - 不要在每个 initializer 中重复 `readIssueState`、phase 校验和 `writeArtifact` 样板。
 - `triage` 这类没有前置 phase gate 的入口 artifact 可以保留专用实现。
 - `ARTIFACT_TYPES` 可以包含 non-gate artifact；只有 `GATE_ARTIFACT_TYPES` 需要 phase gate command 和 initializer 绑定。
+- 每个 `ARTIFACT_TYPES` 成员都必须被 `core/artifact-validator.ts` 覆盖；即使 schema 暂时宽松，也要显式声明原因。
 - 新增 artifact-backed transition 时，必须先更新 `core/phase-gates.ts`；`scripts/phase-artifact-commands.ts` 只绑定 initializer 和 success message。
 - `test/phase-gates.test.ts` 必须证明 CLI artifact command 顺序和 gate rule 顺序保持一致。
 - gate 测试需要把通用 phase setup 放在 `test/helpers/workflow.ts`，不要在每个 gate 文件重复写完整前置 phase 链。
@@ -48,6 +50,7 @@
 ## Execution Runtime 规则
 
 - `core/capabilities.ts` 是 runtime capability contract 的描述性 registry。新增 capability slice 时，先声明 input/output、mutation scope、idempotency、failure modes、commands 和 source anchors，再接执行实现。
+- 每个 phase gate required artifact 都必须至少由一个 capability 的 `outputContract.artifacts` 声明。Command 不能成为唯一知识来源。
 - `gxpm capability list/show` 必须保持只读；它只能检查 registry，不得执行 capability、写 artifact、claim issue 或调用外部 provider。
 - `gxpm run *` 只记录或读取 issue-local run ledger；不得隐式推进 phase。
 - `gxpm issue claim/release/reconcile-claim` 只更新本地 issue claim 生命周期；不得隐式推进 phase。

@@ -91,12 +91,17 @@ export async function ensureIssueWorkspaceWithResolver(
 ): Promise<WorkspaceIsolationResult> {
   const root = input.root ?? process.cwd();
   const issueId = input.issueId;
+  const configuredBaseBranch = String(getResolvedConfigValue({ root, key: "worktree.baseBranch" }).value);
+  const hints: IsolationHints = {
+    ...input.hints,
+    baseBranch: input.hints?.baseBranch ?? configuredBaseBranch,
+  };
 
   // Run resolver first
   const store = createFileSystemStore(root);
   const provider = createGitProvider();
   const resolver = new IsolationResolver({ store, provider });
-  const resolution = await resolver.resolve({ issueId, root, hints: input.hints });
+  const resolution = await resolver.resolve({ issueId, root, hints });
 
   let plan: WorkspacePlan;
   let created = false;

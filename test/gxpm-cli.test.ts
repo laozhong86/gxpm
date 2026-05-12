@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,7 +8,44 @@ import { output, runCli, runCliWithInput } from "./helpers/workflow";
 
 const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
 
+function initGitRepo(root: string) {
+  execSync("git init", { cwd: root, stdio: "ignore" });
+}
+
 describe("gxpm CLI", () => {
+  test("init creates .gitignore with .gxpm entry when missing", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-gitignore-create-"));
+    initGitRepo(root);
+
+    const result = runCli(root, ["init", "--non-interactive", "--skip-hooks", "--skip-skills"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(".gxpm/\n");
+    expect(output(result)).toContain("Updated gitignore: 1");
+  });
+
+  test("init appends .gxpm entry to existing .gitignore", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-gitignore-append-"));
+    initGitRepo(root);
+    writeFileSync(join(root, ".gitignore"), "node_modules/");
+
+    const result = runCli(root, ["init", "--non-interactive", "--skip-hooks", "--skip-skills"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe("node_modules/\n.gxpm/\n");
+  });
+
+  test("init does not duplicate an existing .gxpm ignore entry", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-gitignore-idempotent-"));
+    initGitRepo(root);
+    writeFileSync(join(root, ".gitignore"), ".gxpm\n");
+
+    expect(runCli(root, ["init", "--non-interactive", "--skip-hooks", "--skip-skills"]).exitCode).toBe(0);
+    expect(runCli(root, ["init", "--non-interactive", "--skip-hooks", "--skip-skills"]).exitCode).toBe(0);
+
+    expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(".gxpm\n");
+  });
+
   test("prints the resolved session id", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-session-cli-"));
 

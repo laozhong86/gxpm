@@ -27,9 +27,11 @@ describe("installCodexHooks", () => {
     expect(cfg.hooks.SessionStart).toBeDefined();
     expect(cfg.hooks.UserPromptSubmit).toBeDefined();
     expect(cfg.hooks.PreToolUse).toBeDefined();
+    expect(cfg.hooks.Stop).toBeDefined();
     expect(cfg.hooks.SessionStart[0].hooks[0].command).toBe("gxpm hook SessionStart --host codex");
     expect(cfg.hooks.UserPromptSubmit[0].hooks[0].command).toBe("gxpm hook UserPromptSubmit --host codex");
     expect(cfg.hooks.PreToolUse[0].hooks[0].command).toBe("gxpm hook PreToolUse --host codex");
+    expect(cfg.hooks.Stop[0].hooks[0].command).toBe("gxpm hook Stop --host codex");
   });
 
   test("repo scope: writes hooks.json to <target>/.codex/", () => {
@@ -39,6 +41,71 @@ describe("installCodexHooks", () => {
 
     expect(result.rootDir).toBe(join(fakeRepo, ".codex"));
     expect(existsSync(join(fakeRepo, ".codex", "hooks.json"))).toBe(true);
+  });
+
+  test("repo scope removes gxpm-owned hooks from user scope", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-cross-scope-home-"));
+    const fakeRepo = mkdtempSync(join(tmpdir(), "gxpm-codex-cross-scope-repo-"));
+    const userCodexDir = join(fakeHome, ".codex");
+    mkdirSync(userCodexDir, { recursive: true });
+    writeFileSync(
+      join(userCodexDir, "hooks.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: "command", command: "gxpm hook SessionStart --host codex" },
+                { type: "command", command: "/usr/local/bin/cmux-session", timeout: 5 },
+              ],
+            },
+          ],
+          UserPromptSubmit: [
+            {
+              hooks: [
+                { type: "command", command: "gxpm hook UserPromptSubmit --host codex" },
+              ],
+            },
+          ],
+          PreToolUse: [
+            {
+              hooks: [
+                { type: "command", command: "gxpm hook PreToolUse --host codex" },
+              ],
+            },
+          ],
+          Stop: [
+            {
+              hooks: [
+                { type: "command", command: "gxpm hook Stop --host codex" },
+                { type: "command", command: "/usr/local/bin/cmux-stop", timeout: 5 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    installCodexHooks({
+      scope: "repo",
+      target: fakeRepo,
+      home: fakeHome,
+      enableFeatureFlag: false,
+    });
+
+    const userCfg = JSON.parse(readFileSync(join(userCodexDir, "hooks.json"), "utf8"));
+    const repoCfg = JSON.parse(readFileSync(join(fakeRepo, ".codex", "hooks.json"), "utf8"));
+
+    expect(userCfg.hooks.SessionStart[0].hooks.map((hook: any) => hook.command)).toEqual([
+      "/usr/local/bin/cmux-session",
+    ]);
+    expect(userCfg.hooks.UserPromptSubmit).toBeUndefined();
+    expect(userCfg.hooks.PreToolUse).toBeUndefined();
+    expect(userCfg.hooks.Stop[0].hooks[0].command).toBe("/usr/local/bin/cmux-stop");
+    expect(repoCfg.hooks.SessionStart[0].hooks[0].command).toBe("gxpm hook SessionStart --host codex");
+    expect(repoCfg.hooks.UserPromptSubmit[0].hooks[0].command).toBe("gxpm hook UserPromptSubmit --host codex");
+    expect(repoCfg.hooks.PreToolUse[0].hooks[0].command).toBe("gxpm hook PreToolUse --host codex");
+    expect(repoCfg.hooks.Stop[0].hooks[0].command).toBe("gxpm hook Stop --host codex");
   });
 
   test("registers PreToolUse hook for update_plan recording", () => {
@@ -193,6 +260,6 @@ describe("installCodexHooks", () => {
     expect(commands.SessionStart).not.toContain(join(fakeRepo, ".codex/hooks/gxpm-session-start.sh"));
     expect(commands.UserPromptSubmit).toEqual(["gxpm hook UserPromptSubmit --host codex"]);
     expect(commands.PreToolUse).toEqual(["gxpm hook PreToolUse --host codex"]);
-    expect(commands.Stop).toEqual(["/usr/local/bin/notify-slack"]);
+    expect(commands.Stop).toEqual(["/usr/local/bin/notify-slack", "gxpm hook Stop --host codex"]);
   });
 });

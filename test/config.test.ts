@@ -72,6 +72,23 @@ describe("setConfigValue + getConfigValue", () => {
     expect(defaulted.source).toBe("default");
   });
 
+  test("worktree.baseBranch can be supplied through env", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-base-env-"));
+    const previous = process.env.GXPM_WORKTREE_BASE_BRANCH;
+    process.env.GXPM_WORKTREE_BASE_BRANCH = "develop";
+    try {
+      const got = getConfigValue({ root, key: "worktree.baseBranch" });
+      expect(got.value).toBe("develop");
+      expect(got.source).toBe("env");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.GXPM_WORKTREE_BASE_BRANCH;
+      } else {
+        process.env.GXPM_WORKTREE_BASE_BRANCH = previous;
+      }
+    }
+  });
+
   test("resolved values include whitelisted defaults", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cfg-default-root-"));
     const got = getResolvedConfigValue({ root, key: "update_check" });
@@ -152,6 +169,7 @@ describe("parseAgentsMdConfig", () => {
 
 - worktree.enforcement: required
 - worktree.default: use
+- worktree.baseBranch: develop
 
 ## Other Section
 content
@@ -159,7 +177,7 @@ content
     const cfg = parseAgentsMdConfig(md);
     expect((cfg as any).worktree.enforcement).toBe("required");
     expect((cfg as any).worktree.default).toBe("use");
-    expect((cfg as any).worktree.baseBranch).toBeUndefined();
+    expect((cfg as any).worktree.baseBranch).toBe("develop");
   });
 
   test("handles colon-separated lines without bullet", () => {

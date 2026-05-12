@@ -22,6 +22,9 @@ A canonical stage in the gxpm delivery pipeline: `triage` → `plan` → `dispat
 **Artifact**:
 A machine-readable JSON document persisted under `.gxpm/issues/<id>/artifacts/`. Each phase transition requires a specific artifact type as gate evidence.
 
+**Autopilot Grant**:
+A persisted `autopilot-grant` artifact that records the user's explicit authorization for an agent to complete a gxpm workflow autonomously within a named profile, including allowed actions, hard stops, and lifecycle status.
+
 **Worktree**:
 A git worktree used to isolate feature branch development from the canonical main checkout.
 
@@ -37,6 +40,7 @@ A reusable agent capability loaded by the host (Codex/Claude). Each skill is a s
 - An **Issue** carries one **Triage role** at a time
 - An **Issue** progresses through one **Phase** at a time
 - A **Phase** transition requires one **Artifact**
+- An **Autopilot Grant** may authorize autonomous execution for one **Issue**
 - A **Session** may **Claim** one **Issue** at a time
 
 ## Flagged ambiguities

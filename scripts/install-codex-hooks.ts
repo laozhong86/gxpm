@@ -25,6 +25,54 @@ interface InstallResult {
 }
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
+const GXPM_CODEX_HOOK_CONFIG = {
+  hooks: {
+    SessionStart: [
+      {
+        hooks: [
+          {
+            type: "command",
+            command: "gxpm hook SessionStart --host codex",
+            statusMessage: "gxpm: loading capability hint",
+          },
+        ],
+      },
+    ],
+    UserPromptSubmit: [
+      {
+        hooks: [
+          {
+            type: "command",
+            command: "gxpm hook UserPromptSubmit --host codex",
+            statusMessage: "gxpm: resolving referenced issue",
+          },
+        ],
+      },
+    ],
+    PreToolUse: [
+      {
+        hooks: [
+          {
+            type: "command",
+            command: "gxpm hook PreToolUse --host codex",
+            statusMessage: "gxpm: recording update_plan payload",
+          },
+        ],
+      },
+    ],
+    Stop: [
+      {
+        hooks: [
+          {
+            type: "command",
+            command: "gxpm hook Stop --host codex",
+            statusMessage: "gxpm: checking autopilot grant",
+          },
+        ],
+      },
+    ],
+  },
+};
 const LEGACY_GXPM_CODEX_HOOK_MARKERS: Record<string, string[]> = {
   SessionStart: [
     ".codex/hooks/gxpm-session-start.sh",
@@ -38,6 +86,10 @@ const LEGACY_GXPM_CODEX_HOOK_MARKERS: Record<string, string[]> = {
     ".codex/hooks/gxpm-pre-tool-use.sh",
     "gxpm-pre-tool-use.sh",
   ],
+  Stop: [
+    ".codex/hooks/gxpm-stop.sh",
+    "gxpm-stop.sh",
+  ],
 };
 
 export function installCodexHooks(options: InstallCodexHooksOptions = {}): InstallResult {
@@ -50,46 +102,12 @@ export function installCodexHooks(options: InstallCodexHooksOptions = {}): Insta
 
   const hooksJsonPath = join(rootDir, "hooks.json");
 
-  const newConfig = {
-    hooks: {
-      SessionStart: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: "gxpm hook SessionStart --host codex",
-              statusMessage: "gxpm: loading capability hint",
-            },
-          ],
-        },
-      ],
-      UserPromptSubmit: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: "gxpm hook UserPromptSubmit --host codex",
-              statusMessage: "gxpm: resolving referenced issue",
-            },
-          ],
-        },
-      ],
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: "gxpm hook PreToolUse --host codex",
-              statusMessage: "gxpm: recording update_plan payload",
-            },
-          ],
-        },
-      ],
-    },
-  };
-
-  const merged = mergeWithExisting(hooksJsonPath, newConfig);
+  const merged = mergeWithExisting(hooksJsonPath, GXPM_CODEX_HOOK_CONFIG);
   writeFileSync(hooksJsonPath, JSON.stringify(merged, null, 2) + "\n");
+  const userHooksJsonPath = join(home, ".codex", "hooks.json");
+  if (scope === "repo" && resolve(hooksJsonPath) !== resolve(userHooksJsonPath)) {
+    removeGxpmOwnedHooksFrom(userHooksJsonPath, GXPM_CODEX_HOOK_CONFIG);
+  }
 
   const featureFlagEnabled = (options.enableFeatureFlag ?? true)
     ? ensureCodexHooksFeatureFlag(home)
@@ -159,6 +177,43 @@ function mergeWithExisting(path: string, fresh: Record<string, any>) {
   }
 
   return { ...existing, hooks: existingHooks };
+}
+
+function removeGxpmOwnedHooksFrom(path: string, fresh: Record<string, any>) {
+  if (!existsSync(path)) return;
+  let existing: Record<string, any> = {};
+  try {
+    existing = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return;
+  }
+  if (!existing.hooks || typeof existing.hooks !== "object") return;
+
+  const eventNames = Object.keys(fresh.hooks ?? {});
+  for (const event of eventNames) {
+    const entries = Array.isArray(existing.hooks[event]) ? existing.hooks[event] : [];
+    const freshEntries = (fresh.hooks as Record<string, any[]>)[event] ?? [];
+    const freshCommands = new Set(
+      freshEntries.flatMap((e: any) => (e.hooks ?? []).map((h: any) => h.command)),
+    );
+    const nextEntries = entries
+      .map((entry: any) => {
+        const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
+        const keptHooks = hooks.filter(
+          (hook: any) => !isGxpmOwnedCodexHook(event, hook.command, freshCommands),
+        );
+        return { ...entry, hooks: keptHooks };
+      })
+      .filter((entry: any) => Array.isArray(entry.hooks) && entry.hooks.length > 0);
+
+    if (nextEntries.length > 0) {
+      existing.hooks[event] = nextEntries;
+    } else {
+      delete existing.hooks[event];
+    }
+  }
+
+  writeFileSync(path, JSON.stringify(existing, null, 2) + "\n");
 }
 
 function isGxpmOwnedCodexHook(event: string, command: unknown, currentCommands: Set<unknown>) {
