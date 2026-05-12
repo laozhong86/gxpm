@@ -7,13 +7,25 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 
 A discipline for hard bugs where the root cause is **not yet known**.
 
+### 入口条件
+
 **Skill boundary:**
 - If you have a **specific symptom, stack trace, or error message** and need to trace its root cause through the codebase, load `/gxpm-debug-issue` first.
 - If you need to **understand code structure** without debugging a specific bug, load `/gxpm-explore-codebase` first.
 - If you are **refactoring** and discover a bug mid-refactor, switch to `/gxpm-diagnose` or `/gxpm-debug-issue` instead of continuing.
 
-Skip phases only when explicitly justified.
+- **触发时机**：Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
+- **纪律**：Skip phases only when explicitly justified.
+
+### 可操作流程
+
+{{REFERENCE:phases}}
+
+### 红旗清单 / 反模式
 
 {{REFERENCE:feedback-loop}}
 
-{{REFERENCE:phases}}
+### 验证清单 / 出口条件
+
+- 完成 {{REFERENCE:phases}} 中定义的全部阶段。
+- 按 {{REFERENCE:feedback-loop}} 的约束完成收敛。

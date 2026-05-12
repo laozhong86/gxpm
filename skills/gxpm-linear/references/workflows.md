@@ -4,11 +4,11 @@
 
 `linear issue view` 只返回标题、描述、状态和元数据。**评论是独立 API 调用。**
 
-**规则**：接手 issue 时必须同时运行：
+**规则**：接手 issue 时必须运行：
 ```bash
 linear issue view GXG-123 --json
-linear issue comment list GXG-123 --json
 ```
+Comments require a GraphQL query via `linear api` (CLI v3.2.0 removed `issue comment list`).
 
 评论中可能包含 scope 定义、设计决策、PoC 结果、review 反馈、跨 agent 交接上下文。仅在批量 list/triage 时可跳过评论阅读。
 

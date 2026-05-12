@@ -179,14 +179,14 @@ export function runDoctor(input: RunDoctorInput = {}): DoctorReport {
     checks.push({ name: "config_validity", status: "warn", message: configIssues.join("; ") });
   }
 
-  // --- Linear connectivity (if configured) ---
+  // --- Linear CLI availability (if configured) ---
   const provider = getConfigValue({ root: cwd, home, key: "sync.provider" });
   if (provider.value === "linear") {
     const linearOk = checkLinearQuick();
     checks.push({
-      name: "linear_connectivity",
+      name: "linear_cli",
       status: linearOk ? "ok" : "warn",
-      message: linearOk ? "Linear API reachable" : "Linear API not reachable (check LINEAR_API_KEY)",
+      message: linearOk ? "Linear CLI available" : "Linear CLI not found (install with `npm install -g @linear/cli` or equivalent)",
     });
   }
 
@@ -359,12 +359,11 @@ function checkConfigValidity(cwd: string, home: string): string[] {
 
 function checkLinearQuick(): boolean {
   try {
-    const token = process.env.LINEAR_API_KEY || process.env.LINEAR_API_TOKEN;
-    if (!token) return false;
-    execSync(
-      `curl -sf -m 5 -H "Authorization: ${token}" -H "Content-Type: application/json" -X POST -d '{"query":"{ viewer { id } }"}' https://api.linear.app/graphql`,
-      { stdio: "ignore" }
-    );
+    execSync("linear --version", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { ...process.env, PATH: process.env.PATH },
+    });
     return true;
   } catch {
     return false;
