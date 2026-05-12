@@ -5,6 +5,8 @@ description: Plan and execute safe refactoring using dependency analysis. Use wh
 
 ## gxpm-refactor-safely
 
+### 入口条件
+
 **Skill boundary:**
 - If you do **not yet understand** the target code, load `/gxpm-explore-codebase` first.
 - If you discover a **bug** during refactoring, stop refactoring and load `/gxpm-diagnose` or `/gxpm-debug-issue`.
@@ -12,7 +14,7 @@ description: Plan and execute safe refactoring using dependency analysis. Use wh
 
 Use GitNexus to plan and execute refactoring with confidence. When simplifying code, follow the scan-checklist-incremental-verify loop below.
 
-### Steps
+### 可操作流程
 
 1. **Understand** — Use `impact` with `direction: "upstream"`, `query`, and `context` to understand the target code, its callers, edge cases, and test coverage before touching it.
 2. **Scan for simplification opportunities** (checklist):
@@ -29,14 +31,15 @@ Use GitNexus to plan and execute refactoring with confidence. When simplifying c
    - Only proceed to the next simplification when the current one is green.
 5. **After all changes**, run `detect_changes` to verify the refactoring impact, ensure the build succeeds, and keep the diff clean.
 
-### Safety Checks
+### 红旗清单 / 反模式
 
+**Safety Checks**
 - Always preview before applying (rename mode gives you an edit list).
 - Check `impact` before major refactors.
 - Use `detect_changes` to ensure affected flows are expected.
 - Use `cypher` only for custom graph questions that `query`/`context` cannot answer.
 
-### Protected Blocks
+**Protected Blocks**
 
 Some code must not be simplified even if it looks complex. Respect block-level protection annotations in any language:
 
@@ -50,7 +53,10 @@ result[1] = buf[1] ^ key[1];
 
 Supported comment styles: `//`, `/* */`, `#`, `<!-- -->`. The `reason` field is optional but recommended. Never modify, rename, or delete code inside a protected block.
 
-## Token Efficiency Rules
 - Start with the narrowest GitNexus query or impact target, then expand.
 - Prefer dry-run previews for coordinated renames.
+
+### 验证清单 / 出口条件
+
+- run `detect_changes` to verify the refactoring impact, ensure the build succeeds, and keep the diff clean.
 - Target: complete any review/debug/refactor task in ≤5 graph tool calls.

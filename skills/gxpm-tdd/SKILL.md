@@ -15,7 +15,20 @@ description: Test-driven development with red-green-refactor loops via vertical 
 
 **Violating the letter of the rules is violating the spirit of the rules.**
 
-## The Iron Law
+## 入口条件
+
+在以下场景触发本 skill：
+
+- 用户要求使用 TDD 构建功能或修复 bug
+- 用户提到 "red-green-refactor"
+- 用户需要集成测试
+- 用户要求测试优先开发
+
+在 gxpm 工作流中，`implement` 阶段应将首个子任务视为 **tracer bullet**，从该任务开始 TDD 循环。
+
+## 可操作流程
+
+### The Iron Law
 
 ```
 NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
@@ -33,7 +46,7 @@ Implement fresh from tests. Period.
 
 See [references/red-green-refactor.md](references/red-green-refactor.md) for the full red-green-refactor cycle.
 
-## Anti-Pattern: Horizontal Slices
+### 正确做法：垂直切片（Vertical Slices）
 
 **DO NOT write all tests first, then all implementation.** This is "horizontal slicing" — treating RED as "write all tests" and GREEN as "write all code."
 
@@ -58,23 +71,28 @@ RIGHT (vertical):
 
 See [references/workflow.md](references/workflow.md) for the full TDD workflow.
 
-## Common Rationalizations
+### 卡壳时的应对策略
 
-| Excuse | Reality |
-|--------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
-| "I'll test after" | Tests passing immediately prove nothing. |
-| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
-| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
-| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
-| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
-| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
-| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
-| "Existing code has no tests" | You're improving it. Add tests for existing code. |
+| Problem | Solution |
+|---------|----------|
+| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
+| Test too complicated | Design too complicated. Simplify interface. |
+| Must mock everything | Code too coupled. Use dependency injection. |
+| Test setup huge | Extract helpers. Still complex? Simplify design. |
 
-## Red Flags — STOP and Start Over
+### 调试集成
+
+Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
+
+Never fix bugs without a test.
+
+### 添加 mock 或测试工具时
+
+Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
+
+## 红旗清单 / 反模式
+
+### 必须立即停止并重新开始的情况
 
 - Code before test
 - Test after implementation
@@ -92,26 +110,13 @@ See [references/workflow.md](references/workflow.md) for the full TDD workflow.
 
 **All of these mean: Delete code. Start over with TDD.**
 
-## When Stuck
+### 水平切片（Horizontal Slices）
 
-| Problem | Solution |
-|---------|----------|
-| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
-| Test too complicated | Design too complicated. Simplify interface. |
-| Must mock everything | Code too coupled. Use dependency injection. |
-| Test setup huge | Extract helpers. Still complex? Simplify design. |
+一次性写完全部测试再写全部实现是水平切片，会产生脆弱且脱离实际的测试。必须按垂直切片逐个 RED→GREEN→REFACTOR 推进。
 
-## Debugging Integration
+## 验证清单 / 出口条件
 
-Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
-
-Never fix bugs without a test.
-
-## Verification
-
-Test verification is covered by `/gxpm-verify`. After TDD cycles complete, load `/gxpm-verify` to run the full verification pipeline and collect evidence for `local-verify`.
-
-## Checklist Per Cycle
+每个 TDD 循环完成后检查：
 
 ```
 [ ] Test describes behavior, not implementation
@@ -123,7 +128,7 @@ Test verification is covered by `/gxpm-verify`. After TDD cycles complete, load 
 [ ] Verify GREEN executed (test passes + all others pass + output clean)
 ```
 
-## Final Rule
+### Final Rule
 
 ```
 Production code → test exists and failed first
@@ -132,13 +137,27 @@ Otherwise → not TDD
 
 No exceptions without your human partner's permission.
 
-## gxpm integration
+### 验证与证据
 
-- During `implement`, treat the first sub-task as the **tracer bullet**.
-- Use `gxpm run event <issue-id> <run-id> --type test-passed` to record test milestones.
-- After TDD cycles, load `/gxpm-verify` to execute the full verification pipeline and produce `local-verify` evidence.
-- If a bug is found during TDD, write a failing test reproducing it first. Switch to `/gxpm-diagnose` skill only if root cause is unclear.
+单个 TDD 循环的测试验证由测试运行器覆盖。全部 TDD 循环完成后，加载 `/gxpm-verify` 运行完整验证流水线并收集 `local-verify` 证据。
 
-## When adding mocks or test utilities
+在 gxpm 工作流中：
+- 使用 `gxpm run event <issue-id> <run-id> --type test-passed` 记录测试里程碑。
+- TDD 循环完成后，加载 `/gxpm-verify` 执行完整验证流水线并产出 `local-verify` 证据。
+- 如果在 TDD 过程中发现 bug，先写重现该 bug 的 failing test。仅当根因不明时才切换到 `/gxpm-diagnose` skill。
 
-Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
+## 常见说辞表
+
+| Excuse | Reality |
+|--------|---------|
+| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+| "I'll test after" | Tests passing immediately prove nothing. |
+| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
+| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
+| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
+| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
+| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
+| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
+| "Existing code has no tests" | You're improving it. Add tests for existing code. |

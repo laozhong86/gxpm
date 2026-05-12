@@ -10,6 +10,7 @@ import { validateAllConfigs } from "./host-config";
 import { validateSkillNaming } from "./skill-naming-check";
 import { validateVersionTruth } from "./version";
 import { validateSkillsLock } from "./skills-lock-check";
+import { validateSkillStructure, formatSkillStructureErrors } from "./skill-structure-check";
 
 // Default to the gxpm repo itself (parent of scripts/) so the check is
 // meaningful regardless of the cwd the CLI was invoked from.
@@ -59,6 +60,8 @@ export function runScaffoldCheck(options: RunScaffoldCheckOptions = {}) {
   const skillNamingErrors = validateSkillNaming({ root });
   const skillsLockErrors = validateSkillsLock({ root });
   const layeredWorkflowErrors = validateLayeredWorkflowContracts();
+  const skillStructureViolations = validateSkillStructure(root);
+  const { errors: skillStructureErrors, warnings: skillStructureWarnings } = formatSkillStructureErrors(skillStructureViolations);
   const errors = [
     ...hostErrors.map((error) => `host config: ${error}`),
     ...governanceErrors.map((error) => `governance: ${error}`),
@@ -66,7 +69,12 @@ export function runScaffoldCheck(options: RunScaffoldCheckOptions = {}) {
     ...skillNamingErrors.map((error) => `skill-naming: ${error}`),
     ...skillsLockErrors.map((error) => `skills-lock: ${error}`),
     ...layeredWorkflowErrors.map((error) => `layered-workflow: ${error}`),
+    ...skillStructureErrors,
   ];
+
+  if (skillStructureWarnings.length > 0) {
+    console.warn(skillStructureWarnings.join("\n"));
+  }
 
   if (errors.length > 0) {
     throw new Error(errors.join("\n"));
