@@ -24,6 +24,17 @@ description: 需求收敛与事实扫描入口 — 映射 gxpm triage → plan
 - `implementation-plan` — 步骤、验收标准、风险
 - （可选）`01-spec.md` — 人类可读规格摘要
 
+## 产物链（Markdown）
+JSON artifact 会自动同步到 `.gxpm/issues/<id>/docs/`：
+```
+docs/
+├── 01-spec.md          ← acceptance-contract
+├── 03-plan.md          ← implementation-plan
+├── 04-review.md        ← self-review
+└── 05-ship.md          ← ship-readiness / pr-check / verify-findings / qa-findings
+```
+同步命令：`bun run sync:markdown <issue-id>`
+
 ## 通过条件
 - [ ] issue 已创建（`gxpm issue create --auto-id [--type meta]`）
 - [ ] `acceptance-contract` 已写入

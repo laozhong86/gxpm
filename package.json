@@ -16,6 +16,7 @@
     "check": "bun run scripts/gxpm-check.ts",
     "dev:skill": "bun run scripts/dev-skill.ts",
     "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
+    "sync:markdown": "bun run scripts/sync-markdown-artifacts.ts",
     "test": "bun test"
   },
   "devDependencies": {
