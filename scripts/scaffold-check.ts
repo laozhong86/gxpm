@@ -9,6 +9,7 @@ import { validateGovernanceDocs } from "./governance-check";
 import { validateAllConfigs } from "./host-config";
 import { validateSkillNaming } from "./skill-naming-check";
 import { validateVersionTruth } from "./version";
+import { validateSkillsLock } from "./skills-lock-check";
 
 // Default to the gxpm repo itself (parent of scripts/) so the check is
 // meaningful regardless of the cwd the CLI was invoked from.
@@ -56,12 +57,14 @@ export function runScaffoldCheck(options: RunScaffoldCheckOptions = {}) {
   const governanceErrors = validateGovernanceDocs({ root });
   const versionErrors = validateVersionTruth({ root });
   const skillNamingErrors = validateSkillNaming({ root });
+  const skillsLockErrors = validateSkillsLock({ root });
   const layeredWorkflowErrors = validateLayeredWorkflowContracts();
   const errors = [
     ...hostErrors.map((error) => `host config: ${error}`),
     ...governanceErrors.map((error) => `governance: ${error}`),
     ...versionErrors.map((error) => `version: ${error}`),
     ...skillNamingErrors.map((error) => `skill-naming: ${error}`),
+    ...skillsLockErrors.map((error) => `skills-lock: ${error}`),
     ...layeredWorkflowErrors.map((error) => `layered-workflow: ${error}`),
   ];
 
