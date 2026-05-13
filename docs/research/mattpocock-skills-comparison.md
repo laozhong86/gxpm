@@ -241,7 +241,7 @@
 | **定位** | 教用户如何写新 skill | skill 由项目维护，通过 `gen:skill-docs` 生成 |
 | **结构** | SKILL.md + REFERENCE.md + EXAMPLES.md + scripts/ | SKILL.md.tmpl → SKILL.md（生成式） |
 | **质量检查** | 描述必须含触发词、SKILL.md <100 行、无时间敏感信息 | AGENTS.md 约束 + `bun run check` |
-| **范围** | 任意 agent skill | 当前只有 gxpm 主 skill + 4 个 graph skill |
+| **范围** | 任意 agent skill | gxpm 主 skill + GitNexus code-intelligence skills |
 
 **差距**：
 - gxpm 的 skill 是 **项目维护的**，用户（agent）不直接写 skill。Matt 的 write-a-skill 是 **用户自助扩展**。
@@ -310,7 +310,7 @@
 | **Worktree 隔离 + Claim 机制** | Matt 没有代码隔离和并发执行管理 |
 | **Native wiki engine** | Matt 依赖外部知识管理，gxpm 有 `gxpm wiki` |
 | **GitNexus 集成** | Matt 的 skill 是文本驱动，gxpm 有图谱驱动的导航 |
-| **Token 效率强制约束** | gxpm 的 graph skill 有 ≤5 调用 / ≤800 tokens 规则 |
+| **Token 效率强制约束** | gxpm 的 GitNexus code-intelligence skill 有 ≤5 调用 / ≤800 tokens 规则 |
 | **Linear 协作前门** | Matt 只支持 GitHub/GitLab，gxpm 以 Linear 为协作界面 |
 | **Host 适配层**（Codex/Claude 双宿主） | Matt 的 skill 主要面向 Claude Code |
 | **Git hook 物理 gate** | Matt 只有 Claude Code 的 PreToolUse hook，gxpm 有 git-native hook |

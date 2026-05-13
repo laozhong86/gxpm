@@ -143,7 +143,7 @@ graph TB
     GIT_HOOKS --> |"calls"| GATE
     CODEX_HOOKS --> |"inject context"| STATE
 
-    %% Graph skills now use GitNexus (external tool)
+    %% Code-intelligence skills now use GitNexus (external tool)
     SKILL_ORPHAN -.-> |"uses MCP"| GITNEXUS
 ```
 
@@ -154,7 +154,7 @@ graph TB
 ### 2.1 Skill 层是"单点 + 孤儿"结构
 
 - **主 skill**：`skills/gxpm/SKILL.md.tmpl` → `SKILL.md`（673 行，所有能力塞在一起）
-- **孤儿 skill**：`.claude/skills/*.md`（4 个 graph skill，手写、不走 gen:skill-docs、不被 install-skill 管理）
+- **代码智能 skill**：`skills/gxpm-*`（GitNexus 驱动，随项目维护；旧 Claude-only 图谱 skill 已归档）
 - **生成管道**：`discoverTemplates()` 虽支持递归发现，但 `install-skill.ts` 和 `dev-skill.ts` 硬编码只处理 `skills/gxpm/SKILL.md.tmpl`
 
 ### 2.2 Core 是按 Phase 组织的，但 Skill 是平铺的
@@ -166,7 +166,7 @@ graph TB
 
 - `hosts/codex.ts` 定义了 `globalRoot: ".codex/skills/gxpm"`
 - `hosts/claude.ts` 定义了 `globalRoot: ".claude/skills/gxpm"`
-- 但 4 个 graph skill 只在 `.claude/skills/` 存在，Codex 宿主看不到它们
+- GitNexus code-intelligence skill 已收敛到 `skills/gxpm-*`，不再依赖 Claude-only 的旧图谱路径
 
 ### 2.4 外部系统集成是"可选依赖"模式
 

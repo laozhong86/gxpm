@@ -4,7 +4,7 @@ import { dirname, join, relative } from "node:path";
 export interface SkillTemplate {
   tmpl: string;
   output: string;
-  /** Skill name derived from directory path, e.g. "gxpm" or "graph/debug-issue" */
+  /** Skill name derived from directory path, e.g. "gxpm" or "gxpm-debug-issue" */
   name: string;
   /** Relative paths to reference markdown files under references/ */
   references?: string[];

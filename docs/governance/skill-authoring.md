@@ -79,6 +79,9 @@ bun run check
 
 This runs `skill-structure-check.ts` which validates every `SKILL.md` under `skills/`.
 
-## Examples
+| Category | Purpose | Examples |
+|----------|---------|----------|
+| `gxpm` | Core runtime skill | `gxpm` |
+| `gxpm-*` | GitNexus-backed code intelligence skills | `gxpm-debug-issue`, `gxpm-explore-codebase` |
+| *(direct)* | Engineering disciplines | `diagnose`, `grill`, `tdd`, `architecture`, `planning`, `triage` |
 
-See `skills/gxpm-tdd/SKILL.md` and `skills/gxpm-verify/SKILL.md` for well-structured examples.
