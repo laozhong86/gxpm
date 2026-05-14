@@ -46,6 +46,23 @@ Implement fresh from tests. Period.
 
 See [references/red-green-refactor.md](references/red-green-refactor.md) for the full red-green-refactor cycle.
 
+### The Specify-First Iron Law
+
+**Before writing ANY test logic, the test scenario MUST already exist in `.gxpm/issues/<id>/artifacts/behavior-spec.json` with `confirmedAt` set.**
+
+If you find yourself writing a test without a corresponding entry in `behavior-spec.json`:
+
+- STOP
+- Delete the test code you wrote
+- Return to specify phase: `gxpm phase rewind <id> --to specify --reason "missing scenario"`
+- Add the scenario to `behavior-spec.json`
+- Re-confirm with `gxpm specify confirm <id>`
+- Then resume TDD
+
+**Why:** BDD describes WHAT behavior we want; TDD enforces THAT behavior incrementally. Jumping to TDD without a confirmed BDD spec means the agent is inventing test cases — the precise failure mode this discipline prevents.
+
+**The test stub file at `scenario.stubPath` is your contract.** Open it; the Gherkin comment block at the top is the only legitimate source of assertions you may translate into code.
+
 ### 正确做法：垂直切片（Vertical Slices）
 
 **DO NOT write all tests first, then all implementation.** This is "horizontal slicing" — treating RED as "write all tests" and GREEN as "write all code."
@@ -107,6 +124,8 @@ Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding 
 - "Already spent X hours, deleting is wasteful"
 - "TDD is dogmatic, I'm being pragmatic"
 - "This is different because..."
+- Writing a test without a matching scenario in `behavior-spec.json`
+- Adding assertions that do not appear in the scenario's `then` clauses
 
 **All of these mean: Delete code. Start over with TDD.**
 
