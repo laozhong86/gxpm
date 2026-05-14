@@ -85,6 +85,65 @@ describe("specify-gate backward compatibility", () => {
     expect(SPECIFY_PHASE_CUTOFF).toBe("2026-05-14T00:00:00Z");
   });
 
+  it("emits gate.blocked with legacyBypass:true on file-missing legacy path", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-legacy-event-missing-"));
+    createIssueState({ root, issueId: "G-LEG-EM", issueType: "feature" });
+    const stateFile = join(root, ".gxpm", "issues", "G-LEG-EM", "state.json");
+    const raw = JSON.parse(readFileSync(stateFile, "utf8"));
+    raw.currentPhase = "specify";
+    raw.phaseHistory = [
+      { phase: "triage", enteredAt: "2025-12-01T00:00:00Z", fromPhase: null },
+      { phase: "plan", enteredAt: "2025-12-02T00:00:00Z", fromPhase: "triage" },
+      { phase: "dispatch", enteredAt: "2025-12-03T00:00:00Z", fromPhase: "plan" },
+      { phase: "implement", enteredAt: "2025-12-04T00:00:00Z", fromPhase: "dispatch" },
+      { phase: "specify", enteredAt: "2026-05-14T00:00:00Z", fromPhase: "dispatch" },
+    ];
+    writeFileSync(stateFile, JSON.stringify(raw, null, 2));
+    transitionIssuePhase({ root, issueId: "G-LEG-EM", nextPhase: "implement" });
+    const events = readFileSync(
+      join(root, ".gxpm", "issues", "G-LEG-EM", "events.jsonl"),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const gateEvent = events.find(
+      (e) => e.type === "gate.blocked" && e.payload?.legacyBypass === true,
+    );
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent.payload.missingArtifact).toBe("behavior-spec");
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("emits gate.blocked with legacyBypass:true on file-exists+confirmedAt-null legacy path", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-legacy-event-unconfirmed-"));
+    createIssueState({ root, issueId: "G-LEG-EU", issueType: "feature" });
+    const stateFile = join(root, ".gxpm", "issues", "G-LEG-EU", "state.json");
+    const raw = JSON.parse(readFileSync(stateFile, "utf8"));
+    raw.currentPhase = "specify";
+    raw.phaseHistory = [
+      { phase: "triage", enteredAt: "2025-12-01T00:00:00Z", fromPhase: null },
+      { phase: "implement", enteredAt: "2025-12-04T00:00:00Z", fromPhase: "dispatch" },
+      { phase: "specify", enteredAt: "2026-05-14T00:00:00Z", fromPhase: "dispatch" },
+    ];
+    writeFileSync(stateFile, JSON.stringify(raw, null, 2));
+    writeBehaviorSpec(root, "G-LEG-EU", null);
+    transitionIssuePhase({ root, issueId: "G-LEG-EU", nextPhase: "implement" });
+    const events = readFileSync(
+      join(root, ".gxpm", "issues", "G-LEG-EU", "events.jsonl"),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const gateEvent = events.find(
+      (e) => e.type === "gate.blocked" && e.payload?.legacyBypass === true,
+    );
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent.payload.missingArtifact).toBe("behavior-spec.confirmedAt");
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it("bypasses specify gate when implement was entered before cutoff", () => {
     // Setup: an issue that historically transitioned dispatch->implement directly
     // (before specify phase existed). Now we artificially force its current phase

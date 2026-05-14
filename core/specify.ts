@@ -134,7 +134,7 @@ export function confirmSpecify(input: ConfirmInput) {
     const file = scn.stubPath.split(":")[0];
     const abs = join(root, file);
     if (!existsSync(abs)) {
-      throw new Error(`Stub file missing: ${scn.stubPath} (scenario ${scn.id})`);
+      throw new Error(`Stub file missing: ${file} (scenario ${scn.id})`);
     }
   }
 
@@ -150,11 +150,24 @@ export function confirmSpecify(input: ConfirmInput) {
 
 export function reviseSpecify(input: { root?: string; issueId: string }) {
   const root = input.root ?? process.cwd();
-  const { stored } = readStoredSpec(root, input.issueId);
+  // Revise must be schema-tolerant: its purpose is to restore a confirmable state.
+  // We deliberately skip BehaviorSpecSchema.parse() so a spec that was edited into
+  // an inconsistent shape (e.g. confirmedAt set but confirmedBy null, or partial
+  // field types) can still be reset to draft. The next confirmSpecify call will
+  // re-validate against the full schema.
+  const path = specArtifactPath(root, input.issueId);
+  if (!existsSync(path)) {
+    throw new Error(
+      `behavior-spec.json not found for ${input.issueId}; run \`gxpm specify init ${input.issueId}\` first`,
+    );
+  }
+  const stored = JSON.parse(readFileSync(path, "utf8"));
+  if (!stored?.payload || typeof stored.payload !== "object") {
+    throw new Error(
+      `behavior-spec.json is malformed (missing payload) for ${input.issueId}; cannot revise`,
+    );
+  }
   stored.payload.confirmedAt = null;
   stored.payload.confirmedBy = null;
-  writeFileSync(
-    specArtifactPath(root, input.issueId),
-    `${JSON.stringify(stored, null, 2)}\n`,
-  );
+  writeFileSync(path, `${JSON.stringify(stored, null, 2)}\n`);
 }

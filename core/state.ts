@@ -720,30 +720,48 @@ function assertArtifactGate(input: {
       const legacyEntry = state.phaseHistory?.find((h) => h.phase === "implement");
       const isLegacy =
         legacyEntry !== undefined && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF;
-      if (!isLegacy) {
-        const raw = JSON.parse(readFileSync(requiredArtifactPath, "utf8"));
-        const confirmedAt = raw?.payload?.confirmedAt;
-        if (!confirmedAt) {
-          const now = new Date().toISOString();
-          appendIssueEvent({
-            issueDir: input.issueDir,
-            event: {
-              schemaVersion: 1,
-              type: "gate.blocked",
-              issueId: input.issueId,
-              timestamp: now,
-              sessionId: resolveSessionId(),
-              payload: {
-                fromPhase: input.fromPhase,
-                toPhase: input.nextPhase,
-                missingArtifact: "behavior-spec.confirmedAt",
-              },
+      if (isLegacy) {
+        const now = new Date().toISOString();
+        appendIssueEvent({
+          issueDir: input.issueDir,
+          event: {
+            schemaVersion: 1,
+            type: "gate.blocked",
+            issueId: input.issueId,
+            timestamp: now,
+            sessionId: resolveSessionId(),
+            payload: {
+              fromPhase: input.fromPhase,
+              toPhase: input.nextPhase,
+              missingArtifact: "behavior-spec.confirmedAt",
+              legacyBypass: true,
             },
-          });
-          throw new Error(
-            `behavior-spec exists but confirmedAt is null; run \`gxpm specify confirm ${input.issueId}\` to confirm`,
-          );
-        }
+          },
+        });
+        return;
+      }
+      const raw = JSON.parse(readFileSync(requiredArtifactPath, "utf8"));
+      const confirmedAt = raw?.payload?.confirmedAt;
+      if (!confirmedAt) {
+        const now = new Date().toISOString();
+        appendIssueEvent({
+          issueDir: input.issueDir,
+          event: {
+            schemaVersion: 1,
+            type: "gate.blocked",
+            issueId: input.issueId,
+            timestamp: now,
+            sessionId: resolveSessionId(),
+            payload: {
+              fromPhase: input.fromPhase,
+              toPhase: input.nextPhase,
+              missingArtifact: "behavior-spec.confirmedAt",
+            },
+          },
+        });
+        throw new Error(
+          `behavior-spec exists but confirmedAt is null; run \`gxpm specify confirm ${input.issueId}\` to confirm`,
+        );
       }
     }
 
@@ -767,6 +785,15 @@ function assertArtifactGate(input: {
   }
 
   const now = new Date().toISOString();
+  const legacyEntry =
+    requiredArtifact === "behavior-spec"
+      ? readIssueState({ root: derivedRoot, issueId: input.issueId }).phaseHistory?.find(
+          (h) => h.phase === "implement",
+        )
+      : undefined;
+  const isLegacyBypass =
+    legacyEntry !== undefined && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF;
+
   appendIssueEvent({
     issueDir: input.issueDir,
     event: {
@@ -779,20 +806,13 @@ function assertArtifactGate(input: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
         missingArtifact: requiredArtifact,
+        ...(isLegacyBypass ? { legacyBypass: true } : {}),
       },
     },
   });
 
-  // Task 4.5: legacy bypass — if this issue previously entered implement
-  // before the specify-gate cutoff, skip the gate entirely. We still emit
-  // the gate.blocked event above so the attempt is recorded, but we return
-  // rather than throwing so in-flight legacy issues are not blocked.
-  if (requiredArtifact === "behavior-spec") {
-    const state = readIssueState({ root: derivedRoot, issueId: input.issueId });
-    const legacyEntry = state.phaseHistory?.find((h) => h.phase === "implement");
-    if (legacyEntry && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF) {
-      return; // legacy bypass
-    }
+  if (isLegacyBypass) {
+    return; // legacy bypass: event recorded with legacyBypass: true, no throw
   }
 
   throw new Error(

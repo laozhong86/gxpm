@@ -182,6 +182,21 @@ describe("confirmSpecify", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it("uses split file path (no :testName suffix) in stub-missing error", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-confirm-split-"));
+    createIssueState({ root, issueId: "G-CF-SPLIT", issueType: "feature" });
+    seedConfirmableSpec(root, "G-CF-SPLIT", "test/missing/file.test.ts:test_xyz");
+    try {
+      confirmSpecify({ root, issueId: "G-CF-SPLIT", confirmedBy: "a@b" });
+      throw new Error("should have thrown");
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain("test/missing/file.test.ts");
+      expect(msg).not.toContain(":test_xyz");
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it("rejects confirm when a <placeholder> sentinel remains in any field", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-confirm-ph-"));
     createIssueState({ root, issueId: "G-CF3", issueType: "feature" });
@@ -222,6 +237,56 @@ describe("reviseSpecify", () => {
     reviseSpecify({ root, issueId: "G-RV1" });
 
     const after = JSON.parse(readFileSync(artPath, "utf8"));
+    expect(after.payload.confirmedAt).toBeNull();
+    expect(after.payload.confirmedBy).toBeNull();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("clears confirmation even when payload violates BehaviorSpecSchema", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-revise-invalid-"));
+    createIssueState({ root, issueId: "G-RV-INV", issueType: "feature" });
+    const artDir = join(root, ".gxpm", "issues", "G-RV-INV", "artifacts");
+    mkdirSync(artDir, { recursive: true });
+    // Inconsistent: confirmedAt set but confirmedBy null violates the refine rule
+    writeFileSync(
+      join(artDir, "behavior-spec.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          issueId: "G-RV-INV",
+          type: "behavior-spec",
+          writtenAt: "2026-05-14T00:00:00Z",
+          payload: {
+            $schema: "behavior-spec.v1",
+            issueId: "G-RV-INV",
+            createdAt: "2026-05-14T00:00:00.000Z",
+            createdBy: "x",
+            confirmedAt: "2026-05-14T02:00:00.000Z",
+            confirmedBy: null, // inconsistent — refine rule would reject
+            feature: { title: "T", asA: "u", iWant: "x", soThat: "y" },
+            scenarios: [
+              {
+                id: "scn-01",
+                name: "n",
+                given: ["g"],
+                when: "w",
+                then: ["t"],
+                examples: [],
+                stubPath: "test/foo.test.ts",
+              },
+            ],
+            guidelinesRef: "docs/governance/gherkin-style.md@v1",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    // revise must succeed despite the inconsistent payload
+    reviseSpecify({ root, issueId: "G-RV-INV" });
+    const after = JSON.parse(
+      readFileSync(join(artDir, "behavior-spec.json"), "utf8"),
+    );
     expect(after.payload.confirmedAt).toBeNull();
     expect(after.payload.confirmedBy).toBeNull();
     rmSync(root, { recursive: true, force: true });
