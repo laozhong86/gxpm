@@ -54,7 +54,7 @@ If you find yourself writing a test without a corresponding entry in `behavior-s
 
 - STOP
 - Delete the test code you wrote
-- Return to specify phase by manually editing `.gxpm/issues/<id>/state.json` to set `currentPhase: "specify"` and appending a `phaseHistory` entry (`gxpm phase rewind` is deferred to follow-up; until then, treat this as a controlled manual rollback and record the reason in `events.jsonl`)
+- Return to specify phase: `gxpm phase rewind <id> --to specify --reason "missing scenario"`
 - Run `gxpm specify revise <id>` to clear `confirmedAt`
 - Add the scenario to `behavior-spec.json`
 - Re-confirm with `gxpm specify confirm <id>`

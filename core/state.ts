@@ -117,6 +117,7 @@ export interface StateEvent {
   type:
     | "issue.created"
     | "phase.transitioned"
+    | "phase.rewound"
     | "artifact.written"
     | "artifact.reconciled"
     | "checkpoint.written"
@@ -439,7 +440,7 @@ function assertValidIssueId(issueId: string) {
   }
 }
 
-function assertValidPhase(value: string): GxpmPhase {
+export function assertValidPhase(value: string): GxpmPhase {
   if (!isGxpmPhase(value)) {
     throw new Error(`Invalid phase: ${value}`);
   }
