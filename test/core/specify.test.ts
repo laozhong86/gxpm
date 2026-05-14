@@ -39,4 +39,29 @@ describe("BehaviorSpecSchema", () => {
     };
     expect(() => BehaviorSpecSchema.parse(invalid)).toThrow();
   });
+
+  it("rejects confirmedAt set when confirmedBy is null", () => {
+    const invalid = {
+      $schema: "behavior-spec.v1",
+      issueId: "GXPM-001",
+      createdAt: "2026-05-14T00:00:00.000Z",
+      createdBy: "specifier@test",
+      confirmedAt: "2026-05-14T01:00:00.000Z",
+      confirmedBy: null,
+      feature: { title: "T", asA: "user", iWant: "X", soThat: "Y" },
+      scenarios: [
+        {
+          id: "scn-01",
+          name: "happy",
+          given: ["a"],
+          when: "b",
+          then: ["c"],
+          examples: [],
+          stubPath: "test/foo.test.ts:test_x",
+        },
+      ],
+      guidelinesRef: "docs/governance/gherkin-style.md@v1",
+    };
+    expect(() => BehaviorSpecSchema.parse(invalid)).toThrow(/confirmedAt and confirmedBy/);
+  });
 });
