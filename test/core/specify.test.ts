@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BehaviorSpecSchema, type BehaviorSpec } from "../../core/contracts/behavior-spec.schema";
+import { createIssueState } from "../../core/state";
+import { initializeSpecify } from "../../core/specify";
 
 describe("BehaviorSpecSchema", () => {
   it("accepts a minimal valid spec", () => {
@@ -63,5 +68,37 @@ describe("BehaviorSpecSchema", () => {
       guidelinesRef: "docs/governance/gherkin-style.md@v1",
     };
     expect(() => BehaviorSpecSchema.parse(invalid)).toThrow(/confirmedAt and confirmedBy/);
+  });
+});
+
+describe("initializeSpecify", () => {
+  it("writes a draft behavior-spec.json with confirmedAt=null", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-specify-"));
+    createIssueState({ root, issueId: "G-3", issueType: "feature" });
+    // Force phase to specify by direct state file mutation
+    const stateFile = join(root, ".gxpm", "issues", "G-3", "state.json");
+    const raw = JSON.parse(readFileSync(stateFile, "utf8"));
+    raw.currentPhase = "specify";
+    writeFileSync(stateFile, JSON.stringify(raw, null, 2));
+
+    const record = initializeSpecify({ root, issueId: "G-3" });
+    expect(record.type).toBe("behavior-spec");
+
+    const artPath = join(root, ".gxpm", "issues", "G-3", "artifacts", "behavior-spec.json");
+    const written = JSON.parse(readFileSync(artPath, "utf8"));
+    expect(written.payload.$schema).toBe("behavior-spec.v1");
+    expect(written.payload.confirmedAt).toBeNull();
+    expect(written.payload.confirmedBy).toBeNull();
+    expect(written.payload.scenarios).toHaveLength(1);
+    expect(written.payload.scenarios[0].id).toBe("scn-01");
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("throws when not in specify phase", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-specify-wrong-"));
+    createIssueState({ root, issueId: "G-4", issueType: "feature" });
+    // Default phase after createIssueState is "triage"
+    expect(() => initializeSpecify({ root, issueId: "G-4" })).toThrow(/specify phase/);
+    rmSync(root, { recursive: true, force: true });
   });
 });
