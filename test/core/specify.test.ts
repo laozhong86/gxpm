@@ -101,4 +101,20 @@ describe("initializeSpecify", () => {
     expect(() => initializeSpecify({ root, issueId: "G-4" })).toThrow(/specify phase/);
     rmSync(root, { recursive: true, force: true });
   });
+
+  it("produces a draft that passes BehaviorSpecSchema (so downstream parse won't throw)", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-init-specify-schema-"));
+    createIssueState({ root, issueId: "G-5", issueType: "feature" });
+    const stateFile = join(root, ".gxpm", "issues", "G-5", "state.json");
+    const raw = JSON.parse(readFileSync(stateFile, "utf8"));
+    raw.currentPhase = "specify";
+    writeFileSync(stateFile, JSON.stringify(raw, null, 2));
+
+    initializeSpecify({ root, issueId: "G-5" });
+
+    const artPath = join(root, ".gxpm", "issues", "G-5", "artifacts", "behavior-spec.json");
+    const stored = JSON.parse(readFileSync(artPath, "utf8"));
+    expect(() => BehaviorSpecSchema.parse(stored.payload)).not.toThrow();
+    rmSync(root, { recursive: true, force: true });
+  });
 });
