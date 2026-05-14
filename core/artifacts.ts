@@ -18,6 +18,7 @@ export const ARTIFACT_TYPES = [
   "acceptance-contract",
   "implementation-plan",
   "dispatch-handoff",
+  "behavior-spec",
   "wiki-context",
   "local-verify",
   "acceptance-check",
