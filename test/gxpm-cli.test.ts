@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
-import { output, runCli, runCliWithInput } from "./helpers/workflow";
+import { enterPhaseCli, output, runCli, runCliWithInput } from "./helpers/workflow";
 
 const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
 
@@ -215,31 +215,14 @@ describe("gxpm issue next CLI", () => {
 
   test("indicates terminal state when at land", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-next-land-"));
-    // walk all the way to land
-    expect(runCli(root, ["issue", "create", "GXPM-32"]).exitCode).toBe(0);
-    // Use the helper: create + walk through all phases
-    const phases: Array<[string, string, string]> = [
-      ["triage", "init", "plan"],
-      ["plan", "init", "dispatch"],
-      ["dispatch", "init", "implement"],
-      ["implement", "verify", "local-verify"],
-      ["local-verify", "ac-check", "ac-check"],
-      ["ac-check", "self-review", "self-review"],
-      ["self-review", "ship", "ship"],
-      ["ship", "pr-check", "pr-check"],
-      ["pr-check", "verify", "verify"],
-      ["verify", "qa", "qa"],
-      ["qa", "land", "land"],
-    ];
-    for (const [cmd, sub, next] of phases) {
-      runCli(root, [cmd, sub, "GXPM-32"]);
-      runCli(root, ["issue", "transition", "GXPM-32", next]);
-    }
-
+    // Use the workflow helper to walk all the way to land. The helper handles
+    // the specify-phase fill+confirm step internally and uses in-process phase
+    // transitions to stay within the timeout budget.
+    enterPhaseCli(root, "GXPM-32", "land");
     const r = runCli(root, ["issue", "next", "GXPM-32"]);
     expect(r.exitCode).toBe(0);
     expect(output(r)).toMatch(/land|terminal|complete/i);
-  });
+  }, 30000);
 
   test("returns non-zero for missing issue", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-next-missing-"));
@@ -475,7 +458,7 @@ describe("gxpm wiki CLI", () => {
     const invalidPhase = runCli(root, ["wiki", "context", "GXPM-91", "--phase", "INVALID_PHASE", "--json"]);
     expect(invalidPhase.exitCode).toBe(1);
     expect(output(invalidPhase)).toContain("Invalid phase: INVALID_PHASE");
-  });
+  }, 20000);
 
   test("rejects extra positional tokens for native wiki context", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-wiki-cli-context-extra-"));

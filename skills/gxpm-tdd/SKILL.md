@@ -108,7 +108,7 @@ Never fix bugs without a test.
 
 Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
 
-## 红旗清单 / 反模式
+## Red Flags / 红旗清单 / 反模式
 
 ### 必须立即停止并重新开始的情况
 
