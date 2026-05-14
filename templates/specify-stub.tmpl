@@ -1,0 +1,22 @@
+// Feature: {{feature.title}}
+//
+//   As a {{feature.asA}}
+//   I want {{feature.iWant}}
+//   So that {{feature.soThat}}
+//
+{{#each scenarios}}
+// Scenario ({{this.id}}): {{this.name}}
+{{#each this.given}}
+//   {{#if @first}}Given{{else}}And{{/if}} {{this}}
+{{/each}}
+//   When {{this.when}}
+{{#each this.then}}
+//   {{#if @first}}Then{{else}}And{{/if}} {{this}}
+{{/each}}
+
+test("{{this.testName}}", () => {
+  // intentionally empty — awaiting user confirmation
+  // implement only after `gxpm specify confirm <issue-id>`
+});
+
+{{/each}}

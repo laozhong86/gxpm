@@ -11,7 +11,7 @@ export const LinearStep: StepBase = {
     if (!config.action || typeof config.action !== "string") {
       errors.push("'action' is required");
     }
-    const valid = ["create", "update", "search", "transition"];
+    const valid = ["create", "update", "list", "transition"];
     if (!valid.includes(config.action as string)) {
       errors.push(`'action' must be one of: ${valid.join(", ")}`);
     }

@@ -14,10 +14,16 @@ import { getResolvedConfigValue } from "./config";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
+// Issues whose phaseHistory shows implement entered before this cutoff are
+// exempt from the specify-gate (introduced on this date). Do NOT change
+// retroactively — that would break legacy issues.
+export const SPECIFY_PHASE_CUTOFF = "2026-05-14T00:00:00Z";
+
 export const GXPM_PHASES = [
   "triage",
   "plan",
   "dispatch",
+  "specify",
   "implement",
   "local-verify",
   "ac-check",
@@ -111,6 +117,7 @@ export interface StateEvent {
   type:
     | "issue.created"
     | "phase.transitioned"
+    | "phase.rewound"
     | "artifact.written"
     | "artifact.reconciled"
     | "checkpoint.written"
@@ -433,7 +440,7 @@ function assertValidIssueId(issueId: string) {
   }
 }
 
-function assertValidPhase(value: string): GxpmPhase {
+export function assertValidPhase(value: string): GxpmPhase {
   if (!isGxpmPhase(value)) {
     throw new Error(`Invalid phase: ${value}`);
   }
@@ -654,7 +661,7 @@ function assertWorktreeGate(input: {
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
-  if (input.fromPhase !== "dispatch" || input.nextPhase !== "implement") {
+  if (input.fromPhase !== "dispatch" || input.nextPhase !== "specify") {
     return;
   }
   const branch = getCurrentGitBranch();
@@ -680,12 +687,12 @@ function assertWorktreeGate(input: {
       payload: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
-        reason: `dispatch-to-implement blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
+        reason: `dispatch-to-specify blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
       },
     },
   });
   throw new Error(
-    `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
+    `Transition blocked: dispatch -> specify requires a dedicated git worktree when on a feature branch. ` +
     `Current directory is the canonical main checkout on branch '${branch}'. ` +
     `Run: gxpm workspace ensure ${input.issueId}`,
   );
@@ -702,8 +709,63 @@ function assertArtifactGate(input: {
     return;
   }
 
+  // Derive root from issueDir (<root>/.gxpm/issues/<id>) so readIssueState
+  // uses the same temp dir in tests rather than process.cwd().
+  const derivedRoot = resolve(input.issueDir, "..", "..", "..");
+
   const requiredArtifactPath = join(input.issueDir, "artifacts", `${requiredArtifact}.json`);
   if (existsSync(requiredArtifactPath)) {
+    // Task 4: specify->implement gate — verify confirmedAt is set.
+    if (requiredArtifact === "behavior-spec" && input.nextPhase === "implement") {
+      const state = readIssueState({ root: derivedRoot, issueId: input.issueId });
+      const legacyEntry = state.phaseHistory?.find((h) => h.phase === "implement");
+      const isLegacy =
+        legacyEntry !== undefined && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF;
+      if (isLegacy) {
+        const now = new Date().toISOString();
+        appendIssueEvent({
+          issueDir: input.issueDir,
+          event: {
+            schemaVersion: 1,
+            type: "gate.blocked",
+            issueId: input.issueId,
+            timestamp: now,
+            sessionId: resolveSessionId(),
+            payload: {
+              fromPhase: input.fromPhase,
+              toPhase: input.nextPhase,
+              missingArtifact: "behavior-spec.confirmedAt",
+              legacyBypass: true,
+            },
+          },
+        });
+        return;
+      }
+      const raw = JSON.parse(readFileSync(requiredArtifactPath, "utf8"));
+      const confirmedAt = raw?.payload?.confirmedAt;
+      if (!confirmedAt) {
+        const now = new Date().toISOString();
+        appendIssueEvent({
+          issueDir: input.issueDir,
+          event: {
+            schemaVersion: 1,
+            type: "gate.blocked",
+            issueId: input.issueId,
+            timestamp: now,
+            sessionId: resolveSessionId(),
+            payload: {
+              fromPhase: input.fromPhase,
+              toPhase: input.nextPhase,
+              missingArtifact: "behavior-spec.confirmedAt",
+            },
+          },
+        });
+        throw new Error(
+          `behavior-spec exists but confirmedAt is null; run \`gxpm specify confirm ${input.issueId}\` to confirm`,
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     appendIssueEvent({
       issueDir: input.issueDir,
@@ -724,6 +786,15 @@ function assertArtifactGate(input: {
   }
 
   const now = new Date().toISOString();
+  const legacyEntry =
+    requiredArtifact === "behavior-spec"
+      ? readIssueState({ root: derivedRoot, issueId: input.issueId }).phaseHistory?.find(
+          (h) => h.phase === "implement",
+        )
+      : undefined;
+  const isLegacyBypass =
+    legacyEntry !== undefined && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF;
+
   appendIssueEvent({
     issueDir: input.issueDir,
     event: {
@@ -736,9 +807,15 @@ function assertArtifactGate(input: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
         missingArtifact: requiredArtifact,
+        ...(isLegacyBypass ? { legacyBypass: true } : {}),
       },
     },
   });
+
+  if (isLegacyBypass) {
+    return; // legacy bypass: event recorded with legacyBypass: true, no throw
+  }
+
   throw new Error(
     `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );

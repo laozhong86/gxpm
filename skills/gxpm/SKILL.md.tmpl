@@ -1,6 +1,6 @@
 ---
 name: gxpm
-description: 第二代代理项目管理运行时。状态图、能力运行时、阶段门控推进。
+description: Second-generation agent project management runtime. Use when user mentions gxpm, issue phases, worktrees, artifacts, checkpoint recovery, or asks about project management workflow.
 ---
 
 {{PREAMBLE}}
@@ -10,13 +10,32 @@ description: 第二代代理项目管理运行时。状态图、能力运行时�
 gxpm 是面向代理执行的统一项目管理运行时。
 产品目标是替代 PMC 和 gstack，以原生状态图、能力运行时和阶段门控推进 —— 不是包装它们。
 
-## 角色
+## 入口条件
 
-先读状态，再路由到正确阶段，调用正确的 gxpm 能力，
-在声称进度前持久化 artifact。将 `.gxpm/issues/<id>/` 视为
-单一真相源，而非聊天记忆或 Linear 评论。
+**何时触发**
+- 用户提到 gxpm、issue phases、worktrees、artifacts、checkpoint recovery。
+- 用户询问项目管理 workflow、阶段推进、或 issue 生命周期。
+- 任何涉及 `.gxpm/issues/<id>/` 状态或 artifact 的操作。
 
-## 速查手册
+**前置条件**
+- 无特殊前置；如状态不存在，先创建：`gxpm issue create --auto-id`。
+
+**Skill 边界（什么情况下应该加载别的 skill）**
+- 纪律性调试循环 → `/gxpm-diagnose`
+- 对齐会议、术语精炼 → `/gxpm-grill`
+- 垂直切片测试驱动开发 → `/gxpm-tdd`
+- 架构摩擦分析 → `/gxpm-architecture`
+- PRD 合成与垂直切片拆分 → `/gxpm-planning`
+- Issue 状态机管理（分类、标签、路由） → `/gxpm-triage`
+- GitNexus 驱动问题调试 → `/gxpm-debug-issue`
+- GitNexus 驱动代码探索 → `/gxpm-explore-codebase`
+- GitNexus 驱动安全重构 → `/gxpm-refactor-safely`
+- GitNexus 驱动变更审查 → `/gxpm-review-changes`
+- 浏览器证据捕获 → `/gxpm-browser`
+
+## 可操作流程
+
+### 速查手册
 
 ```bash
 gxpm issue status <issue-id>          # 读取当前阶段
@@ -30,7 +49,7 @@ gxpm doctor                           # 健康检查
 gxpm version                          # 已安装版本
 ```
 
-## 阶段地图
+### 阶段地图
 
 - `triage`: 澄清 issue、范围、风险、下一阶段。
 - `plan`: 产出已批准的实现和验证计划。
@@ -44,17 +63,6 @@ gxpm version                          # 已安装版本
 - `verify`: 独立验收验证。
 - `qa`: 浏览器/运行时证明（如需要）。
 - `land`: 合并/部署交接门。
-
-## 必需习惯
-
-- 绝不从聊天记忆推断阶段。
-- 绝不跳过 artifact 回写。
-- 绝不让 Linear 替代本地状态。
-- 绝不未经用户明确确认或 active Autopilot Grant 授权就执行不可逆的 land 操作。
-- 将 PMC/gstack 视为上游参考，而非最终运行时依赖。
-- 优先使用 gxpm 原生能力，而非硬编码的主机假设。
-
-## 关键规则
 
 ### 状态优先
 
@@ -203,23 +211,80 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 - `wiki-context` 是非门控支持 artifact；它不替代
   GitNexus 影响/调试/审查证据。
 
+## 红旗清单 / 反模式
+
+- **STOP：绝不从聊天记忆推断阶段。** 始终先读 `gxpm issue status`。
+- **STOP：绝不跳过 artifact 回写。** 任何非平凡提议在阶段推进前必须写入 artifact。
+- **STOP：绝不让 Linear 替代本地状态。** `.gxpm/issues/<id>/` 是单一真相源。
+- **STOP：绝不未经用户明确确认或 active Autopilot Grant 授权就执行不可逆的 land 操作。**
+- **STOP：绝不在 worktree 中创建按 worktree 分布的 `.gxpm/` 目录。** 状态始终在主仓库。
+- **STOP：不要将 PMC/gstack 视为最终运行时依赖。** 它们是上游参考；优先使用 gxpm 原生能力。
+- **STOP：不要硬编码主机假设。** 使用 gxpm 原生能力。
+- **STOP：不要将 hooks 用作唤醒源。** Hooks 仅在 Codex 生命周期事件后运行。
+- **STOP：不要从成功的轮询中自动 merge/land（除非用户已授权或存在 active Autopilot Grant）。**
+- **STOP：不要将 wiki 新鲜度用作阶段门。**
+- **危险信号：** `wiki-context` 试图替代 GitNexus 影响/调试/审查证据时拒绝。
+
+## 验证清单 / 出口条件
+
+**各阶段 artifact 要求**
+- `triage` → `acceptance-contract`
+- `plan` → `implementation-plan`
+- `dispatch` → `dispatch-handoff`（含 worktreePath / worktreeDecision）
+- `implement` → 代码变更 + commit
+- `local-verify` → 测试/构建/浏览器证据 artifact
+- `ac-check` → 验收契约履行记录
+- `self-review` → review findings artifact
+- `ship` → PR / 发布准备 artifact
+- `pr-check` → PR 状态 / 审查评论记录
+- `verify` → 独立验证证据
+- `qa` → 浏览器/运行时证明（如需要）
+- `land` → `land-findings`（含 retainWorktreeReason，如保留 worktree）
+
+**失败时路由**
+- 调试困难 → `/gxpm-diagnose`
+- 需求/术语不清 → `/gxpm-grill`
+- 代码问题 → `/gxpm-debug-issue`
+- 架构决策 → `/gxpm-architecture`
+- PR 审查 → `/gxpm-review-changes`
+
+## 必需习惯
+
+- 绝不从聊天记忆推断阶段。始终先读 `gxpm issue status`。
+- 绝不跳过 artifact 回写。任何非平凡提议在阶段推进前必须写入 artifact。
+- 绝不让 Linear 替代本地状态。`.gxpm/issues/<id>/` 是单一真相源。
+
+## 关键规则
+
+### 状态优先
+
+在做阶段工作前，先读取 `gxpm issue status <issue-id>`。
+如果状态不存在，创建它：`gxpm issue create --auto-id`。
+
+### Artifact 纪律
+
+任何非平凡的提议在阶段推进前**必须**写入 artifact。
+Artifact 树是真相源；聊天历史是易失的。
+
 ## 相关 Skills
 
-在任务需要时加载适当的 skill：
+- 纪律性调试循环 → `/gxpm-diagnose`
+- 对齐会议、术语精炼 → `/gxpm-grill`
+- 垂直切片测试驱动开发 → `/gxpm-tdd`
+- 架构摩擦分析 → `/gxpm-architecture`
+- PRD 合成与垂直切片拆分 → `/gxpm-planning`
+- Issue 状态机管理（分类、标签、路由） → `/gxpm-triage`
 
-- `/gxpm-diagnose` — 纪律性调试循环
-- `/gxpm-grill` — 对齐会议，精炼术语
-- `/gxpm-tdd` — 垂直切片测试驱动开发
-- `/gxpm-architecture` — 架构摩擦分析
-- `/gxpm-planning` — PRD 合成与垂直切片拆分
-- `/gxpm-triage` — issue 状态机管理
-- `/gxpm-debug-issue` — GitNexus 驱动调试
-- `/gxpm-explore-codebase` — GitNexus 驱动架构探索
-- `/gxpm-refactor-safely` — GitNexus 驱动安全重构
-- `/gxpm-review-changes` — GitNexus 驱动变更审查
+## 常见说辞表
 
-可选的 wiki 操作：`gxpm wiki status/init/update/query`。
-浏览器证据捕获：加载 `/gxpm-browser`。
+| 用户 utterance | 推荐回应 |
+|----------------|----------|
+| "继续 GXPM-42" | 执行 `gxpm issue context GXPM-42`，按 requiredReads 和 agentInstructions 行动。 |
+| "帮我推进这个 issue" | 先 `gxpm issue status <id>`，再 `gxpm issue next <id>`，按推荐步骤执行。 |
+| "自动驾驶模式" | 执行 `gxpm autopilot start <id>|--auto-id --profile full-delivery --prompt "..."`，然后按 `gxpm issue next` 推进。 |
+| "这是什么阶段？" | `gxpm issue status <id>`，然后解释当前阶段及下一阶段的入口条件。 |
+| "我改了多少？" | 引导到 `gxpm issue context <id>` 或对应阶段的 artifact 审查。 |
+| "可以合并了吗？" | 检查当前阶段是否为 `verify`/`qa` 之后，确认 Autopilot Grant 或显式用户授权，再执行 land 操作。 |
 
 ## Read Next
 

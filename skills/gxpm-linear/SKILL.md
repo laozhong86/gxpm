@@ -1,6 +1,6 @@
 ---
 name: gxpm-linear
-description: Linear CLI 集成，用于 gxpm issue 生命周期管理。创建、更新、查询 Linear issue。
+description: Linear CLI integration for gxpm issue lifecycle management. Use when creating, updating, or querying Linear issues, syncing gxpm issues to Linear, or managing issue lifecycle via command line.
 status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -9,14 +9,14 @@ status: stable
 
 Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** — 所有操作走 `linear` 命令。
 
-## When to trigger
+## 入口条件
 
 - 需要创建/更新/查询 Linear issue
 - gxpm issue 需要同步到 Linear（`maybeSyncIssue` 的替代路径）
 - Sprint 规划、backlog 分类、批量操作
 - 需要读取 issue 评论获取上下文
 
-## Prerequisites
+### 前置条件
 
 ```bash
 # CLI 已安装在
@@ -26,7 +26,7 @@ Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** �
 export PATH="/opt/homebrew/bin:$PATH"
 ```
 
-## Auth
+### 认证
 
 ```bash
 linear auth login    # 首次使用或 token 过期
@@ -37,14 +37,7 @@ linear config        # 查看默认 team/workspace
 > 只需确保 `linear auth login` 已完成，gxpm 会自动复用其认证状态。
 > 旧配置 `sync.linearApiKey` 和 `GXPM_LINEAR_API_KEY` 已废弃，可安全移除。
 
-## Global flags
-
-| Flag | 说明 |
-|------|------|
-| `--json` | 机器可读输出（默认使用） |
-| `--text` | 人类可读输出 |
-| `--dry-run` | 预览不执行 |
-| `--team <KEY>` | 指定 team（如 `GXG`） |
+## 可操作流程
 
 ## CLI Commands
 
@@ -77,16 +70,17 @@ linear config        # 查看默认 team/workspace
 | Task | Command |
 |------|---------|
 | Add comment | `linear issue comment add GXG-123 --body "text" --json` |
-| List comments | `linear issue comment list GXG-123 --json` |
-| Update comment | `linear issue comment update <commentId> --json` |
-| Delete comment | `linear issue comment delete <commentId>` |
+| Update comment | `linear issue comment update <commentId> --body "text"` |
+| List/Delete comments | Use `linear api` GraphQL queries/mutations |
+
+**Note**: `linear issue comment list` and `linear issue comment delete` were **removed** in CLI v3.2.0. Use `linear api` for comment reads and deletes.
 
 ### Issue Relations
 
 | Task | Command |
 |------|---------|
 | List relations | `linear issue relation list GXG-123 --json` |
-| Add relation | `linear issue relation add GXG-123 --json` |
+| Add relation | `linear issue relation add GXG-123 blocked-by GXG-456 --json` |
 | Delete relation | `linear issue relation delete <relationId>` |
 
 ### Other Commands
@@ -118,7 +112,7 @@ linear config        # 查看默认 team/workspace
 | Rate limited | Batch operations, add delays |
 | "No team configured" | Add `--team GXG` or run `linear config` |
 | "Sort must be provided" | Add `--sort priority` to `issue list` |
-| CLI not found | Use full path `/opt/homebrew/bin/linear` |
+| CLI not found | Use full path `/Users/x/.nvm/versions/node/v25.8.0/bin/linear` |
 | Wrong workflow states | Query `linear workflow-state list --json` first |
 
 
@@ -128,11 +122,11 @@ linear config        # 查看默认 team/workspace
 
 `linear issue view` 只返回标题、描述、状态和元数据。**评论是独立 API 调用。**
 
-**规则**：接手 issue 时必须同时运行：
+**规则**：接手 issue 时必须运行：
 ```bash
 linear issue view GXG-123 --json
-linear issue comment list GXG-123 --json
 ```
+Comments require a GraphQL query via `linear api` (CLI v3.2.0 removed `issue comment list`).
 
 评论中可能包含 scope 定义、设计决策、PoC 结果、review 反馈、跨 agent 交接上下文。仅在批量 list/triage 时可跳过评论阅读。
 
@@ -244,19 +238,43 @@ linear label list --json
 | **Workflow** | `blocked`, `in-review`, `needs-design`, `needs-split` | 按需 |
 
 
-## Core Principles
+### 常用全局参数
+
+| Flag | 说明 |
+|------|------|
+| `--json` | 机器可读输出（默认使用） |
+| `--text` | 人类可读输出 |
+| `--dry-run` | 预览不执行 |
+| `--team <KEY>` | 指定 team（如 `GXG`） |
+
+### 操作原则
 
 1. **Issue 是单一真相源** — 所有需求、bug、变更都先落地 Linear issue
 2. **创建前先查重** — `linear issue list --query "keyword"` 避免重复
 3. **写操作需确认** — 批量操作先呈现表格，等用户点头再执行
 4. **状态完整性** — 子 issue 全 Done 才能关父 issue
 
-## Tips
+### Tips
 
 - `--json` 优先于 `--text`，方便脚本解析
 - `issue list` 默认只显示分配给当前用户的，加 `-A` 看全部
 - `issue list` 必须加 `--sort`（`manual` 或 `priority`）
 - GraphQL escape hatch: `linear api '{ issues { nodes { id title } } }'`
+
+## 红旗清单 / 反模式
+
+- **不使用 MCP** — 所有操作走 `linear` 命令，禁止通过 MCP 操作 Linear
+- 禁止绕过查重直接创建 issue
+- 禁止未确认就执行批量写操作
+- 禁止在子 issue 未完成时关闭父 issue
+- 不要混用旧 API key 认证方式（`sync.linearApiKey`、`GXPM_LINEAR_API_KEY` 已废弃）
+
+## 验证清单 / 出口条件
+
+- [ ] issue 创建/更新/查询结果与预期一致
+- [ ] 同步后的 gxpm issue 与 Linear issue 状态一致
+- [ ] 批量操作已获用户确认
+- [ ] `--json` 输出可被脚本正确解析（如需要）
 
 ## Read Next
 

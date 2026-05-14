@@ -1,172 +1,87 @@
 # Skill Authoring Guide
 
-> How to write, structure, and maintain gxpm skills.
+> gxpm skills follow the **Five-Section Structure** adapted from unified-skills.
+> Every `SKILL.md` must contain four required sections. Gatekeeping skills should also include the fifth optional section.
 
-## Skill Structure
-
-```
-skills/<category>/<name>/
-├── SKILL.md           # Main instructions (required)
-├── SKILL.md.tmpl      # Template source (if host-specific injection needed)
-├── references/        # Reference docs for on-demand loading (optional)
-│   └── detailed-guide.md
-├── scripts/           # Utility scripts for Script-First architecture (optional)
-│   └── helper.ts
-└── REFERENCE.md       # Legacy detailed docs (deprecated, use references/)
-```
-
-## Two Types of Skills
-
-Skills are also classified by **type** for quality governance. The type determines what structural elements are required and how the skill is tested.
-
-### Skill Type Taxonomy
-
-| Type | Purpose | Required Elements | Test Strategy | Examples |
-|------|---------|-------------------|---------------|----------|
-| **Discipline** | Enforce rules/requirements that agents may rationalize away | Rationalization Table, Red Flags, Explicit Negation, Foundational Principle | Pressure scenarios with subagents; must resist 3+ combined pressures under maximum stress | `tdd`, `triage` |
-| **Technique** | How-to guides for specific methods | Step-by-step workflow, concrete examples | Application scenarios + variation scenarios | `diagnose`, `debug-issue`, `refactor-safely` |
-| **Pattern** | Mental models and ways of thinking | Recognition criteria, counter-examples, when NOT to apply | Recognition scenarios + counter-example tests | `architecture`, `planning` |
-| **Reference** | API docs, syntax guides, tool documentation | Accurate syntax, complete flag coverage, quick lookup tables | Retrieval scenarios + gap testing | `eval`, `browser` |
-
-**Discipline skills are the highest-risk category.** If they fail, agents bypass critical governance. They MUST include:
-- A `## Red Flags` section listing STOP conditions
-- A rationalization table (`| Excuse | Reality |`) preempting common workarounds
-- Explicit negation under rules (`**No exceptions:** ...`)
-- A foundational principle like `**Violating the letter of the rules is violating the spirit of the rules.**`
-
-### 1. Generated skills (`.tmpl`)
-
-Use `.tmpl` when the skill needs host-specific injection or references/ loading:
-
-```
-skills/gxpm/SKILL.md.tmpl
-```
-
-Variables available during generation:
-- `{{PREAMBLE}}` — host-aware env vars and target declaration
-- `{{ARTIFACT_READ_COMMANDS}}` — `gxpm artifact read` commands for all phase gates
-- `{{PHASE_GATE_COMMANDS}}` — `gxpm <phase> init` commands for all transitions
-- `{{PHASE_TRANSITION_SUMMARY}}` — strict transition rules summary
-- `{{REFERENCE:<name>}}` — inject content from `references/<name>.md`
-
-Generated output goes to the same path without `.tmpl`:
-```
-skills/gxpm/SKILL.md   (generated from .tmpl)
-```
-
-### 2. Static skills (`.md`)
-
-Use `.md` when the skill is pure text instructions with no host-specific variables:
-
-```
-skills/diagnose/SKILL.md
-```
-
-Static skills are copied as-is during `gen:skill-docs` and installed verbatim.
-
-## SKILL.md Format
-
-```md
----
-name: skill-name
-description: Brief description of capability. Use when [specific triggers].
 ---
 
-# Skill Name
+## Five-Section Structure
 
-## Quick start
-[Minimal working example]
+### Required Sections
 
-## Workflows
-[Step-by-step processes with checklists for complex tasks]
+Each `SKILL.md` must have these sections (use `##` or `###` heading):
 
-## Advanced features
-[Link to separate files: See [REFERENCE.md](REFERENCE.md)]
+#### 1. 入口条件 / Entry Conditions
+
+- When should this skill be loaded?
+- What triggers it? (user utterances, phase transitions, failure modes)
+- What are the preconditions?
+- Skill boundary: what should the agent load *instead* of this skill?
+
+#### 2. 可操作流程 / Process
+
+- Numbered or bulleted steps the agent follows
+- Concrete actions, not vague advice
+- Include exact commands where applicable
+- Reference external docs with relative paths
+
+#### 3. 红旗清单 / Red Flags
+
+- Behaviors that violate this skill's discipline
+- Anti-patterns specific to this domain
+- STOP conditions — when to halt and escalate
+- Common rationalizations and why they are wrong
+
+#### 4. 验证清单 / Verification / Exit Conditions
+
+- Checklist the agent must complete before claiming success
+- Evidence that must be produced
+- Exit criteria: what artifact or state confirms completion?
+- Failure routing: which skill to load when a check fails?
+
+### Optional Section (Recommended for Gatekeeping Skills)
+
+#### 5. 常见说辞表 / Common Phrases
+
+- Table mapping common user/agent utterances to recommended responses
+- Helps shape consistent behavior across sessions
+- Especially valuable for review, triage, planning, and ship skills
+
+---
+
+## Frontmatter
+
+```yaml
+---
+name: gxpm-<skill>
+description: <One sentence. Must contain "Use when" trigger phrase. 20-300 chars.>
+---
 ```
 
-## Description Requirements
+- `name`: kebab-case, prefixed with `gxpm-` for core skills
+- `description`: must include "Use when" to help agents recognize triggers
 
-The description is **the only thing your agent sees** when deciding which skill to load.
+## Template-Generated Skills
 
-- Max 1024 chars
-- Write in third person
-- First sentence: what it does
-- Second sentence: "Use when [specific triggers]"
-
-Good:
-```
-Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', 'debug this', reports a bug, or describes a performance regression.
-```
-
-Bad:
-```
-Helps with debugging.
-```
-
-## When to Add Scripts
-
-Add utility scripts when:
-- Operation is deterministic (validation, formatting)
-- Same code would be generated repeatedly
-- Errors need explicit handling
-
-## When to Split Files
-
-Split into separate files when:
-- SKILL.md exceeds 100 lines
-- Content has distinct domains
-- Advanced features are rarely needed
-
-Use `references/` for on-demand content that should not bloat the main SKILL.md:
-- Detailed step-by-step templates
-- Long examples or personas
-- Data-heavy reference tables
-
-In `.tmpl`, reference a file with `{{REFERENCE:filename}}` (reads `references/filename.md`).
-
-## Review Checklist
-
-After drafting, verify:
-- [ ] Description includes triggers ("Use when...")
-- [ ] SKILL.md under 100 lines (or split)
-- [ ] No time-sensitive info
-- [ ] Consistent terminology with CONTEXT.md
-- [ ] Concrete examples included
-- [ ] References one level deep
-- [ ] gxpm integration section included (for phase-aware skills)
-- [ ] references/ files are `.md` and named without spaces
-- [ ] scripts/ are executable and documented in SKILL.md
-
-## Preset Layer Support
-
-Skills can be customized via the preset system without modifying core templates:
-
-1. Create a preset: `gxpm preset init my-team`
-2. Add rules to `.gxpm/presets/my-team/manifest.json` targeting skill output paths
-3. Activate: `gxpm preset add my-team`
-4. Regenerate: `bun run gen:skill-docs`
-
-Preset strategies (`replace`, `prepend`, `append`, `wrap`) apply to generated skill output. See `docs/architecture/preset-system.md` for full manifest schema.
-
-## Installation
-
-All skills in `skills/` are discovered automatically:
+Skills with `SKILL.md.tmpl` are template-generated. Edit the `.tmpl` file, then run:
 
 ```bash
-bun run gen:skill-docs    # generate .tmpl → .md
-bun run dev:skill         # watch mode
+bun run gen:skill-docs
 ```
 
-Install to host:
+Never edit the generated `SKILL.md` directly. Generated artifacts are not truth sources.
+
+## Checking Compliance
 
 ```bash
-gxpm-init --install-skill --host all
+bun run check
 ```
 
-## Category Conventions
+This runs `skill-structure-check.ts` which validates every `SKILL.md` under `skills/`.
 
 | Category | Purpose | Examples |
 |----------|---------|----------|
 | `gxpm` | Core runtime skill | `gxpm` |
-| `graph` | Code intelligence skills | `debug-issue`, `explore-codebase` |
+| `gxpm-*` | GitNexus-backed code intelligence skills | `gxpm-debug-issue`, `gxpm-explore-codebase` |
 | *(direct)* | Engineering disciplines | `diagnose`, `grill`, `tdd`, `architecture`, `planning`, `triage` |
+

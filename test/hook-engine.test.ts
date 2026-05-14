@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -22,6 +22,15 @@ function baseInput(overrides: Partial<HookInput> = {}): HookInput {
     hook_event_name: "SessionStart",
     ...overrides,
   };
+}
+
+function createInitializedGxpmProject(cwd: string) {
+  for (const dir of [".gxpm/issues", ".gxpm/local", ".gxpm/out-of-scope", ".gxpm/wiki"]) {
+    mkdirSync(join(cwd, dir), { recursive: true });
+  }
+  writeFileSync(join(cwd, ".gxpm", "config.json"), JSON.stringify({
+    worktree: { enforcement: "optional", default: "ask" },
+  }));
 }
 
 describe("hook-engine utilities", () => {
@@ -141,17 +150,57 @@ describe("formatHookOutput", () => {
 });
 
 describe("processHook SessionStart", () => {
-  test("no .gxpm/issues → allow with no output", async () => {
+  test("plain repo without gxpm markers → allow with no output", async () => {
     const emptyCwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-empty-"));
     const result = await processHook("codex", "SessionStart", baseInput({ cwd: emptyCwd }));
     expect(result.action).toBe("allow");
     expect(result.additionalContext).toBeUndefined();
     expect(result.exitCode).toBe(0);
+    expect(existsSync(join(emptyCwd, ".gxpm"))).toBe(false);
   });
 
-  test("with .gxpm/issues → injects schema/version context", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-ctx-"));
+  test("repo-scoped gxpm hook without .gxpm → reports uninitialized without writing state", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-uninit-"));
+    mkdirSync(join(cwd, ".codex"), { recursive: true });
+    writeFileSync(join(cwd, ".codex", "hooks.json"), JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: "gxpm hook SessionStart --host codex" }] }],
+      },
+    }));
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+    expect(result.action).toBe("allow");
+    expect(result.additionalContext).toContain("not been initialized");
+    expect(result.additionalContext).toContain("gxpm init --target <repo>");
+    expect(existsSync(join(cwd, ".gxpm"))).toBe(false);
+  });
+
+  test("partial .gxpm state → reports missing initialization markers", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-partial-"));
     mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+    expect(result.action).toBe("allow");
+    expect(result.additionalContext).toContain("initialization is incomplete");
+    expect(result.additionalContext).toContain(".gxpm/local");
+    expect(result.additionalContext).toContain("will not write plan state");
+  });
+
+  test("git repo with gxpm dirs but missing gxpm git hooks → reports partial initialization", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-missing-hooks-"));
+    createInitializedGxpmProject(cwd);
+    execSync("git init", { cwd, stdio: "ignore" });
+
+    const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
+    expect(result.action).toBe("allow");
+    expect(result.additionalContext).toContain("initialization is incomplete");
+    expect(result.additionalContext).toContain(".githooks/gxpm-pre-commit");
+    expect(result.additionalContext).toContain(".githooks/gxpm-post-checkout");
+  });
+
+  test("initialized gxpm project → injects schema/version context", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-ctx-"));
+    createInitializedGxpmProject(cwd);
     mkdirSync(join(cwd, "core"), { recursive: true });
     writeFileSync(join(cwd, "core", "state.ts"), "export const CURRENT_SCHEMA_VERSION = 42;\n");
     writeFileSync(join(cwd, "VERSION"), "1.2.3\n");
@@ -164,8 +213,7 @@ describe("processHook SessionStart", () => {
 
   test("with optional wiki state → does not inject or auto-update wiki context", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-human-wiki-"));
-    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
-    mkdirSync(join(cwd, ".gxpm", "wiki"), { recursive: true });
+    createInitializedGxpmProject(cwd);
     writeFileSync(join(cwd, ".gxpm", "wiki", "state.json"), JSON.stringify({
       schemaVersion: 1,
       provider: "gxpm",
@@ -183,11 +231,15 @@ describe("processHook SessionStart", () => {
 
   test("on main branch in canonical checkout → no worktree warning", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-main-"));
-    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    createInitializedGxpmProject(cwd);
     execSync("git init", { cwd, stdio: "ignore" });
     execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
     execSync("git config user.name Test", { cwd, stdio: "ignore" });
     execSync("git checkout -b main", { cwd, stdio: "ignore" });
+    mkdirSync(join(cwd, ".githooks"), { recursive: true });
+    for (const hook of ["gxpm-pre-commit", "gxpm-commit-msg", "gxpm-pre-push", "gxpm-post-merge", "gxpm-post-checkout"]) {
+      writeFileSync(join(cwd, ".githooks", hook), "#!/bin/bash\n");
+    }
 
     const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
     expect(result.additionalContext).toBeDefined();
@@ -196,11 +248,15 @@ describe("processHook SessionStart", () => {
 
   test("on feature branch in canonical checkout → worktree warning first", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-feat-"));
-    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    createInitializedGxpmProject(cwd);
     execSync("git init", { cwd, stdio: "ignore" });
     execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
     execSync("git config user.name Test", { cwd, stdio: "ignore" });
     execSync("git checkout -b gxpm-92-test", { cwd, stdio: "ignore" });
+    mkdirSync(join(cwd, ".githooks"), { recursive: true });
+    for (const hook of ["gxpm-pre-commit", "gxpm-commit-msg", "gxpm-pre-push", "gxpm-post-merge", "gxpm-post-checkout"]) {
+      writeFileSync(join(cwd, ".githooks", hook), "#!/bin/bash\n");
+    }
 
     const result = await processHook("codex", "SessionStart", baseInput({ cwd }));
     expect(result.additionalContext).toBeDefined();
@@ -215,11 +271,15 @@ describe("processHook SessionStart", () => {
 
   test("on feature branch inside worktree → no worktree warning", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ss-wt-"));
-    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    createInitializedGxpmProject(cwd);
     execSync("git init", { cwd, stdio: "ignore" });
     execSync("git config user.email test@test.com", { cwd, stdio: "ignore" });
     execSync("git config user.name Test", { cwd, stdio: "ignore" });
     execSync("git checkout -b gxpm-92-test", { cwd, stdio: "ignore" });
+    mkdirSync(join(cwd, ".githooks"), { recursive: true });
+    for (const hook of ["gxpm-pre-commit", "gxpm-commit-msg", "gxpm-pre-push", "gxpm-post-merge", "gxpm-post-checkout"]) {
+      writeFileSync(join(cwd, ".githooks", hook), "#!/bin/bash\n");
+    }
     // Simulate worktree by creating a .git file pointing to a worktrees path
     // and creating the git-path structure so rev-parse --git-path HEAD returns a worktrees path
     const gitDir = execSync("git rev-parse --git-dir", { cwd, encoding: "utf8" }).trim();
@@ -332,9 +392,38 @@ describe("processHook PreToolUse", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  test("update_plan records to orphan log when no active issue", async () => {
+  test("update_plan in uninitialized repo does not create .gxpm", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ptu-uninit-"));
+
+    const result = await processHook("codex", "PreToolUse", baseInput({
+      hook_event_name: "PreToolUse",
+      tool_name: "update_plan",
+      cwd,
+      tool_input: { steps: [{ description: "read file" }] },
+    }));
+
+    expect(result.action).toBe("allow");
+    expect(existsSync(join(cwd, ".gxpm"))).toBe(false);
+  });
+
+  test("update_plan in partial repo does not write orphan log", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ptu-partial-"));
+    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+
+    const result = await processHook("codex", "PreToolUse", baseInput({
+      hook_event_name: "PreToolUse",
+      tool_name: "update_plan",
+      cwd,
+      tool_input: { steps: [{ description: "read file" }] },
+    }));
+
+    expect(result.action).toBe("allow");
+    expect(existsSync(join(cwd, ".gxpm", "codex-plans-orphan.jsonl"))).toBe(false);
+  });
+
+  test("update_plan records to orphan log when initialized and no active issue", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-ptu-orphan-"));
-    mkdirSync(join(cwd, ".gxpm"), { recursive: true });
+    createInitializedGxpmProject(cwd);
 
     const result = await processHook("codex", "PreToolUse", baseInput({
       hook_event_name: "PreToolUse",
@@ -354,7 +443,7 @@ describe("processHook PreToolUse", () => {
 describe("end-to-end through gxpm CLI", () => {
   test("gxpm hook SessionStart --host codex with repo context", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-e2e-ss-"));
-    mkdirSync(join(cwd, ".gxpm", "issues"), { recursive: true });
+    createInitializedGxpmProject(cwd);
     mkdirSync(join(cwd, "core"), { recursive: true });
     writeFileSync(join(cwd, "core", "state.ts"), "export const CURRENT_SCHEMA_VERSION = 7;\n");
 

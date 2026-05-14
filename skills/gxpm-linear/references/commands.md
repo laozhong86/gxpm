@@ -29,16 +29,17 @@
 | Task | Command |
 |------|---------|
 | Add comment | `linear issue comment add GXG-123 --body "text" --json` |
-| List comments | `linear issue comment list GXG-123 --json` |
-| Update comment | `linear issue comment update <commentId> --json` |
-| Delete comment | `linear issue comment delete <commentId>` |
+| Update comment | `linear issue comment update <commentId> --body "text"` |
+| List/Delete comments | Use `linear api` GraphQL queries/mutations |
+
+**Note**: `linear issue comment list` and `linear issue comment delete` were **removed** in CLI v3.2.0. Use `linear api` for comment reads and deletes.
 
 ### Issue Relations
 
 | Task | Command |
 |------|---------|
 | List relations | `linear issue relation list GXG-123 --json` |
-| Add relation | `linear issue relation add GXG-123 --json` |
+| Add relation | `linear issue relation add GXG-123 blocked-by GXG-456 --json` |
 | Delete relation | `linear issue relation delete <relationId>` |
 
 ### Other Commands
@@ -70,5 +71,5 @@
 | Rate limited | Batch operations, add delays |
 | "No team configured" | Add `--team GXG` or run `linear config` |
 | "Sort must be provided" | Add `--sort priority` to `issue list` |
-| CLI not found | Use full path `/opt/homebrew/bin/linear` |
+| CLI not found | Use full path `/Users/x/.nvm/versions/node/v25.8.0/bin/linear` |
 | Wrong workflow states | Query `linear workflow-state list --json` first |

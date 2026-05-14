@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readArtifact, writeArtifact } from "../core/artifacts";
 import { initializeDispatch } from "../core/dispatch";
+import { confirmSpecify, initializeSpecify } from "../core/specify";
 import { createIssueState, transitionIssuePhase } from "../core/state";
 import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
@@ -36,7 +37,7 @@ describe("dispatch gate", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-gate-"));
     enterPhase(root, "GXPM-52", "dispatch");
 
-    expect(() => transitionIssuePhase({ root, issueId: "GXPM-52", nextPhase: "implement" })).toThrow(
+    expect(() => transitionIssuePhase({ root, issueId: "GXPM-52", nextPhase: "specify" })).toThrow(
       "Missing required artifact",
     );
     const blockedEvents = readFileSync(join(root, ".gxpm", "issues", "GXPM-52", "events.jsonl"), "utf8")
@@ -49,9 +50,9 @@ describe("dispatch gate", () => {
     });
 
     initializeDispatch({ root, issueId: "GXPM-52" });
-    const state = transitionIssuePhase({ root, issueId: "GXPM-52", nextPhase: "implement" });
+    const state = transitionIssuePhase({ root, issueId: "GXPM-52", nextPhase: "specify" });
 
-    expect(state.currentPhase).toBe("implement");
+    expect(state.currentPhase).toBe("specify");
     const events = readFileSync(join(root, ".gxpm", "issues", "GXPM-52", "events.jsonl"), "utf8")
       .trim()
       .split("\n")
@@ -66,7 +67,7 @@ describe("dispatch gate", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-cli-"));
     enterPhaseCli(root, "GXPM-53", "dispatch");
 
-    const blocked = runCli(root, ["issue", "transition", "GXPM-53", "implement"]);
+    const blocked = runCli(root, ["issue", "transition", "GXPM-53", "specify"]);
     expect(blocked.exitCode).toBe(1);
     expect(output(blocked)).toContain("Missing required artifact");
     expect(output(blocked)).toContain("gxpm dispatch init GXPM-53");
@@ -85,12 +86,33 @@ describe("dispatch gate", () => {
     expect(read.exitCode).toBe(0);
     expect(output(read)).toContain('"status": "draft"');
 
-    const transition = runCli(root, ["issue", "transition", "GXPM-53", "implement"]);
-    expect(transition.exitCode).toBe(0);
-    expect(output(transition)).toContain("transitioned GXPM-53: dispatch -> implement");
+    const toSpecify = runCli(root, ["issue", "transition", "GXPM-53", "specify"]);
+    expect(toSpecify.exitCode).toBe(0);
+    expect(output(toSpecify)).toContain("transitioned GXPM-53: dispatch -> specify");
+
+    // Complete the specify phase: init the behavior-spec, fill placeholders, confirm
+    initializeSpecify({ root, issueId: "GXPM-53" });
+    const specPath = join(root, ".gxpm", "issues", "GXPM-53", "artifacts", "behavior-spec.json");
+    const stored = JSON.parse(readFileSync(specPath, "utf8"));
+    stored.payload.feature = { title: "test feature", asA: "user", iWant: "outcome", soThat: "tests pass" };
+    const stubRel = `test/.gxpm-fixtures/GXPM-53.test.ts`;
+    stored.payload.scenarios = [{
+      id: "scn-01", name: "test scenario", given: ["a precondition"],
+      when: "an action occurs", then: ["an outcome appears"],
+      examples: [], stubPath: stubRel,
+    }];
+    writeFileSync(specPath, `${JSON.stringify(stored, null, 2)}\n`);
+    const stubAbs = join(root, stubRel);
+    mkdirSync(join(stubAbs, ".."), { recursive: true });
+    writeFileSync(stubAbs, "// stub\n");
+    confirmSpecify({ root, issueId: "GXPM-53", confirmedBy: "test@gxpm" });
+
+    const toImplement = runCli(root, ["issue", "transition", "GXPM-53", "implement"]);
+    expect(toImplement.exitCode).toBe(0);
+    expect(output(toImplement)).toContain("transitioned GXPM-53: specify -> implement");
   });
 
-  test("auto-creates worktree on dispatch to implement transition in a git repo", () => {
+  test("auto-creates worktree on dispatch to specify transition in a git repo", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-dispatch-worktree-"));
     // Initialize git repo on main branch
     Bun.spawnSync({ cmd: ["git", "init"], cwd: root });
@@ -105,9 +127,9 @@ describe("dispatch gate", () => {
     const dispatch = runCli(root, ["dispatch", "init", "GXPM-54"]);
     expect(dispatch.exitCode).toBe(0);
 
-    const transition = runCli(root, ["issue", "transition", "GXPM-54", "implement"]);
+    const transition = runCli(root, ["issue", "transition", "GXPM-54", "specify"]);
     expect(transition.exitCode).toBe(0);
-    expect(output(transition)).toContain("transitioned GXPM-54: dispatch -> implement");
+    expect(output(transition)).toContain("transitioned GXPM-54: dispatch -> specify");
     expect(output(transition)).toContain("worktree:");
     expect(output(transition)).toContain("branch:");
 
@@ -133,7 +155,7 @@ describe("dispatch gate", () => {
     enterPhaseCli(root, "GXPM-55", "dispatch");
     runCli(root, ["dispatch", "init", "GXPM-55"]);
 
-    const transition = runCli(root, ["issue", "transition", "GXPM-55", "implement"]);
+    const transition = runCli(root, ["issue", "transition", "GXPM-55", "specify"]);
     expect(transition.exitCode).toBe(1);
     expect(output(transition)).toContain("Transition blocked");
     expect(output(transition)).toContain("git worktree");

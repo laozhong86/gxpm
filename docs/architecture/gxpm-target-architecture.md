@@ -46,11 +46,11 @@ graph TB
             SKILL_TRIAGE["skills/triage/<br/>SKILL.md.tmpl<br/>state machine + briefs"]
         end
 
-        subgraph "Code Intelligence<br/>(migrated from .claude/skills)"
-            SKILL_DEBUG["skills/graph/debug-issue/<br/>SKILL.md"]
-            SKILL_EXPLORE["skills/graph/explore-codebase/<br/>SKILL.md"]
-            SKILL_REFACTOR["skills/graph/refactor-safely/<br/>SKILL.md"]
-            SKILL_REVIEW["skills/graph/review-changes/<br/>SKILL.md"]
+        subgraph "Code Intelligence<br/>(GitNexus-backed)"
+            SKILL_DEBUG["skills/gxpm-debug-issue/<br/>SKILL.md"]
+            SKILL_EXPLORE["skills/gxpm-explore-codebase/<br/>SKILL.md"]
+            SKILL_REFACTOR["skills/gxpm-refactor-safely/<br/>SKILL.md"]
+            SKILL_REVIEW["skills/gxpm-review-changes/<br/>SKILL.md"]
         end
     end
 
@@ -310,11 +310,11 @@ flowchart TB
 | implement | `gxpm` + `tdd` + `diagnose` | `architecture` | gxpm 管执行，tdd 管测试纪律，diagnose 管调试 |
 | local-verify | `gxpm` | `tdd` | 回归测试验证 |
 | ac-check | `gxpm` | — | 验收合约检查 |
-| self-review | `gxpm` + `architecture` | `graph/review-changes` | 代码审查 + 架构审视 |
+| self-review | `gxpm` + `architecture` | `gxpm-review-changes` | 代码审查 + 架构审视 |
 | ship | `gxpm` | — | PR 准备 |
-| pr-check | `gxpm` | `graph/review-changes` | PR 风险评审 |
+| pr-check | `gxpm` | `gxpm-review-changes` | PR 风险评审 |
 | verify | `gxpm` | — | 独立验证 |
-| qa | `gxpm` + `diagnose` | `graph/debug-issue` | bug 调试 + 图谱诊断 |
+| qa | `gxpm` + `diagnose` | `gxpm-debug-issue` | bug 调试 + 图谱诊断 |
 | land | `gxpm` + `architecture` | — | 清理 + 架构复盘建议 |
 
 ---
@@ -331,10 +331,10 @@ flowchart LR
         TMPL_ARCH["skills/architecture/<br/>SKILL.md.tmpl"]
         TMPL_PLANNING["skills/planning/<br/>SKILL.md.tmpl"]
         TMPL_TRIAGE["skills/triage/<br/>SKILL.md.tmpl"]
-        STATIC_DEBUG["skills/graph/debug-issue/<br/>SKILL.md"]
-        STATIC_EXPLORE["skills/graph/explore-codebase/<br/>SKILL.md"]
-        STATIC_REFACTOR["skills/graph/refactor-safely/<br/>SKILL.md"]
-        STATIC_REVIEW["skills/graph/review-changes/<br/>SKILL.md"]
+        STATIC_DEBUG["skills/gxpm-debug-issue/<br/>SKILL.md"]
+        STATIC_EXPLORE["skills/gxpm-explore-codebase/<br/>SKILL.md"]
+        STATIC_REFACTOR["skills/gxpm-refactor-safely/<br/>SKILL.md"]
+        STATIC_REVIEW["skills/gxpm-review-changes/<br/>SKILL.md"]
     end
 
     subgraph "Generation"
@@ -350,10 +350,10 @@ flowchart LR
         OUT_ARCH["skills/architecture/<br/>SKILL.md"]
         OUT_PLANNING["skills/planning/<br/>SKILL.md"]
         OUT_TRIAGE["skills/triage/<br/>SKILL.md"]
-        OUT_DEBUG["skills/graph/debug-issue/<br/>SKILL.md<br/>(passthrough)"]
-        OUT_EXPLORE["skills/graph/explore-codebase/<br/>SKILL.md<br/>(passthrough)"]
-        OUT_REFACTOR["skills/graph/refactor-safely/<br/>SKILL.md<br/>(passthrough)"]
-        OUT_REVIEW["skills/graph/review-changes/<br/>SKILL.md<br/>(passthrough)"]
+        OUT_DEBUG["skills/gxpm-debug-issue/<br/>SKILL.md<br/>(passthrough)"]
+        OUT_EXPLORE["skills/gxpm-explore-codebase/<br/>SKILL.md<br/>(passthrough)"]
+        OUT_REFACTOR["skills/gxpm-refactor-safely/<br/>SKILL.md<br/>(passthrough)"]
+        OUT_REVIEW["skills/gxpm-review-changes/<br/>SKILL.md<br/>(passthrough)"]
     end
 
     subgraph "Install"
@@ -434,7 +434,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     P1["Phase 1<br/>脚本层扩展<br/>support batch"]
-    P2["Phase 2<br/>迁移 graph skill<br/>skills/graph/*"]
+    P2["Phase 2<br/>收敛 GitNexus skill<br/>skills/gxpm-*"]
     P3["Phase 3<br/>创建新 skill<br/>diagnose/grill/tdd/arch/planning/triage"]
     P4["Phase 4<br/>主 skill 瘦身<br/>gxpm ~150 lines"]
     P5["Phase 5<br/>文档层建设<br/>CONTEXT.md + ADR + out-of-scope"]

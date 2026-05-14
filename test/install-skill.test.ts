@@ -11,7 +11,7 @@ describe("installSkill", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-codex-"));
     const installed = installSkill({ hostName: "codex", root: repoRoot, home: fakeHome });
 
-    // Batch install: gxpm main skill + graph skills
+    // Batch install: gxpm main skill + code-intelligence skills
     expect(installed.length).toBeGreaterThanOrEqual(1);
     const expectedPath = join(fakeHome, ".codex", "skills", "gxpm", "SKILL.md");
     expect(installed).toContain(expectedPath);
@@ -27,7 +27,7 @@ describe("installSkill", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-install-skill-claude-"));
     const installed = installSkill({ hostName: "claude", root: repoRoot, home: fakeHome });
 
-    // Batch install: gxpm main skill + graph skills
+    // Batch install: gxpm main skill + code-intelligence skills
     expect(installed.length).toBeGreaterThanOrEqual(1);
     const expectedPath = join(fakeHome, ".claude", "skills", "gxpm", "SKILL.md");
     expect(installed).toContain(expectedPath);

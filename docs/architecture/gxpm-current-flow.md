@@ -46,7 +46,7 @@ flowchart LR
 ### 关键问题
 
 - **单点故障**：只有一个 tmpl → 一个输出 → 一个安装目标
-- **孤儿 skill**：`.claude/skills/*.md`（4 个 graph skill）**不在此生命周期内**
+- **代码智能 skill**：`skills/gxpm-*`（GitNexus 驱动）在项目生命周期内维护；旧 Claude-only 图谱 skill 已归档
 - **无版本管理**：生成产物 SKILL.md 入 git，但 install 目标在用户 home 目录
 
 ---

@@ -1,13 +1,21 @@
 ---
 name: gxpm-architecture
-description: 基于领域语言和 ADR 寻找代码库深化机会，改善架构、发现重构点、提升可测试性。
+description: Find deepening opportunities in a codebase using domain language and ADRs. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
 # Improve Codebase Architecture
 
 Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
 
-## gxpm-architecture
+## 入口条件
+
+Load this skill when you see:
+- User asks to "improve architecture", "refactor", "make this more testable", or "reduce coupling".
+- A diagnosis surfaces an architectural root cause (tight coupling, shallow modules, missing seams).
+- A new module is introduced during `self-review` and its depth is questionable.
+- The codebase has grown and `CONTEXT.md` terms no longer map cleanly to file structure.
+
+### 核心术语
 
 Use these terms exactly in every suggestion:
 
@@ -26,7 +34,7 @@ Key principles:
 - **The interface is the test surface.**
 - **One adapter = hypothetical seam. Two adapters = real seam.**
 
-## Process
+## 可操作流程
 
 ### 1. Explore
 
@@ -66,8 +74,33 @@ Side effects happen inline:
 - **Sharpening a fuzzy term?** Update `CONTEXT.md` right there.
 - **User rejects the candidate with a load-bearing reason?** Offer an ADR so future architecture reviews don't re-suggest it.
 
-## gxpm integration
+### gxpm 集成
 
 - Run `/architecture` once every few days, or after `/diagnose` surfaces an architectural root cause.
 - During `self-review`, apply the deletion test to new modules introduced in the PR.
 - After `land`, if architecture recommendations were deferred, create a follow-up issue via `gxpm issue create --auto-id`.
+
+## 红旗清单 / 反模式
+
+Do NOT use architecture deepening when:
+
+- The user wants a purely cosmetic rename or formatting change. Use `gxpm-refactor-safely` instead.
+- The code is already deep, well-tested, and stable. If the deletion test shows the module earns its keep, leave it alone.
+- The change is urgent and tactical (hotfix, security patch). Architecture work is strategic; defer it to a dedicated issue.
+- You have not read `CONTEXT.md` and the relevant ADRs. Surfacing architectural friction without domain vocabulary produces shallow advice.
+
+### Counter-examples
+
+**WRONG:** User asks "Can we rename `UserService` to `UserManager`?" You propose a full seam extraction with adapter interfaces.
+**RIGHT:** Suggest the rename directly. Architecture skill is for structural depth, not naming preferences.
+
+**WRONG:** A module passes the deletion test (complexity reappears across callers), but you suggest splitting it anyway because it looks large.
+**RIGHT:** Size is not depth. A large deep module is preferable to many shallow ones. If deletion test passes, recommend leaving it alone.
+
+## 验证清单 / 出口条件
+
+- [ ] 已阅读 `CONTEXT.md` 和相关 ADR
+- [ ] 已用删除测试（deletion test）排查候选模块
+- [ ] deepening opportunities 已按 Files / Problem / Solution / Benefits 结构化呈现
+- [ ] 用户使用 `CONTEXT.md` 术语确认候选方案
+- [ ] 如需更新 `CONTEXT.md` 或新增 ADR，已 inline 完成

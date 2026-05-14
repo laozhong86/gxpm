@@ -1,6 +1,6 @@
 ---
 name: gxpm-tdd
-description: 垂直切片红绿重构循环的测试驱动开发。
+description: Test-driven development with red-green-refactor loops via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
 ---
 
 # Test-Driven Development
@@ -15,7 +15,20 @@ description: 垂直切片红绿重构循环的测试驱动开发。
 
 **Violating the letter of the rules is violating the spirit of the rules.**
 
-## The Iron Law
+## 入口条件
+
+在以下场景触发本 skill：
+
+- 用户要求使用 TDD 构建功能或修复 bug
+- 用户提到 "red-green-refactor"
+- 用户需要集成测试
+- 用户要求测试优先开发
+
+在 gxpm 工作流中，`implement` 阶段应将首个子任务视为 **tracer bullet**，从该任务开始 TDD 循环。
+
+## 可操作流程
+
+### The Iron Law
 
 ```
 NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
@@ -31,69 +44,27 @@ Write code before the test? Delete it. Start over.
 
 Implement fresh from tests. Period.
 
-## Red-Green-Refactor
+See [references/red-green-refactor.md](references/red-green-refactor.md) for the full red-green-refactor cycle.
 
-Each vertical slice follows this cycle. No skips. No shortcuts.
+### The Specify-First Iron Law
 
-### RED — Write Failing Test
+**Before writing ANY test logic, the test scenario MUST already exist in `.gxpm/issues/<id>/artifacts/behavior-spec.json` with `confirmedAt` set.**
 
-Write one minimal test showing what should happen.
+If you find yourself writing a test without a corresponding entry in `behavior-spec.json`:
 
-**Requirements:**
-- One behavior
-- Clear name
-- Real code (no mocks unless unavoidable)
+- STOP
+- Delete the test code you wrote
+- Return to specify phase: `gxpm phase rewind <id> --to specify --reason "missing scenario"`
+- Run `gxpm specify revise <id>` to clear `confirmedAt`
+- Add the scenario to `behavior-spec.json`
+- Re-confirm with `gxpm specify confirm <id>`
+- Then resume TDD
 
-### Verify RED — Watch It Fail (MANDATORY. Never skip.)
+**Why:** BDD describes WHAT behavior we want; TDD enforces THAT behavior incrementally. Jumping to TDD without a confirmed BDD spec means the agent is inventing test cases — the precise failure mode this discipline prevents.
 
-```bash
-bun test path/to/test.test.ts
-```
+**The test stub file at `scenario.stubPath` is your contract.** Open it; the Gherkin comment block at the top is the only legitimate source of assertions you may translate into code.
 
-Confirm:
-- Test fails (not errors)
-- Failure message is expected
-- Fails because feature missing (not typos)
-
-**Test passes?** You're testing existing behavior. Fix test.
-
-**Test errors?** Fix error, re-run until it fails correctly.
-
-### GREEN — Minimal Code
-
-Write simplest code to pass the test.
-
-Don't add features, refactor other code, or "improve" beyond the test.
-
-### Verify GREEN — Watch It Pass (MANDATORY)
-
-```bash
-bun test path/to/test.test.ts
-```
-
-Confirm:
-- Test passes
-- Other tests still pass
-- Output pristine (no errors, warnings)
-
-**Test fails?** Fix code, not test.
-
-**Other tests fail?** Fix now.
-
-### REFACTOR — Clean Up
-
-After green only:
-- Remove duplication
-- Improve names
-- Extract helpers
-
-Keep tests green. Don't add behavior.
-
-### Repeat
-
-Next failing test for next feature.
-
-## Anti-Pattern: Horizontal Slices
+### 正确做法：垂直切片（Vertical Slices）
 
 **DO NOT write all tests first, then all implementation.** This is "horizontal slicing" — treating RED as "write all tests" and GREEN as "write all code."
 
@@ -116,74 +87,30 @@ RIGHT (vertical):
   ...
 ```
 
-## Workflow
+See [references/workflow.md](references/workflow.md) for the full TDD workflow.
 
-### 1. Planning
+### 卡壳时的应对策略
 
-Before writing any code:
-- [ ] Confirm with user what interface changes are needed
-- [ ] Confirm which behaviors to test (prioritise)
-- [ ] Identify opportunities for deep modules (small interface, deep implementation)
-- [ ] Design interfaces for testability
-- [ ] List the behaviors to test (not implementation steps)
-- [ ] Get user approval on the plan
+| Problem | Solution |
+|---------|----------|
+| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
+| Test too complicated | Design too complicated. Simplify interface. |
+| Must mock everything | Code too coupled. Use dependency injection. |
+| Test setup huge | Extract helpers. Still complex? Simplify design. |
 
-**You can't test everything.** Focus on critical paths and complex logic.
+### 调试集成
 
-### 2. Tracer Bullet
+Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
 
-Write ONE test that confirms ONE thing about the system:
+Never fix bugs without a test.
 
-```
-RED:   Write test for first behavior → verify it fails correctly
-GREEN: Write minimal code to pass → verify it passes
-```
+### 添加 mock 或测试工具时
 
-This is your tracer bullet — proves the path works end-to-end.
+Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
 
-### 3. Incremental Loop
+## Red Flags / 红旗清单 / 反模式
 
-For each remaining behavior:
-
-```
-RED:   Write next test → verify it fails correctly
-GREEN: Minimal code to pass → verify it passes + all other tests pass
-```
-
-Rules:
-- One test at a time
-- Only enough code to pass current test
-- Don't anticipate future tests
-- Keep tests focused on observable behavior
-- **Never skip Verify RED or Verify GREEN**
-
-### 4. Refactor
-
-After all tests pass, look for refactor candidates:
-- [ ] Extract duplication
-- [ ] Deepen modules (move complexity behind simple interfaces)
-- [ ] Apply SOLID principles where natural
-- [ ] Run tests after each refactor step
-
-**Never refactor while RED.** Get to GREEN first.
-
-## Common Rationalizations
-
-| Excuse | Reality |
-|--------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
-| "I'll test after" | Tests passing immediately prove nothing. |
-| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
-| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
-| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
-| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
-| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
-| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
-| "Existing code has no tests" | You're improving it. Add tests for existing code. |
-
-## Red Flags — STOP and Start Over
+### 必须立即停止并重新开始的情况
 
 - Code before test
 - Test after implementation
@@ -198,29 +125,18 @@ After all tests pass, look for refactor candidates:
 - "Already spent X hours, deleting is wasteful"
 - "TDD is dogmatic, I'm being pragmatic"
 - "This is different because..."
+- Writing a test without a matching scenario in `behavior-spec.json`
+- Adding assertions that do not appear in the scenario's `then` clauses
 
 **All of these mean: Delete code. Start over with TDD.**
 
-## When Stuck
+### 水平切片（Horizontal Slices）
 
-| Problem | Solution |
-|---------|----------|
-| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
-| Test too complicated | Design too complicated. Simplify interface. |
-| Must mock everything | Code too coupled. Use dependency injection. |
-| Test setup huge | Extract helpers. Still complex? Simplify design. |
+一次性写完全部测试再写全部实现是水平切片，会产生脆弱且脱离实际的测试。必须按垂直切片逐个 RED→GREEN→REFACTOR 推进。
 
-## Debugging Integration
+## 验证清单 / 出口条件
 
-Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
-
-Never fix bugs without a test.
-
-## Verification
-
-Test verification is covered by `/gxpm-verify`. After TDD cycles complete, load `/gxpm-verify` to run the full verification pipeline and collect evidence for `local-verify`.
-
-## Checklist Per Cycle
+每个 TDD 循环完成后检查：
 
 ```
 [ ] Test describes behavior, not implementation
@@ -232,7 +148,7 @@ Test verification is covered by `/gxpm-verify`. After TDD cycles complete, load 
 [ ] Verify GREEN executed (test passes + all others pass + output clean)
 ```
 
-## Final Rule
+### Final Rule
 
 ```
 Production code → test exists and failed first
@@ -241,13 +157,27 @@ Otherwise → not TDD
 
 No exceptions without your human partner's permission.
 
-## gxpm integration
+### 验证与证据
 
-- During `implement`, treat the first sub-task as the **tracer bullet**.
-- Use `gxpm run event <issue-id> <run-id> --type test-passed` to record test milestones.
-- After TDD cycles, load `/gxpm-verify` to execute the full verification pipeline and produce `local-verify` evidence.
-- If a bug is found during TDD, write a failing test reproducing it first. Switch to `/gxpm-diagnose` skill only if root cause is unclear.
+单个 TDD 循环的测试验证由测试运行器覆盖。全部 TDD 循环完成后，加载 `/gxpm-verify` 运行完整验证流水线并收集 `local-verify` 证据。
 
-## When adding mocks or test utilities
+在 gxpm 工作流中：
+- 使用 `gxpm run event <issue-id> <run-id> --type test-passed` 记录测试里程碑。
+- TDD 循环完成后，加载 `/gxpm-verify` 执行完整验证流水线并产出 `local-verify` 证据。
+- 如果在 TDD 过程中发现 bug，先写重现该 bug 的 failing test。仅当根因不明时才切换到 `/gxpm-diagnose` skill。
 
-Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
+## 常见说辞表
+
+| Excuse | Reality |
+|--------|---------|
+| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+| "I'll test after" | Tests passing immediately prove nothing. |
+| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
+| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
+| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
+| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
+| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
+| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
+| "Existing code has no tests" | You're improving it. Add tests for existing code. |

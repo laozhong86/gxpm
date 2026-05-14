@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "playwright": "^1.59.1",
-    "yaml": "^2.8.4"
+    "yaml": "^2.8.4",
+    "zod": "^4.4.3"
   }
 }

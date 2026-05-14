@@ -177,8 +177,8 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     const before = readIssueState({ issueId });
     const after = transitionIssuePhase({ issueId, nextPhase: value });
 
-    // Auto-ensure worktree on dispatch -> implement transition
-    if (before.currentPhase === "dispatch" && after.currentPhase === "implement") {
+    // Auto-ensure worktree on dispatch -> specify transition
+    if (before.currentPhase === "dispatch" && after.currentPhase === "specify") {
       try {
         const result = await ensureIssueWorkspaceWithResolver({ issueId });
         if (result.resolution?.status === "resolved" && result.resolution.env) {
