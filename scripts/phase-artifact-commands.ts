@@ -9,6 +9,7 @@ import { initializePrCheck } from "../core/pr-check";
 import { initializeQaFindings } from "../core/qa";
 import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
+import { initializeSpecify } from "../core/specify";
 import { initializeTriage } from "../core/triage";
 import { initializeVerifyFindings } from "../core/verify";
 
@@ -34,6 +35,10 @@ const PHASE_ARTIFACT_HANDLERS: Partial<Record<
   "dispatch-handoff": {
     initialize: initializeDispatch,
     successMessage: (issueId) => `initialized dispatch handoff for ${issueId}`,
+  },
+  "behavior-spec": {
+    initialize: initializeSpecify,
+    successMessage: (issueId) => `initialized behavior-spec artifact for ${issueId}`,
   },
   "local-verify": {
     initialize: initializeLocalVerify,

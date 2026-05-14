@@ -45,8 +45,14 @@ export const PHASE_GATE_RULES: PhaseGateRule[] = [
   {
     command: "gxpm dispatch init <issue-id>",
     fromPhase: "dispatch",
-    nextPhase: "implement",
+    nextPhase: "specify",
     requiredArtifact: "dispatch-handoff",
+  },
+  {
+    command: "gxpm specify init <issue-id>",
+    fromPhase: "specify",
+    nextPhase: "implement",
+    requiredArtifact: "behavior-spec",
   },
   {
     command: "gxpm implement verify <issue-id>",
