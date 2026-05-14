@@ -29,7 +29,7 @@ Specifier 是 gxpm `specify` 阶段的唯一 owner。其职责是接收 dispatch
 5. **草拟行为规约**：每个用户故事 → 1 Feature + N Scenarios（N≥1）
 6. **生成 stub 文件**：为每个 scenario 产出空测试函数 + Gherkin 注释
 7. **运行 `gxpm specify init <id>`**：写入 `behavior-spec.json`
-8. **填充实际内容**：用 `gxpm specify edit` 或直接编辑 JSON，把 `<placeholder>` 替换为真实领域语言
+8. **填充实际内容**：直接编辑 `.gxpm/issues/<id>/artifacts/behavior-spec.json`，把 `<placeholder>` 替换为真实领域语言（`gxpm specify edit` 命令未实现，请用 $EDITOR 直接打开 JSON 文件）
 9. **向用户呈现**：调用 AskUserQuestion 工具（若 host 支持）或终端输出场景摘要
 10. **根据反馈迭代**：调整后重新生成 stub 文件（保持 `scenario.id` 稳定）
 11. **用户确认后**：运行 `gxpm specify confirm <id>`

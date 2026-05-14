@@ -54,7 +54,7 @@ NO <placeholder> SENTINEL REMAINS AT CONFIRM TIME
    ```
 
 6. 运行 `gxpm specify init <issue-id>` 写入 `behavior-spec.json`（自动用 `<placeholder>` 占位）
-7. 用 `gxpm specify edit <issue-id>` 或直接编辑 JSON，把所有 `<placeholder>` 替换为真实领域语言
+7. 直接编辑 `.gxpm/issues/<issue-id>/artifacts/behavior-spec.json`，把所有 `<placeholder>` 替换为真实领域语言（`gxpm specify edit` 命令未实现，请用 $EDITOR 直接打开 JSON 文件）
 8. 调用 AskUserQuestion 呈现三选项：
    - 行为正确，继续
    - 需要调整：用户反馈 → 回到步骤 4
