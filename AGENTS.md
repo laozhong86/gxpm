@@ -36,6 +36,15 @@ L5: 证据与恢复层 — .gxpm/issues/<id>/{state,artifacts,evidence,memory}/
 2. 本地 state 永远比外部系统更权威 —— `state.json` 比 Linear comment、PR body、聊天上下文更权威。
 3. 所有 transition 都必须可审计、可重放、可恢复 —— 事件 append-only 写入 `events.jsonl`。
 4. Command 只路由，Agent 只担责，Skill 只注入，Artifact 只存真值 —— 分层边界不可漂移。
+
+**Phase 顺序（13 阶段）：**
+
+```
+triage → plan → dispatch → specify → implement → local-verify → ac-check → self-review → ship → pr-check → verify → qa → land
+```
+
+- **specify**：BDD 行为规约阶段。产出 `behavior-spec.json` artifact + 空测试 stub；必须由用户通过 `gxpm specify confirm <id>` 显式确认后才能进入 implement。Owner：`specifier`。Skill：`gxpm-specifier`。规则：`docs/governance/gherkin-style.md`。
+- 进入 `implement` 之前，phase-gate 校验 `behavior-spec.confirmedAt` 非空；老 issue（在 `SPECIFY_PHASE_CUTOFF = 2026-05-14T00:00:00Z` 前已进入 implement）可豁免。
 <!-- END USER-SPECIFIED -->
 
 ## 全局纪律
@@ -56,7 +65,8 @@ L5: 证据与恢复层 — .gxpm/issues/<id>/{state,artifacts,evidence,memory}/
 10. `docs/governance/template-authoring.md`
 11. `docs/governance/host-adapter.md`
 12. `docs/governance/skill-authoring.md`
-13. `docs/research/pmc-gstack-skill-study.md`
+13. `docs/governance/gherkin-style.md`（specify 阶段强制规则）
+14. `docs/research/pmc-gstack-skill-study.md`
 
 如果来源冲突，先指出冲突和建议的最小安全路径。
 
