@@ -257,6 +257,33 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 - 架构决策 → `/gxpm-architecture`
 - PR 审查 → `/gxpm-review-changes`
 
+## 必需习惯
+
+- 绝不从聊天记忆推断阶段。始终先读 `gxpm issue status`。
+- 绝不跳过 artifact 回写。任何非平凡提议在阶段推进前必须写入 artifact。
+- 绝不让 Linear 替代本地状态。`.gxpm/issues/<id>/` 是单一真相源。
+
+## 关键规则
+
+### 状态优先
+
+在做阶段工作前，先读取 `gxpm issue status <issue-id>`。
+如果状态不存在，创建它：`gxpm issue create --auto-id`。
+
+### Artifact 纪律
+
+任何非平凡的提议在阶段推进前**必须**写入 artifact。
+Artifact 树是真相源；聊天历史是易失的。
+
+## 相关 Skills
+
+- 纪律性调试循环 → `/gxpm-diagnose`
+- 对齐会议、术语精炼 → `/gxpm-grill`
+- 垂直切片测试驱动开发 → `/gxpm-tdd`
+- 架构摩擦分析 → `/gxpm-architecture`
+- PRD 合成与垂直切片拆分 → `/gxpm-planning`
+- Issue 状态机管理（分类、标签、路由） → `/gxpm-triage`
+
 ## 常见说辞表
 
 | 用户 utterance | 推荐回应 |
