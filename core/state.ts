@@ -14,6 +14,11 @@ import { getResolvedConfigValue } from "./config";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
+// Issues whose phaseHistory shows implement entered before this cutoff are
+// exempt from the specify-gate (introduced on this date). Do NOT change
+// retroactively — that would break legacy issues.
+export const SPECIFY_PHASE_CUTOFF = "2026-05-14T00:00:00Z";
+
 export const GXPM_PHASES = [
   "triage",
   "plan",
@@ -703,8 +708,45 @@ function assertArtifactGate(input: {
     return;
   }
 
+  // Derive root from issueDir (<root>/.gxpm/issues/<id>) so readIssueState
+  // uses the same temp dir in tests rather than process.cwd().
+  const derivedRoot = resolve(input.issueDir, "..", "..", "..");
+
   const requiredArtifactPath = join(input.issueDir, "artifacts", `${requiredArtifact}.json`);
   if (existsSync(requiredArtifactPath)) {
+    // Task 4: specify->implement gate — verify confirmedAt is set.
+    if (requiredArtifact === "behavior-spec" && input.nextPhase === "implement") {
+      const state = readIssueState({ root: derivedRoot, issueId: input.issueId });
+      const legacyEntry = state.phaseHistory?.find((h) => h.phase === "implement");
+      const isLegacy =
+        legacyEntry !== undefined && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF;
+      if (!isLegacy) {
+        const raw = JSON.parse(readFileSync(requiredArtifactPath, "utf8"));
+        const confirmedAt = raw?.payload?.confirmedAt;
+        if (!confirmedAt) {
+          const now = new Date().toISOString();
+          appendIssueEvent({
+            issueDir: input.issueDir,
+            event: {
+              schemaVersion: 1,
+              type: "gate.blocked",
+              issueId: input.issueId,
+              timestamp: now,
+              sessionId: resolveSessionId(),
+              payload: {
+                fromPhase: input.fromPhase,
+                toPhase: input.nextPhase,
+                missingArtifact: "behavior-spec.confirmedAt",
+              },
+            },
+          });
+          throw new Error(
+            `behavior-spec exists but confirmedAt is null; run \`gxpm specify confirm ${input.issueId}\` to confirm`,
+          );
+        }
+      }
+    }
+
     const now = new Date().toISOString();
     appendIssueEvent({
       issueDir: input.issueDir,
@@ -740,6 +782,19 @@ function assertArtifactGate(input: {
       },
     },
   });
+
+  // Task 4.5: legacy bypass — if this issue previously entered implement
+  // before the specify-gate cutoff, skip the gate entirely. We still emit
+  // the gate.blocked event above so the attempt is recorded, but we return
+  // rather than throwing so in-flight legacy issues are not blocked.
+  if (requiredArtifact === "behavior-spec") {
+    const state = readIssueState({ root: derivedRoot, issueId: input.issueId });
+    const legacyEntry = state.phaseHistory?.find((h) => h.phase === "implement");
+    if (legacyEntry && legacyEntry.enteredAt < SPECIFY_PHASE_CUTOFF) {
+      return; // legacy bypass
+    }
+  }
+
   throw new Error(
     `Missing required artifact: ${requiredArtifact}; run ${getGateCommand(input.issueId, requiredArtifact)}`,
   );
