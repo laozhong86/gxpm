@@ -1,7 +1,44 @@
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { PHASE_GATE_RULES } from "../../core/phase-gates";
+import { confirmSpecify } from "../../core/specify";
 import { createIssueState, transitionIssuePhase, type GxpmPhase } from "../../core/state";
 import { PHASE_ARTIFACT_COMMANDS } from "../../scripts/phase-artifact-commands";
+
+function fillAndConfirmSpecDraft(root: string, issueId: string) {
+  const specPath = join(
+    root,
+    ".gxpm",
+    "issues",
+    issueId,
+    "artifacts",
+    "behavior-spec.json",
+  );
+  const stored = JSON.parse(readFileSync(specPath, "utf8"));
+  stored.payload.feature = {
+    title: "test feature",
+    asA: "test user",
+    iWant: "test outcome",
+    soThat: "tests can advance phases",
+  };
+  const stubRel = `test/.gxpm-fixtures/${issueId}.test.ts`;
+  stored.payload.scenarios = [
+    {
+      id: "scn-01",
+      name: "test scenario",
+      given: ["a precondition"],
+      when: "an action occurs",
+      then: ["an observable outcome appears"],
+      examples: [],
+      stubPath: stubRel,
+    },
+  ];
+  writeFileSync(specPath, `${JSON.stringify(stored, null, 2)}\n`);
+  const stubAbs = join(root, stubRel);
+  mkdirSync(join(stubAbs, ".."), { recursive: true });
+  writeFileSync(stubAbs, "// test fixture stub\n");
+  confirmSpecify({ root, issueId, confirmedBy: "test-helper@gxpm" });
+}
 
 const cliPath = resolve(import.meta.dir, "..", "..", "scripts", "gxpm.ts");
 
@@ -47,6 +84,9 @@ export function enterPhase(root: string, issueId: string, targetPhase: GxpmPhase
 
   for (const step of WORKFLOW_STEPS) {
     step.initialize({ root, issueId });
+    if (step.nextPhase === "implement") {
+      fillAndConfirmSpecDraft(root, issueId);
+    }
     transitionIssuePhase({ root, issueId, nextPhase: step.nextPhase });
     if (step.nextPhase === targetPhase) {
       return;
@@ -64,7 +104,10 @@ export function enterPhaseCli(root: string, issueId: string, targetPhase: GxpmPh
 
   for (const step of CLI_WORKFLOW_STEPS) {
     runRequiredCli(root, [...step.initializeArgs, issueId]);
-    runRequiredCli(root, ["issue", "transition", issueId, step.nextPhase]);
+    if (step.nextPhase === "implement") {
+      fillAndConfirmSpecDraft(root, issueId);
+    }
+    transitionIssuePhase({ root, issueId, nextPhase: step.nextPhase });
     if (step.nextPhase === targetPhase) {
       return;
     }
