@@ -18,6 +18,7 @@ export const GXPM_PHASES = [
   "triage",
   "plan",
   "dispatch",
+  "specify",
   "implement",
   "local-verify",
   "ac-check",
