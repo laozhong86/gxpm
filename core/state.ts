@@ -660,7 +660,7 @@ function assertWorktreeGate(input: {
   nextPhase: GxpmPhase;
   issueDir: string;
 }) {
-  if (input.fromPhase !== "dispatch" || input.nextPhase !== "implement") {
+  if (input.fromPhase !== "dispatch" || input.nextPhase !== "specify") {
     return;
   }
   const branch = getCurrentGitBranch();
@@ -686,12 +686,12 @@ function assertWorktreeGate(input: {
       payload: {
         fromPhase: input.fromPhase,
         toPhase: input.nextPhase,
-        reason: `dispatch-to-implement blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
+        reason: `dispatch-to-specify blocked: canonical main checkout must stay on ${baseBranch}; create a git worktree for feature branches`,
       },
     },
   });
   throw new Error(
-    `Transition blocked: dispatch -> implement requires a dedicated git worktree when on a feature branch. ` +
+    `Transition blocked: dispatch -> specify requires a dedicated git worktree when on a feature branch. ` +
     `Current directory is the canonical main checkout on branch '${branch}'. ` +
     `Run: gxpm workspace ensure ${input.issueId}`,
   );
