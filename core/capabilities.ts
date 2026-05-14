@@ -293,6 +293,41 @@ export const CAPABILITY_REGISTRY = [
     ],
   },
   {
+    id: "execution.behavior-spec",
+    title: "Behavior Specification",
+    summary: "Initializes and confirms the BDD-style behavior spec that gates the specify-to-implement transition.",
+    runtime: "execution",
+    status: "active",
+    inputContract: "Issue id in specify phase; dispatch-handoff artifact must already exist.",
+    outputContract: {
+      description: "behavior-spec phase artifact with confirmedAt set, and artifact timeline event.",
+      artifacts: ["behavior-spec"],
+      evidence: ["artifacts/behavior-spec.json", "events.jsonl artifact.written"],
+    },
+    mutationPolicy: {
+      scope: "issue-local-files",
+      description: "Writes and confirms only the target issue behavior-spec artifact through the artifact store.",
+    },
+    idempotency: "Repeated initialization recreates the draft spec; confirm is idempotent once confirmed.",
+    failureModes: [
+      { description: "Current phase is not specify", defaultType: "FATAL" },
+      { description: "Placeholder sentinels remain unfilled", defaultType: "FATAL" },
+      { description: "Stub file referenced in scenario is missing", defaultType: "FATAL" },
+      { description: "Artifact store write failure", defaultType: "TRANSIENT" },
+    ],
+    commands: [
+      "gxpm specify init <issue-id>",
+      "gxpm specify confirm <issue-id>",
+    ],
+    sourceFiles: [
+      "core/specify.ts",
+      "core/phase-gates.ts",
+      "core/artifacts.ts",
+      "scripts/phase-artifact-commands.ts",
+      "scripts/commands/specify.ts",
+    ],
+  },
+  {
     id: "verification.issue-evidence-store",
     title: "Issue Evidence Store",
     summary: "Allocates and writes issue-local command, browser, review, release, and investigation evidence.",
