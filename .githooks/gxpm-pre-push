@@ -16,7 +16,18 @@ current_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
 issue_id=$(printf '%s' "$current_branch" | grep -oEi '(gxg|gxpm)-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
 
 if [ -n "$issue_id" ] && [ -f ".gxpm/issues/${issue_id}/state.json" ]; then
-  exec "$GXPM_BIN" gate pre-push "$issue_id"
+  "$GXPM_BIN" gate pre-push "$issue_id"
+fi
+
+# Informational dogfood compliance check (non-blocking by default).
+# Reports issues that reached implement without going through specify
+# after SPECIFY_PHASE_CUTOFF. Set GXPM_DOGFOOD_STRICT=1 to enforce.
+if command -v bun >/dev/null 2>&1 && [ -f "scripts/dogfood-check.ts" ]; then
+  if [ "${GXPM_DOGFOOD_STRICT:-0}" = "1" ]; then
+    bun run scripts/dogfood-check.ts --strict || exit 1
+  else
+    bun run scripts/dogfood-check.ts || true
+  fi
 fi
 
 exit 0
