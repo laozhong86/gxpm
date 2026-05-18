@@ -5,8 +5,6 @@ description: Test-driven development with red-green-refactor loops via vertical 
 
 # Test-Driven Development
 
-## gxpm-tdd
-
 **Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.
 
 **Good tests** are integration-style: they exercise real code paths through public APIs. They describe _what_ the system does, not _how_ it does it.
@@ -91,6 +89,10 @@ See [references/workflow.md](references/workflow.md) for the full TDD workflow.
 
 ### 卡壳时的应对策略
 
+See [references/troubleshooting.md](references/troubleshooting.md) for detailed guidance.
+
+Quick reference:
+
 | Problem | Solution |
 |---------|----------|
 | Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
@@ -106,9 +108,11 @@ Never fix bugs without a test.
 
 ### 添加 mock 或测试工具时
 
-Read `@testing-anti-patterns.md` before adding mocks, changing tests, or adding test-only methods to production code.
+Read [references/mocking.md](references/mocking.md) before adding mocks, changing tests, or adding test-only methods to production code.
 
-## Red Flags / 红旗清单 / 反模式
+See [references/interface-design.md](references/interface-design.md) for designing testable interfaces.
+
+## 红旗清单 / 反模式
 
 ### 必须立即停止并重新开始的情况
 

@@ -30,6 +30,7 @@ gxpm issue create --auto-id [--type meta]
 gxpm issue status <id>
 gxpm issue next <id>
 gxpm issue transition <id> <phase>
+gxpm phase rewind <id> --to <phase> --reason "..."
 gxpm artifact write <id> <type> --json '...'
 bun test
 bun run check

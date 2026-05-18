@@ -1,6 +1,6 @@
 ---
 name: gxpm-specifier
-description: BDD 行为规约设计 skill。在 gxpm specify 阶段使用，强制先产出 Gherkin 行为注释 + 空测试 stub，由用户确认后才能进入 TDD。触发场景：用户在 specify 阶段、用户提到 BDD、Gherkin、Given-When-Then、行为规约、行为先行。
+description: BDD behavior specification design skill. Use during gxpm specify phase, when user mentions BDD, Gherkin, Given-When-Then, behavior spec, or behavior-first development.
 ---
 
 # gxpm-specifier

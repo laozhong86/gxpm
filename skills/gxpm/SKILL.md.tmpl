@@ -43,6 +43,7 @@ gxpm issue next <issue-id>            # 推荐下一步命令
 gxpm issue context <issue-id>         # 完整上下文 + 恢复新鲜度 + 必读文件 + 代理指令（新会话续做的首选入口）
 gxpm issue list                       # 活跃 issue
 gxpm issue create --auto-id           # 使用下一个空闲 id 创建新 issue
+gxpm phase rewind <issue-id> --to <phase> --reason "..."  # 回退到已进入过的历史阶段（需显式理由）
 gxpm autopilot start <issue-id>|--auto-id --profile full-delivery
 gxpm autopilot status <issue-id>
 gxpm doctor                           # 健康检查
