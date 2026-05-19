@@ -35,11 +35,12 @@ export function installClaudeHooks(options: InstallClaudeHooksOptions = {}): Ins
     hooks: {
       SessionStart: [
         {
-          matcher: "startup|resume",
+          matcher: "startup|clear|compact",
           hooks: [
             {
               type: "command",
               command: "gxpm hook SessionStart --host claude",
+              async: false,
               statusMessage: "gxpm: loading capability hint",
             },
           ],
@@ -51,6 +52,7 @@ export function installClaudeHooks(options: InstallClaudeHooksOptions = {}): Ins
             {
               type: "command",
               command: "gxpm hook UserPromptSubmit --host claude",
+              async: false,
               statusMessage: "gxpm: resolving referenced issue",
             },
           ],
@@ -63,6 +65,7 @@ export function installClaudeHooks(options: InstallClaudeHooksOptions = {}): Ins
             {
               type: "command",
               command: "gxpm hook PreToolUse --host claude",
+              async: false,
               statusMessage: "gxpm: recording plan payload",
             },
           ],

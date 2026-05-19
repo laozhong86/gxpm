@@ -38,12 +38,12 @@ describe("installClaudeHooks", () => {
     expect(existsSync(join(fakeRepo, ".claude", "settings.json"))).toBe(true);
   });
 
-  test("SessionStart matcher filters startup|resume", () => {
+  test("SessionStart matcher filters startup|clear|compact", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-claude-matcher-"));
     installClaudeHooks({ scope: "user", home: fakeHome });
 
     const cfg = JSON.parse(readFileSync(join(fakeHome, ".claude", "settings.json"), "utf8"));
-    expect(cfg.hooks.SessionStart[0].matcher).toBe("startup|resume");
+    expect(cfg.hooks.SessionStart[0].matcher).toBe("startup|clear|compact");
     expect(cfg.hooks.PreToolUse[0].matcher).toBe("ExitPlanMode");
   });
 
@@ -53,6 +53,16 @@ describe("installClaudeHooks", () => {
 
     const cfg = JSON.parse(readFileSync(join(fakeHome, ".claude", "settings.json"), "utf8"));
     expect(cfg.hooks.UserPromptSubmit[0].matcher).toBeUndefined();
+  });
+
+  test("all hooks are synchronous (async: false)", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-claude-async-"));
+    installClaudeHooks({ scope: "user", home: fakeHome });
+
+    const cfg = JSON.parse(readFileSync(join(fakeHome, ".claude", "settings.json"), "utf8"));
+    expect(cfg.hooks.SessionStart[0].hooks[0].async).toBe(false);
+    expect(cfg.hooks.UserPromptSubmit[0].hooks[0].async).toBe(false);
+    expect(cfg.hooks.PreToolUse[0].hooks[0].async).toBe(false);
   });
 
   test("re-run is idempotent (does not duplicate entries)", () => {

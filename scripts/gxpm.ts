@@ -22,6 +22,7 @@ import { runWorkflowCommand } from "./commands/workflow";
 import { runPresetCommand } from "./commands/preset";
 import { runPhaseCommand } from "./commands/phase";
 import { runSpecifyCommand } from "./commands/specify";
+import { runFeedbackCommand } from "./commands/feedback";
 
 async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
@@ -30,7 +31,9 @@ async function main(argv: string[]) {
       console.error(`[event] ${JSON.stringify(event)}`);
     });
   }
-  const [command, subcommand, issueId, value] = argv;
+  // Filter out flags like --army before positional parsing
+  const positional = argv.filter((arg) => !arg.startsWith("--"));
+  const [command, subcommand, issueId, value] = positional;
 
   if (!command || command === "check") {
     console.log(runScaffoldCheck());
@@ -173,6 +176,11 @@ async function main(argv: string[]) {
 
   if (command === "specify" && subcommand !== "init") {
     runSpecifyCommand(argv, subcommand, issueId);
+    return;
+  }
+
+  if (command === "feedback") {
+    await runFeedbackCommand(argv, subcommand);
     return;
   }
 

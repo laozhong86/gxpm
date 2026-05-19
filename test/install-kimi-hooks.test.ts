@@ -74,7 +74,7 @@ describe("installKimiHooks", () => {
     installKimiHooks({ home: fakeHome });
 
     const content = readFileSync(join(fakeHome, ".kimi", "config.toml"), "utf8");
-    expect(content).toContain('matcher = ""');
+    expect(content).toContain('matcher = "startup|clear|compact"');
     expect(content).toContain('matcher = "edit_file|write_file"');
   });
 });

@@ -146,6 +146,11 @@ const CONFIG_REGISTRY = {
     description: "Human-readable agent identity used as issue creator/assignee name. Falls back to host name if empty.",
     normalize: (value: unknown) => (typeof value === "string" ? value : ""),
   },
+  "feedback.gxpmSourceRoot": {
+    defaultValue: "",
+    description: "Absolute path to the gxpm source repository where feedback issues are created. When empty, feedback creation is disabled.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
 } as const;
 
 export type KnownConfigKey = keyof typeof CONFIG_REGISTRY;
@@ -187,6 +192,7 @@ function getEnvConfigValue(key: string): unknown | undefined {
     "workspace.basePort": "GXPM_WORKSPACE_BASE_PORT",
     update_check: "GXPM_UPDATE_CHECK",
     "agent.name": "GXPM_AGENT_NAME",
+    "feedback.gxpmSourceRoot": "GXPM_FEEDBACK_SOURCE_ROOT",
   };
   const envKey = envMap[key];
   if (!envKey) return undefined;

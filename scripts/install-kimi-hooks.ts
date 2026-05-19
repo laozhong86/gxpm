@@ -24,7 +24,7 @@ const GXPM_HOOKS_END = "# end gxpm hooks";
 const HOOKS_TOML = `[[hooks]]
 event = "SessionStart"
 command = "gxpm hook SessionStart --host kimi"
-matcher = ""
+matcher = "startup|clear|compact"
 timeout = 30
 
 [[hooks]]

@@ -94,6 +94,9 @@ describe("phase gate registry", () => {
       "triage-report",
       "autopilot-grant",
       "wiki-context",
+      "review-report",
+      "ship-audit-report",
+      "feedback-description",
     ]);
     expect(isGateArtifact("acceptance-contract")).toBe(true);
     expect(isGateArtifact("issue-intake")).toBe(false);

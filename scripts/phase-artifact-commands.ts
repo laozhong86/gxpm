@@ -49,11 +49,11 @@ const PHASE_ARTIFACT_HANDLERS: Partial<Record<
     successMessage: (issueId) => `initialized acceptance check artifact for ${issueId}`,
   },
   "self-review": {
-    initialize: initializeSelfReview,
+    initialize: (input) => initializeSelfReview({ ...input, army: process.argv.includes("--army") }),
     successMessage: (issueId) => `initialized self review artifact for ${issueId}`,
   },
   "ship-readiness": {
-    initialize: initializeShipReadiness,
+    initialize: (input) => initializeShipReadiness({ ...input, army: process.argv.includes("--army") }),
     successMessage: (issueId) => `initialized ship readiness artifact for ${issueId}`,
   },
   "pr-check": {

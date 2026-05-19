@@ -123,6 +123,7 @@ describe("setConfigValue + getConfigValue", () => {
       "sync.syncArtifacts",
       "sync.linearAssigneeId",
       "agent.name",
+      "feedback.gxpmSourceRoot",
     ]);
     expect(entries.find((entry) => entry.key === "update_check")).toMatchObject({
       value: false,

@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   createIssueState,
   getIssuePaths,
@@ -31,13 +32,18 @@ import { getResolvedConfigValue } from "../../core/config";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
-const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}]`;
+const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}] [--parent <parent-issue-id>]`;
 
 export async function runIssueCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, value: string | undefined) {
   if (subcommand === "create") {
     const resolvedId = resolveIssueCreateId(argv);
     const issueType = parseIssueTypeOption(argv, "feature");
-    const state = createIssueState({ issueId: resolvedId, issueType });
+    const parentId = parseParentOption(argv);
+    let state = createIssueState({ issueId: resolvedId, issueType });
+    if (parentId) {
+      state = addIssueRelation({ childId: resolvedId, parentId });
+      console.log(`parent: ${parentId}`);
+    }
     console.log(`created ${state.issueId} at ${state.currentPhase}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), resolvedId).statePath}`);
     return;
@@ -99,7 +105,18 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     const phaseWidth = Math.max(13, ...entries.map((e) => e.currentPhase.length));
     console.log(`${"ISSUE".padEnd(idWidth)}  ${"TYPE".padEnd(typeWidth)}  ${"PHASE".padEnd(phaseWidth)}  UPDATED                   FLAGS`);
     for (const entry of entries) {
-      const flags = entry.archived ? "archived" : "";
+      let flags = entry.archived ? "archived" : "";
+      try {
+        const st = readIssueState({ issueId: entry.issueId });
+        const hasParent = st.relations?.some((r) => r.relation === "parent");
+        const hasChild = st.relations?.some((r) => r.relation === "child");
+        const relFlags = [hasParent ? "has-parent" : "", hasChild ? "has-child" : ""].filter(Boolean).join(",");
+        if (relFlags) {
+          flags = flags ? `${flags},${relFlags}` : relFlags;
+        }
+      } catch {
+        // ignore
+      }
       console.log(
         `${entry.issueId.padEnd(idWidth)}  ${entry.issueType.padEnd(typeWidth)}  ${entry.currentPhase.padEnd(phaseWidth)}  ${entry.updatedAt}  ${flags}`,
       );
@@ -154,6 +171,12 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     return;
   }
 
+  if (subcommand === "batch") {
+    if (!issueId) throw new Error("Usage: gxpm issue batch <issue-id>");
+    runIssueBatch(issueId);
+    return;
+  }
+
   if (subcommand === "history") {
     if (!issueId) throw new Error("Usage: gxpm issue history <issue-id> [--json]");
     runIssueHistory(issueId, argv.includes("--json"));
@@ -180,7 +203,9 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     // Auto-ensure worktree on dispatch -> specify transition
     if (before.currentPhase === "dispatch" && after.currentPhase === "specify") {
       try {
-        const result = await ensureIssueWorkspaceWithResolver({ issueId });
+        // Build linkedIssues from relations so child issues reuse parent worktree
+        const linkedIssues = (before.relations ?? []).map((r) => r.issueId);
+        const result = await ensureIssueWorkspaceWithResolver({ issueId, hints: linkedIssues.length > 0 ? { linkedIssues } : undefined });
         if (result.resolution?.status === "resolved" && result.resolution.env) {
           const handoff = readArtifact({ issueId, type: "dispatch-handoff" });
           writeArtifact({
@@ -192,7 +217,22 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
               worktreeDecision: result.method?.type === "created" ? "created" : "reused",
             },
           });
-          console.log(`worktree: ${result.resolution.env.workspacePath}`);
+          // Write worktree ownership marker
+          const allLinked = [issueId, ...linkedIssues];
+          const ownerMarker = {
+            ownerIssueId: issueId,
+            linkedIssues: allLinked,
+            createdAt: new Date().toISOString(),
+          };
+          try {
+            writeFileSync(
+              join(result.workspacePath, ".gxpm-worktree-owner.json"),
+              `${JSON.stringify(ownerMarker, null, 2)}\n`,
+            );
+          } catch {
+            // best-effort; marker is advisory
+          }
+          console.log(`worktree: ${result.workspacePath}`);
           if (result.resolution.env.branchName) {
             console.log(`branch:   ${result.resolution.env.branchName}`);
           }
@@ -563,6 +603,10 @@ function resolveIssueCreateId(argv: string[]) {
       index += 1;
       continue;
     }
+    if (arg === "--parent") {
+      index += 1;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new Error(`Unknown option for gxpm issue create: ${arg}`);
     }
@@ -578,6 +622,62 @@ function resolveIssueCreateId(argv: string[]) {
   if (positional[0]) return positional[0];
   if (hasAutoId) return getNextAvailableIssueId();
   throw new Error(ISSUE_CREATE_USAGE);
+}
+
+function parseParentOption(argv: string[]): string | undefined {
+  if (!argv.includes("--parent")) return undefined;
+  return optionRequiredValue(argv, "--parent");
+}
+
+function addIssueRelation(input: { childId: string; parentId: string }) {
+  const now = new Date().toISOString();
+  // Update child: add parent relation
+  const childState = readIssueState({ issueId: input.childId });
+  const childRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
+    ...(childState.relations ?? []),
+    { relation: "parent", issueId: input.parentId, createdAt: now },
+  ];
+  const childPaths = getIssuePaths(process.cwd(), input.childId);
+  const childRaw = JSON.parse(readFileSync(childPaths.statePath, "utf8")) as Record<string, unknown>;
+  childRaw.relations = childRelations;
+  writeFileSync(childPaths.statePath, `${JSON.stringify(childRaw, null, 2)}\n`);
+
+  // Update parent: add child relation
+  const parentState = readIssueState({ issueId: input.parentId });
+  const parentRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
+    ...(parentState.relations ?? []),
+    { relation: "child", issueId: input.childId, createdAt: now },
+  ];
+  const parentPaths = getIssuePaths(process.cwd(), input.parentId);
+  const parentRaw = JSON.parse(readFileSync(parentPaths.statePath, "utf8")) as Record<string, unknown>;
+  parentRaw.relations = parentRelations;
+  writeFileSync(parentPaths.statePath, `${JSON.stringify(parentRaw, null, 2)}\n`);
+
+  return { ...childState, relations: childRelations.map((r) => ({ ...r, relation: r.relation as "parent" | "child" | "related", createdAt: r.createdAt })) };
+}
+
+function runIssueBatch(issueId: string) {
+  const state = readIssueState({ issueId });
+  const relations = state.relations ?? [];
+  const batchIssues = [issueId, ...relations.map((r) => r.issueId)];
+
+  console.log(`batch for ${issueId}`);
+  console.log("─".repeat(60));
+  console.log(`${issueId}  ${state.currentPhase}  (self)`);
+
+  for (const rel of relations) {
+    try {
+      const relState = readIssueState({ issueId: rel.issueId });
+      const marker = rel.relation === "parent" ? "↑ parent" : rel.relation === "child" ? "↓ child" : "→ related";
+      console.log(`${rel.issueId}  ${relState.currentPhase}  (${marker})`);
+    } catch {
+      console.log(`${rel.issueId}  (unknown)  (${rel.relation})`);
+    }
+  }
+
+  if (relations.length === 0) {
+    console.log("(no related issues)");
+  }
 }
 
 function parseIssueTypeOption(argv: string[], fallback: IssueType): IssueType {

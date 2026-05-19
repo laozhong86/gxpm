@@ -29,6 +29,7 @@ const GXPM_CODEX_HOOK_CONFIG = {
   hooks: {
     SessionStart: [
       {
+        matcher: "startup|clear|compact",
         hooks: [
           {
             type: "command",

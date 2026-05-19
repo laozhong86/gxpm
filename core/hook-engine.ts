@@ -230,6 +230,23 @@ async function processUserPromptSubmit(
   }
 
   const lines: string[] = [];
+
+  // Scope drift detection: if current directory has a worktree owner marker,
+  // warn when prompt mentions an unrelated issue.
+  if (match && cwd) {
+    const mentionedIssue = match[0].toUpperCase();
+    const owner = readWorktreeOwner(cwd);
+    if (owner && !owner.linkedIssues.includes(mentionedIssue)) {
+      lines.push(`⚠️ SCOPE DRIFT DETECTED ⚠️`);
+      lines.push(`Current worktree is owned by ${owner.ownerIssueId} (linked: ${owner.linkedIssues.join(", ")}).`);
+      lines.push(`You mentioned ${mentionedIssue} which is NOT in this batch.`);
+      lines.push(`RULE: If you need to work on ${mentionedIssue}, create it as a child issue first:`);
+      lines.push(`  gxpm issue create --auto-id --parent ${owner.ownerIssueId}`);
+      lines.push(`Or switch to a different worktree/session.`);
+      lines.push("");
+    }
+  }
+
   if (match) {
     const issueId = match[0].toUpperCase();
     const statePath = join(cwd, ".gxpm", "issues", issueId, "state.json");
@@ -540,6 +557,29 @@ function getActiveIssueId(cwd: string): string | null {
       return (issues[0] as Record<string, unknown>)?.issueId as string ?? null;
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+interface WorktreeOwner {
+  ownerIssueId: string;
+  linkedIssues: string[];
+  createdAt: string;
+}
+
+function readWorktreeOwner(cwd: string): WorktreeOwner | null {
+  try {
+    const path = join(cwd, ".gxpm-worktree-owner.json");
+    if (!existsSync(path)) return null;
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const ownerIssueId = typeof raw.ownerIssueId === "string" ? raw.ownerIssueId : "";
+    const linkedIssues = Array.isArray(raw.linkedIssues)
+      ? raw.linkedIssues.filter((item): item is string => typeof item === "string")
+      : [];
+    const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : "";
+    if (!ownerIssueId || !createdAt) return null;
+    return { ownerIssueId, linkedIssues, createdAt };
   } catch {
     return null;
   }

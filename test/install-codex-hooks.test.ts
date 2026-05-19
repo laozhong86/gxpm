@@ -117,6 +117,14 @@ describe("installCodexHooks", () => {
     expect(cfg.hooks.PreToolUse[0].hooks[0].command).toBe("gxpm hook PreToolUse --host codex");
   });
 
+  test("SessionStart matcher filters startup|clear|compact", () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-matcher-"));
+    installCodexHooks({ scope: "user", home: fakeHome });
+
+    const cfg = JSON.parse(readFileSync(join(fakeHome, ".codex", "hooks.json"), "utf8"));
+    expect(cfg.hooks.SessionStart[0].matcher).toBe("startup|clear|compact");
+  });
+
   test("re-run is idempotent (does not duplicate entries)", () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "gxpm-codex-hooks-idem-"));
 

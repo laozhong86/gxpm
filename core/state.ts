@@ -64,6 +64,12 @@ export interface IssueCreator {
   createdAt: string;
 }
 
+export interface IssueRelation {
+  relation: "parent" | "child" | "related";
+  issueId: string;
+  createdAt: string;
+}
+
 interface BaseIssueClaim {
   actor: string;
   claimedBySession: string;
@@ -103,6 +109,7 @@ export interface IssueState {
   creator?: IssueCreator;
   ownership?: IssueOwnership;
   claim?: IssueClaim;
+  relations?: IssueRelation[];
   archived?: boolean;
   archivedAt?: string | null;
   phaseHistory: Array<{
@@ -416,6 +423,7 @@ function migrateIssueState(raw: RawIssueState): IssueState {
     artifactRoot: String(raw.artifactRoot),
     creator: normalizeCreator(raw.creator),
     claim: normalizeClaim(raw.claim),
+    relations: normalizeRelations(raw.relations),
     archived: typeof raw.archived === "boolean" ? raw.archived : undefined,
     archivedAt:
       typeof raw.archivedAt === "string" || raw.archivedAt === null ? raw.archivedAt : undefined,
@@ -615,6 +623,28 @@ function normalizeClaim(value: unknown): IssueClaim | undefined {
   return { status: "stale", ...base, staleAt, staleReason };
 }
 
+function normalizeRelations(value: unknown): IssueRelation[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const result: IssueRelation[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const relation =
+      record.relation === "parent" || record.relation === "child" || record.relation === "related"
+        ? record.relation
+        : undefined;
+    const issueId = typeof record.issueId === "string" && record.issueId.trim() ? record.issueId : "";
+    const createdAt =
+      typeof record.createdAt === "string" && record.createdAt.trim() ? record.createdAt : "";
+    if (relation && issueId && createdAt) {
+      result.push({ relation, issueId, createdAt });
+    }
+  }
+  return result.length > 0 ? result : undefined;
+}
+
 function normalizeOwnershipHistory(value: unknown): IssueOwnershipHistoryEntry[] {
   if (!Array.isArray(value)) {
     return [];
@@ -763,6 +793,40 @@ function assertArtifactGate(input: {
         throw new Error(
           `behavior-spec exists but confirmedAt is null; run \`gxpm specify confirm ${input.issueId}\` to confirm`,
         );
+      }
+    }
+
+    // Army mode: check review-report for blocking findings on self-review -> ship
+    if (input.fromPhase === "self-review" && input.nextPhase === "ship") {
+      const reviewReportPath = join(input.issueDir, "artifacts", "review-report.json");
+      if (existsSync(reviewReportPath)) {
+        const raw = JSON.parse(readFileSync(reviewReportPath, "utf8"));
+        const findings = raw?.payload?.findings ?? [];
+        const blockingCount = findings.filter(
+          (f: Record<string, unknown>) => f.severity === "blocking",
+        ).length;
+        if (blockingCount > 0) {
+          const now = new Date().toISOString();
+          appendIssueEvent({
+            issueDir: input.issueDir,
+            event: {
+              schemaVersion: 1,
+              type: "gate.blocked",
+              issueId: input.issueId,
+              timestamp: now,
+              sessionId: resolveSessionId(),
+              payload: {
+                fromPhase: input.fromPhase,
+                toPhase: input.nextPhase,
+                missingArtifact: "review-report.blocking-free",
+                blockingCount,
+              },
+            },
+          });
+          throw new Error(
+            `self-review → ship blocked: review-report contains ${blockingCount} blocking finding(s)`,
+          );
+        }
       }
     }
 

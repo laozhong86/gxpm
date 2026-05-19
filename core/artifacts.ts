@@ -23,11 +23,14 @@ export const ARTIFACT_TYPES = [
   "local-verify",
   "acceptance-check",
   "self-review",
+  "review-report",
   "ship-readiness",
+  "ship-audit-report",
   "pr-check",
   "verify-findings",
   "qa-findings",
   "land-findings",
+  "feedback-description",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
