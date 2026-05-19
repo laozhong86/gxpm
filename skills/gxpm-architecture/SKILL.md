@@ -58,6 +58,7 @@ Present a numbered list of deepening opportunities. For each candidate:
 - **Problem** — why the current architecture is causing friction
 - **Solution** — plain English description of what would change
 - **Benefits** — explained in terms of locality and leverage, and also in how tests would improve
+- **Dependencies** — classify into [references/DEEPENING.md](references/DEEPENING.md) categories so the testing strategy is clear
 
 **Use CONTEXT.md vocabulary for the domain.** If `CONTEXT.md` defines "Order," talk about "the Order intake module" — not "the FooBarHandler."
 
@@ -74,6 +75,10 @@ Side effects happen inline:
 - **Sharpening a fuzzy term?** Update `CONTEXT.md` right there.
 - **User rejects the candidate with a load-bearing reason?** Offer an ADR so future architecture reviews don't re-suggest it.
 
+### 4. Interface design (optional)
+
+If the user wants to explore alternative interfaces for the chosen candidate, load [references/INTERFACE-DESIGN.md](references/INTERFACE-DESIGN.md) and run the parallel sub-agent pattern.
+
 ### gxpm 集成
 
 - Run `/architecture` once every few days, or after `/diagnose` surfaces an architectural root cause.
@@ -84,23 +89,18 @@ Side effects happen inline:
 
 Do NOT use architecture deepening when:
 
-- The user wants a purely cosmetic rename or formatting change. Use `gxpm-refactor-safely` instead.
+- The user wants a purely cosmetic rename. Use `gxpm-refactor-safely` instead.
 - The code is already deep, well-tested, and stable. If the deletion test shows the module earns its keep, leave it alone.
-- The change is urgent and tactical (hotfix, security patch). Architecture work is strategic; defer it to a dedicated issue.
-- You have not read `CONTEXT.md` and the relevant ADRs. Surfacing architectural friction without domain vocabulary produces shallow advice.
+- The change is urgent and tactical (hotfix, security patch). Architecture work is strategic; defer it.
+- You have not read `CONTEXT.md` and the relevant ADRs. Surfacing friction without domain vocabulary produces shallow advice.
 
-### Counter-examples
-
-**WRONG:** User asks "Can we rename `UserService` to `UserManager`?" You propose a full seam extraction with adapter interfaces.
-**RIGHT:** Suggest the rename directly. Architecture skill is for structural depth, not naming preferences.
-
-**WRONG:** A module passes the deletion test (complexity reappears across callers), but you suggest splitting it anyway because it looks large.
-**RIGHT:** Size is not depth. A large deep module is preferable to many shallow ones. If deletion test passes, recommend leaving it alone.
+**Counter-examples:** Proposing full seam extraction for a simple rename is wrong — architecture skill is for structural depth, not naming preferences. Suggesting to split a module that passes the deletion test because it "looks large" is wrong — size is not depth.
 
 ## 验证清单 / 出口条件
 
 - [ ] 已阅读 `CONTEXT.md` 和相关 ADR
 - [ ] 已用删除测试（deletion test）排查候选模块
-- [ ] deepening opportunities 已按 Files / Problem / Solution / Benefits 结构化呈现
+- [ ] deepening opportunities 已按 Files / Problem / Solution / Benefits / Dependencies 结构化呈现
 - [ ] 用户使用 `CONTEXT.md` 术语确认候选方案
+- [ ] 如需接口设计，已运行并行 sub-agent 模式并给出有主见的推荐
 - [ ] 如需更新 `CONTEXT.md` 或新增 ADR，已 inline 完成
