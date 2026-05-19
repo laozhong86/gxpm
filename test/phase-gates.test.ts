@@ -55,8 +55,14 @@ describe("phase gate registry", () => {
         requiredArtifact: "self-review",
       },
       {
-        command: "gxpm self-review ship <issue-id>",
+        command: "gxpm self-review cleanup <issue-id>",
         fromPhase: "self-review",
+        nextPhase: "cleanup",
+        requiredArtifact: "cleanup-report",
+      },
+      {
+        command: "gxpm cleanup ship <issue-id>",
+        fromPhase: "cleanup",
         nextPhase: "ship",
         requiredArtifact: "ship-readiness",
       },

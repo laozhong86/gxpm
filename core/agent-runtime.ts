@@ -11,7 +11,7 @@ import { join } from "node:path";
  * - Fallback 机制：并行不支持时自动回退到串行
  */
 
-export const ARMY_PHASES = ["self-review", "ship", "plan"] as const;
+export const ARMY_PHASES = ["self-review", "cleanup", "ship", "plan"] as const;
 export type ArmyPhase = (typeof ARMY_PHASES)[number];
 
 export const SEVERITY_LEVELS = ["blocking", "important", "suggestion"] as const;

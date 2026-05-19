@@ -28,6 +28,7 @@ export const GXPM_PHASES = [
   "local-verify",
   "ac-check",
   "self-review",
+  "cleanup",
   "ship",
   "pr-check",
   "verify",
@@ -165,6 +166,7 @@ interface IssueInput {
 
 interface TransitionInput extends IssueInput {
   nextPhase: GxpmPhase | string;
+  skipCleanup?: boolean;
 }
 
 const ISSUE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
@@ -283,7 +285,11 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
   const state = readIssueState({ root, issueId: input.issueId });
   const allowedNextPhase = getNextPhase(state.currentPhase);
 
-  if (nextPhase !== allowedNextPhase) {
+  // Allow skipping cleanup phase from self-review directly to ship
+  const isSkipCleanup =
+    input.skipCleanup && state.currentPhase === "self-review" && nextPhase === "ship";
+
+  if (nextPhase !== allowedNextPhase && !isSkipCleanup) {
     throw new Error(
       `Invalid phase transition: ${state.currentPhase} -> ${nextPhase}; allowed next phase: ${
         allowedNextPhase ?? "<none>"
@@ -293,7 +299,7 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
 
   assertPhaseGate({
     issueId: input.issueId,
-    fromPhase: state.currentPhase,
+    fromPhase: isSkipCleanup ? "cleanup" : state.currentPhase,
     nextPhase,
     issueDir: paths.issueDir,
   });
@@ -796,8 +802,8 @@ function assertArtifactGate(input: {
       }
     }
 
-    // Army mode: check review-report for blocking findings on self-review -> ship
-    if (input.fromPhase === "self-review" && input.nextPhase === "ship") {
+    // Army mode: check review-report for blocking findings on cleanup -> ship
+    if (input.fromPhase === "cleanup" && input.nextPhase === "ship") {
       const reviewReportPath = join(input.issueDir, "artifacts", "review-report.json");
       if (existsSync(reviewReportPath)) {
         const raw = JSON.parse(readFileSync(reviewReportPath, "utf8"));

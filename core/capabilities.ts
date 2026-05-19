@@ -484,16 +484,50 @@ export const CAPABILITY_REGISTRY = [
     ],
   },
   {
+    id: "review.cleanup",
+    title: "Cleanup",
+    summary: "Records cross-issue code cleanup findings including duplicates, naming inconsistencies, interface misalignments, and dead code removals.",
+    runtime: "review",
+    status: "active",
+    inputContract: "Issue id plus self-review artifact and worktree context with multiple issue changes.",
+    outputContract: {
+      description: "cleanup-report phase artifact and artifact timeline event.",
+      artifacts: ["cleanup-report"],
+      evidence: ["artifacts/cleanup-report.json", "artifacts/self-review.json", "events.jsonl artifact.written"],
+    },
+    mutationPolicy: {
+      scope: "issue-local-files",
+      description: "Writes only the target issue cleanup-report artifact through the artifact store.",
+    },
+    idempotency: "Repeated initialization replaces only the cleanup-report artifact.",
+    failureModes: [
+      { description: "Current phase is not self-review", defaultType: "FATAL" },
+      { description: "Self-review artifact missing", defaultType: "FATAL" },
+      { description: "Artifact store write failure", defaultType: "TRANSIENT" },
+    ],
+    commands: [
+      "gxpm self-review cleanup <issue-id>",
+      "gxpm artifact write <issue-id> cleanup-report --json <json>",
+    ],
+    sourceFiles: [
+      "core/cleanup.ts",
+      "core/phase-gates.ts",
+      "core/artifacts.ts",
+      "scripts/phase-artifact-commands.ts",
+      "scripts/commands/artifact.ts",
+    ],
+  },
+  {
     id: "release.ship-readiness",
     title: "Ship Readiness",
     summary: "Records release readiness, rollback plan, compatibility notes, and human verification expectations.",
     runtime: "release",
     status: "active",
-    inputContract: "Issue id plus self-review, acceptance-check, and release readiness findings.",
+    inputContract: "Issue id plus cleanup-report, self-review, acceptance-check, and release readiness findings.",
     outputContract: {
       description: "ship-readiness phase artifact and artifact timeline event.",
       artifacts: ["ship-readiness"],
-      evidence: ["artifacts/ship-readiness.json", "artifacts/self-review.json", "events.jsonl artifact.written"],
+      evidence: ["artifacts/ship-readiness.json", "artifacts/cleanup-report.json", "artifacts/self-review.json", "events.jsonl artifact.written"],
     },
     mutationPolicy: {
       scope: "issue-local-files",
@@ -501,12 +535,12 @@ export const CAPABILITY_REGISTRY = [
     },
     idempotency: "Repeated initialization refreshes release readiness fields without mutating remote providers.",
     failureModes: [
-      { description: "Current phase is not self-review", defaultType: "FATAL" },
+      { description: "Current phase is not cleanup", defaultType: "FATAL" },
       { description: "Rollback plan or checklist missing", defaultType: "FATAL" },
       { description: "Artifact store write failure", defaultType: "TRANSIENT" },
     ],
     commands: [
-      "gxpm self-review ship <issue-id>",
+      "gxpm cleanup ship <issue-id>",
       "gxpm artifact write <issue-id> ship-readiness --json <json>",
     ],
     sourceFiles: [

@@ -9,6 +9,7 @@ import { initializePrCheck } from "../core/pr-check";
 import { initializeQaFindings } from "../core/qa";
 import { initializeSelfReview } from "../core/self-review";
 import { initializeShipReadiness } from "../core/ship";
+import { initializeCleanup } from "../core/cleanup";
 import { initializeSpecify } from "../core/specify";
 import { initializeTriage } from "../core/triage";
 import { initializeVerifyFindings } from "../core/verify";
@@ -51,6 +52,10 @@ const PHASE_ARTIFACT_HANDLERS: Partial<Record<
   "self-review": {
     initialize: (input) => initializeSelfReview({ ...input, army: process.argv.includes("--army") }),
     successMessage: (issueId) => `initialized self review artifact for ${issueId}`,
+  },
+  "cleanup-report": {
+    initialize: initializeCleanup,
+    successMessage: (issueId) => `initialized cleanup report for ${issueId}`,
   },
   "ship-readiness": {
     initialize: (input) => initializeShipReadiness({ ...input, army: process.argv.includes("--army") }),

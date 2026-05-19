@@ -8,15 +8,16 @@ import { createIssueState, transitionIssuePhase } from "../core/state";
 import { enterPhase, enterPhaseCli, output, runCli } from "./helpers/workflow";
 
 describe("ship gate", () => {
-  test("initializes ship readiness only in self-review phase", () => {
+  test("initializes ship readiness from cleanup or self-review phase", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ship-init-"));
     createIssueState({ root, issueId: "GXPM-90" });
 
+    // Should reject from triage phase
     expect(() => initializeShipReadiness({ root, issueId: "GXPM-90" })).toThrow(
-      "Ship readiness can only be initialized from self-review phase",
+      "Ship readiness can only be initialized from cleanup or self-review phase",
     );
 
-    enterPhase(root, "GXPM-91", "self-review");
+    enterPhase(root, "GXPM-91", "cleanup");
     const artifact = initializeShipReadiness({ root, issueId: "GXPM-91" });
 
     expect(artifact.type).toBe("ship-readiness");
@@ -59,9 +60,9 @@ describe("ship gate", () => {
     });
   });
 
-  test("blocks self-review to ship until ship readiness exists", () => {
+  test("blocks cleanup to ship until ship readiness exists", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ship-gate-"));
-    enterPhase(root, "GXPM-92", "self-review");
+    enterPhase(root, "GXPM-92", "cleanup");
 
     expect(() => transitionIssuePhase({ root, issueId: "GXPM-92", nextPhase: "ship" })).toThrow(
       "Missing required artifact",
@@ -91,20 +92,20 @@ describe("ship gate", () => {
 
   test("CLI supports ship readiness init and artifact-backed ship transition", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-ship-cli-"));
-    enterPhaseCli(root, "GXPM-93", "self-review");
+    enterPhaseCli(root, "GXPM-93", "cleanup");
 
     const blocked = runCli(root, ["issue", "transition", "GXPM-93", "ship"]);
     expect(blocked.exitCode).toBe(1);
     expect(output(blocked)).toContain("Missing required artifact");
-    expect(output(blocked)).toContain("gxpm self-review ship GXPM-93");
+    expect(output(blocked)).toContain("gxpm cleanup ship GXPM-93");
 
-    const ship = runCli(root, ["self-review", "ship", "GXPM-93"]);
+    const ship = runCli(root, ["cleanup", "ship", "GXPM-93"]);
     expect(ship.exitCode).toBe(0);
     expect(output(ship)).toContain("initialized ship readiness artifact for GXPM-93");
 
     const list = runCli(root, ["artifact", "list", "GXPM-93"]);
     expect(list.exitCode).toBe(0);
-    expect(output(list)).toContain("self-review");
+    expect(output(list)).toContain("cleanup-report");
     expect(output(list)).toContain("ship-readiness");
 
     const read = runCli(root, ["artifact", "read", "GXPM-93", "ship-readiness"]);
@@ -113,6 +114,6 @@ describe("ship gate", () => {
 
     const transition = runCli(root, ["issue", "transition", "GXPM-93", "ship"]);
     expect(transition.exitCode).toBe(0);
-    expect(output(transition)).toContain("transitioned GXPM-93: self-review -> ship");
+    expect(output(transition)).toContain("transitioned GXPM-93: cleanup -> ship");
   });
 });

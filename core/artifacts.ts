@@ -24,6 +24,7 @@ export const ARTIFACT_TYPES = [
   "acceptance-check",
   "self-review",
   "review-report",
+  "cleanup-report",
   "ship-readiness",
   "ship-audit-report",
   "pr-check",

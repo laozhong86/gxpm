@@ -198,7 +198,7 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
   if (subcommand === "transition") {
     if (!issueId || !value) throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
     const before = readIssueState({ issueId });
-    const after = transitionIssuePhase({ issueId, nextPhase: value });
+    const after = transitionIssuePhase({ issueId, nextPhase: value, skipCleanup: argv.includes("--skip-cleanup") });
 
     // Auto-ensure worktree on dispatch -> specify transition
     if (before.currentPhase === "dispatch" && after.currentPhase === "specify") {

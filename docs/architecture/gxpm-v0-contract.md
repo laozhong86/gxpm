@@ -82,6 +82,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `acceptance-check`
 - `self-review`
 - `review-report`
+- `cleanup-report`
 - `ship-readiness`
 - `ship-audit-report`
 - `pr-check`
@@ -137,6 +138,7 @@ V0 phase 集合：
 - `local-verify`
 - `ac-check`
 - `self-review`
+- `cleanup`
 - `ship`
 - `pr-check`
 - `verify`
@@ -161,7 +163,9 @@ V0 phase transition 采用严格顺序：只能从当前 phase 进入列表中�
 
 `ac-check -> self-review` 额外要求存在 `self-review` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm ac-check self-review <issue-id>`。
 
-`self-review -> ship` 额外要求存在 `ship-readiness` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm self-review ship <issue-id>`。
+`self-review -> cleanup` 额外要求存在 `cleanup-report` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm self-review cleanup <issue-id>`。
+
+`cleanup -> ship` 额外要求存在 `ship-readiness` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm cleanup ship <issue-id>`。
 
 `ship -> pr-check` 额外要求存在 `pr-check` artifact。缺失时 transition 必须失败，并提示先运行 `gxpm ship pr-check <issue-id>`。
 
@@ -296,11 +300,12 @@ gxpm specify init <issue-id>
 gxpm implement verify <issue-id>
 gxpm local-verify ac-check <issue-id>
 gxpm ac-check self-review <issue-id>
-gxpm self-review ship <issue-id>
+gxpm self-review cleanup <issue-id>
+gxpm cleanup ship <issue-id>
 gxpm ship pr-check <issue-id>
 gxpm pr-check verify <issue-id>
 gxpm verify qa <issue-id>
 gxpm qa land <issue-id>
 ```
 
-`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> specify`。`gxpm specify init` 会生成 draft `behavior-spec`，用于解锁 `specify -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。`gxpm ac-check self-review` 会生成 draft `self-review`，用于解锁 `ac-check -> self-review`。`gxpm self-review ship` 会生成 draft `ship-readiness`，用于解锁 `self-review -> ship`。`gxpm ship pr-check` 会生成 draft `pr-check`，用于解锁 `ship -> pr-check`。`gxpm pr-check verify` 会生成 draft `verify-findings`，用于解锁 `pr-check -> verify`。`gxpm verify qa` 会生成 draft `qa-findings`，用于解锁 `verify -> qa`。`gxpm qa land` 会生成 draft `land-findings`，用于解锁 `qa -> land`。
+`gxpm issue create` 默认进入 `triage`。`gxpm issue transition` 不支持跳 phase 或 force。`gxpm triage init` 会生成 draft `acceptance-contract`，用于解锁 `triage -> plan`。`gxpm plan init` 会生成 draft `implementation-plan`，用于解锁 `plan -> dispatch`。`gxpm dispatch init` 会生成 draft `dispatch-handoff`，用于解锁 `dispatch -> specify`。`gxpm specify init` 会生成 draft `behavior-spec`，用于解锁 `specify -> implement`。`gxpm implement verify` 会生成 draft `local-verify`，用于解锁 `implement -> local-verify`。`gxpm local-verify ac-check` 会生成 draft `acceptance-check`，用于解锁 `local-verify -> ac-check`。`gxpm ac-check self-review` 会生成 draft `self-review`，用于解锁 `ac-check -> self-review`。`gxpm self-review cleanup` 会生成 draft `cleanup-report`，用于解锁 `self-review -> cleanup`。`gxpm cleanup ship` 会生成 draft `ship-readiness`，用于解锁 `cleanup -> ship`。`gxpm ship pr-check` 会生成 draft `pr-check`，用于解锁 `ship -> pr-check`。`gxpm pr-check verify` 会生成 draft `verify-findings`，用于解锁 `pr-check -> verify`。`gxpm verify qa` 会生成 draft `qa-findings`，用于解锁 `verify -> qa`。`gxpm qa land` 会生成 draft `land-findings`，用于解锁 `qa -> land`。

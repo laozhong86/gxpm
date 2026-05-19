@@ -7,8 +7,8 @@ import { AgentRegistry } from "./agent-runtime";
 export function initializeShipReadiness(input: { root?: string; issueId: string; army?: boolean }) {
   const root = input.root ?? process.cwd();
   const state = readIssueState({ root, issueId: input.issueId });
-  if (state.currentPhase !== "self-review") {
-    throw new Error(`Ship readiness can only be initialized from self-review phase: current phase is ${state.currentPhase}`);
+  if (state.currentPhase !== "cleanup" && state.currentPhase !== "self-review") {
+    throw new Error(`Ship readiness can only be initialized from cleanup or self-review phase: current phase is ${state.currentPhase}`);
   }
 
   const result = writeArtifact({
