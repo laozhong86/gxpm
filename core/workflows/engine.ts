@@ -1,7 +1,7 @@
 // WORKFLOW ENGINE — declarative workflow runtime.
 // Loads YAML definitions, executes step-by-step, supports resume.
 
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import YAML from "yaml";
@@ -150,6 +150,7 @@ export class WorkflowEngine {
       if (result.status === "paused") {
         state.status = "paused";
         state.updatedAt = new Date().toISOString();
+        this.saveState(state);
         return state;
       }
     }
@@ -157,6 +158,29 @@ export class WorkflowEngine {
     state.status = "completed";
     state.updatedAt = new Date().toISOString();
     return state;
+  }
+
+  /**
+   * Persist run state to disk so it can survive process restarts.
+   */
+  saveState(state: RunState): string {
+    const runsDir = join(this.projectRoot, ".gxpm", "workflows", "runs", state.runId);
+    mkdirSync(runsDir, { recursive: true });
+    const statePath = join(runsDir, "state.json");
+    writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+    return statePath;
+  }
+
+  /**
+   * Load a previously persisted run state from disk.
+   */
+  loadState(runId: string): RunState {
+    const statePath = join(this.projectRoot, ".gxpm", "workflows", "runs", runId, "state.json");
+    if (!existsSync(statePath)) {
+      throw new Error(`Workflow run state not found: ${statePath}`);
+    }
+    const raw = JSON.parse(readFileSync(statePath, "utf8")) as RunState;
+    return raw;
   }
 
   async resume(state: RunState): Promise<RunState> {
@@ -171,6 +195,11 @@ export class WorkflowEngine {
       }
     }
     return this.run(state);
+  }
+
+  async resumeFromDisk(runId: string): Promise<RunState> {
+    const state = this.loadState(runId);
+    return this.resume(state);
   }
 
   private async executeStep(

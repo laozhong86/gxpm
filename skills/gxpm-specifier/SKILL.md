@@ -17,6 +17,43 @@ description: BDD behavior specification design skill. Use during gxpm specify ph
 - 用户要求"先写行为再写代码"、"BDD 先行"、"Given-When-Then"
 - `dispatch-handoff.json` 已存在
 
+## Constitution Gate（宪法门）
+
+在 specify 阶段，**CANON.md 是最高权威**。每次生成 spec 前，必须：
+
+1. **读取 CANON.md**，提取与当前 feature 相关的 3-5 条核心纪律
+2. **在 spec 开头写入宪法合规声明**：
+   ```markdown
+   ## Constitution Compliance
+   
+   本规格遵循 CANON.md 以下条款：
+   - Article X: [相关条款摘要]
+   - Article Y: [相关条款摘要]
+   - ...
+   
+   任何违反上述条款的实现方案都必须显式说明理由。
+   ```
+3. **检查清单**（spec 末尾必须包含）：
+   - [ ] 没有过工程化（≤3 个核心模块）
+   - [ ] 没有过早抽象（直接使用框架能力）
+   - [ ] 测试优先（contracts → tests → source）
+   - [ ] 无 `[NEEDS CLARIFICATION]` 残留
+
+## [NEEDS CLARIFICATION] 强制标记
+
+遇到以下情况时，**禁止猜测**，必须使用 `[NEEDS CLARIFICATION: 具体问题]` 标记：
+
+- 用户 prompt 未明确的技术栈或架构选择
+- 需求中缺失的边界条件、错误处理策略
+- 与现有代码风格/模式冲突的实现方式
+- 性能、安全、并发等非功能性需求未量化
+- 与上游 artifact（acceptance-contract / implementation-plan）不一致的地方
+
+**规则**：
+- 每个 `[NEEDS CLARIFICATION]` 必须包含具体的、可回答的问题
+- 标记数量 > 3 时，必须暂停生成，向用户呈现所有标记并请求澄清
+- 用户澄清后，替换标记为确定内容，不得删除标记不留痕迹
+
 ## Hard Rules
 
 ```
@@ -26,6 +63,8 @@ NO PLACEHOLDER DATA (foo/bar/test/123)
 NO SCENARIO WITH > 10 STEPS
 NO MIXED CONCERNS IN ONE SCENARIO
 NO <placeholder> SENTINEL REMAINS AT CONFIRM TIME
+NO CONSTITUTION VIOLATION WITHOUT DOCUMENTED RATIONALE
+NO GUESSING — USE [NEEDS CLARIFICATION] INSTEAD
 ```
 
 违反任一条 = 删除产出，从 `gxpm specify init` 重新开始。
