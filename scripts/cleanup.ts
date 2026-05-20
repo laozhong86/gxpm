@@ -14,29 +14,54 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     throw new Error("cleanup only applies to landed issues");
   }
 
-  // 2. Resolve cleanup target from dispatch-handoff artifact
-  let handoffPayload: Record<string, unknown>;
+  // 2. Resolve cleanup target. Standard/full rigor issues carry this in the
+  // dispatch-handoff artifact; lite-rigor issues skip dispatch entirely
+  // (GXPM-152), so we fall back to the conventional worktree path/branch name
+  // when dispatch-handoff is absent.
+  let worktree: string | undefined;
+  let branch: string | undefined;
+  let resolvedFrom: "dispatch-handoff" | "lite-convention" = "dispatch-handoff";
+
   try {
     const artifact = readArtifact({ root, issueId, type: "dispatch-handoff" });
-    handoffPayload = artifact.payload as Record<string, unknown>;
+    const handoffPayload = artifact.payload as Record<string, unknown>;
+    worktree = (handoffPayload.worktree ?? handoffPayload.workspace ?? handoffPayload.worktreePath) as
+      | string
+      | undefined;
+    branch = (handoffPayload.branch ?? handoffPayload.targetBranch) as string | undefined;
   } catch {
-    throw new Error("cleanup requires dispatch-handoff artifact");
+    // No dispatch-handoff: lite rigor path. Use conventional worktree path and branch.
+    if (state.rigorLevel === "lite") {
+      worktree = resolve(root, ".gxpm", "worktrees", `gxpm-${issueId}`);
+      branch = `gxpm-${issueId}`;
+      resolvedFrom = "lite-convention";
+    } else {
+      throw new Error(
+        `cleanup requires dispatch-handoff artifact (rigorLevel=${state.rigorLevel ?? "unknown"}). ` +
+          `If this is a lite-rigor issue with a worktree at .gxpm/worktrees/gxpm-${issueId}, ensure state.rigorLevel="lite".`,
+      );
+    }
   }
-
-  // Prefer newer fields (worktree / branch), then current handoff workspace,
-  // and finally legacy worktreePath / targetBranch.
-  const worktree = (handoffPayload.worktree ?? handoffPayload.workspace ?? handoffPayload.worktreePath) as
-    | string
-    | undefined;
-  const branch = (handoffPayload.branch ?? handoffPayload.targetBranch) as string | undefined;
 
   if (!worktree) {
     throw new Error(
-      "cleanup requires one of dispatch-handoff.payload.worktree, dispatch-handoff.payload.workspace, or dispatch-handoff.payload.worktreePath",
+      `cleanup requires worktree (resolvedFrom=${resolvedFrom}). For dispatch-handoff path, set payload.worktree/workspace/worktreePath.`,
     );
   }
   if (!branch) {
-    throw new Error("cleanup requires dispatch-handoff.payload.branch");
+    throw new Error(
+      `cleanup requires branch (resolvedFrom=${resolvedFrom}). For dispatch-handoff path, set payload.branch/targetBranch.`,
+    );
+  }
+
+  // GXPM-152: for lite path, also verify the conventional worktree directory actually exists
+  // before proceeding; otherwise produce a clearer error than the downstream git failure.
+  if (resolvedFrom === "lite-convention" && !existsSync(worktree)) {
+    throw new Error(
+      `cleanup: lite-convention worktree not found at ${worktree}. ` +
+        `Either the worktree was already cleaned, or rigorLevel="lite" was set without a workspace. ` +
+        `Run 'git worktree list' to check.`,
+    );
   }
 
   // 3. Reject dangerous targets
