@@ -5,6 +5,8 @@ import {
   getIssuePaths,
   isIssueType,
   ISSUE_TYPES,
+  markIssueNextSeen,
+  nextVisiblePhase,
   readIssueState,
   setIssueArchived,
   transitionIssuePhase,
@@ -16,7 +18,7 @@ import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
-import { PHASE_GATE_RULES } from "../../core/phase-gates";
+import { PHASE_GATE_RULES, type PhaseGateRule } from "../../core/phase-gates";
 import {
   claimIssue,
   listIssueReadiness,
@@ -63,12 +65,47 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     if (state.claim?.status === "claimed") {
       console.log(`assignee: ${state.claim.actor} (${state.claim.claimedBySession.split(":")[0] ?? "unknown"})`);
     }
+    // GXPM-159: show relations summary so agents can discover batch/epic boundaries
+    const relations = state.relations ?? [];
+    if (relations.length > 0) {
+      const grouped: Record<string, string[]> = { parent: [], child: [], related: [] };
+      for (const r of relations) {
+        (grouped[r.relation] ?? []).push(r.issueId);
+      }
+      for (const kind of ["parent", "child", "related"] as const) {
+        if (grouped[kind].length > 0) {
+          console.log(`${kind}: ${grouped[kind].join(", ")}`);
+        }
+      }
+    }
     const syncState = readSyncState({ issueId });
     if (syncState.targets.length > 0) {
       for (const target of syncState.targets) {
         const syncStatus = target.lastError ? `error: ${target.lastError.message}` : `synced at ${target.syncedAt ?? "unknown"}`;
         console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
       }
+    }
+    return;
+  }
+
+  if (subcommand === "link") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue link <source-id> (--parent <target-id> | --related <target-id>)");
+    }
+    const parentTarget = argv.includes("--parent") ? optionRequiredValue(argv, "--parent") : undefined;
+    const relatedTarget = argv.includes("--related") ? optionRequiredValue(argv, "--related") : undefined;
+    if (parentTarget && relatedTarget) {
+      throw new Error("gxpm issue link: --parent and --related are mutually exclusive");
+    }
+    if (!parentTarget && !relatedTarget) {
+      throw new Error("gxpm issue link: must specify --parent <id> or --related <id>");
+    }
+    if (parentTarget) {
+      linkIssues({ sourceId: issueId, targetId: parentTarget, kind: "parent" });
+      console.log(`linked ${issueId} --parent--> ${parentTarget}`);
+    } else if (relatedTarget) {
+      linkIssues({ sourceId: issueId, targetId: relatedTarget, kind: "related" });
+      console.log(`linked ${issueId} <--related--> ${relatedTarget}`);
     }
     return;
   }
@@ -153,8 +190,8 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
   }
 
   if (subcommand === "next") {
-    if (!issueId) throw new Error("Usage: gxpm issue next <issue-id>");
-    runIssueNext(issueId);
+    if (!issueId) throw new Error("Usage: gxpm issue next <issue-id> [--json]");
+    runIssueNext(issueId, { json: argv.includes("--json") });
     return;
   }
 
@@ -453,11 +490,79 @@ function runIssueOwnership(argv: string[], issueId: string) {
   }
 }
 
-function runIssueNext(issueId: string) {
+interface IssueNextPayload {
+  issueId: string;
+  currentPhase: string;
+  terminal: boolean;
+  requiredSkill: string | null;
+  nextPhase: string | null;
+  effectiveNextPhase: string | null;
+  requiredArtifact: string | null;
+  command: string | null;
+  artifactExists: boolean;
+}
+
+export function buildIssueNextPayload(
+  issueId: string,
+  state: { currentPhase: string; rigorLevel?: string },
+  rule: PhaseGateRule | undefined,
+  artifactExists: boolean,
+  effectiveNextPhase: string | null = null,
+): IssueNextPayload {
+  if (!rule) {
+    return {
+      issueId,
+      currentPhase: state.currentPhase,
+      terminal: true,
+      requiredSkill: null,
+      nextPhase: null,
+      effectiveNextPhase: null,
+      requiredArtifact: null,
+      command: null,
+      artifactExists: false,
+    };
+  }
+  return {
+    issueId,
+    currentPhase: state.currentPhase,
+    terminal: false,
+    requiredSkill: rule.requiredSkill,
+    nextPhase: rule.nextPhase,
+    effectiveNextPhase: effectiveNextPhase ?? rule.nextPhase,
+    requiredArtifact: rule.requiredArtifact,
+    command: rule.command.replace("<issue-id>", issueId),
+    artifactExists,
+  };
+}
+
+function runIssueNext(issueId: string, options: { json?: boolean } = {}) {
   const state = readIssueState({ issueId });
-  console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
+
+  // GXPM-141: record that this session has consulted issue next, so subsequent
+  // artifact writes from the same session are permitted.
+  try {
+    markIssueNextSeen({ issueId });
+  } catch {
+    // best-effort; do not block read-only next display
+  }
 
   const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === state.currentPhase);
+  const has = rule ? hasArtifact({ issueId, type: rule.requiredArtifact }) : false;
+  // GXPM-150: under lite/standard rigor, recommend the next *visible* phase
+  // rather than the raw PHASE_GATE_RULES next, so agents are not nudged into
+  // phases the rigor level has compressed away (e.g. lite → no dispatch).
+  const effectiveNextPhase = rule
+    ? nextVisiblePhase(state.currentPhase, state.rigorLevel) ?? rule.nextPhase
+    : null;
+  const payload = buildIssueNextPayload(issueId, state, rule, has, effectiveNextPhase);
+
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+
+  console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
+
   if (!rule) {
     console.log("");
     console.log(`Phase ${state.currentPhase} is terminal — no further transition.`);
@@ -467,7 +572,6 @@ function runIssueNext(issueId: string) {
     return;
   }
 
-  const has = hasArtifact({ issueId, type: rule.requiredArtifact });
   console.log("");
 
   // Worktree advisory: when in dispatch on canonical main checkout with a feature branch, warn early
@@ -486,20 +590,31 @@ function runIssueNext(issueId: string) {
     }
   }
 
+  // effectiveNextPhase already computed above for both --json payload and text output.
+
   // Phase command reference for agent clarity
   console.log(`Available commands for ${state.currentPhase}:`);
   console.log(`  init:    ${rule.command.replace("<issue-id>", issueId)}`);
   console.log(`  write:   gxpm artifact write ${issueId} ${rule.requiredArtifact} --json '...'`);
   console.log(`  edit:    gxpm artifact edit ${issueId} ${rule.requiredArtifact}`);
-  console.log(`  transition: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+  console.log(`  transition: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   console.log("");
+
+  // Phase → Required Skill contract (REQUIRED SUB-SKILL pattern).
+  // Surface BEFORE the "Next:" hint so the agent reads the contract first
+  // and invokes the skill before taking the recommended action.
+  if (rule.requiredSkill) {
+    console.log(`Required skill: /${rule.requiredSkill}`);
+    console.log(`      → invoke this skill BEFORE running any "Next:" command below.`);
+    console.log("");
+  }
 
   if (!has) {
     console.log(`Next: ${rule.command.replace("<issue-id>", issueId)}`);
     console.log(`      → creates draft of artifact: ${rule.requiredArtifact}`);
     console.log("");
     console.log(`Then: edit the artifact (or use 'gxpm artifact write ${issueId} ${rule.requiredArtifact} --json ...')`);
-    console.log(`Then: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+    console.log(`Then: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   } else {
     console.log(`Artifact ${rule.requiredArtifact} already exists.`);
     // Worktree advisory: when dispatch-handoff exists but worktree is still pending
@@ -516,7 +631,7 @@ function runIssueNext(issueId: string) {
         // ignore missing dispatch-handoff
       }
     }
-    console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+    console.log(`Next: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   }
 }
 
@@ -744,30 +859,79 @@ function parseParentOption(argv: string[]): string | undefined {
 }
 
 function addIssueRelation(input: { childId: string; parentId: string }) {
+  return linkIssues({ sourceId: input.childId, targetId: input.parentId, kind: "parent", root: process.cwd() });
+}
+
+/**
+ * GXPM-159: General-purpose post-hoc issue linking.
+ * - kind === "parent": writes child→parent and parent→child
+ * - kind === "related": writes a→related→b and b→related→a (symmetric)
+ *
+ * Validates: existence of both issues, no self-links, no duplicate relations.
+ */
+function linkIssues(input: { sourceId: string; targetId: string; kind: "parent" | "related"; root?: string }) {
+  if (input.sourceId === input.targetId) {
+    throw new Error(`gxpm issue link: cannot link to self (${input.sourceId})`);
+  }
+  const root = input.root ?? process.cwd();
   const now = new Date().toISOString();
-  // Update child: add parent relation
-  const childState = readIssueState({ issueId: input.childId });
-  const childRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
-    ...(childState.relations ?? []),
-    { relation: "parent", issueId: input.parentId, createdAt: now },
-  ];
-  const childPaths = getIssuePaths(process.cwd(), input.childId);
-  const childRaw = JSON.parse(readFileSync(childPaths.statePath, "utf8")) as Record<string, unknown>;
-  childRaw.relations = childRelations;
-  writeFileSync(childPaths.statePath, `${JSON.stringify(childRaw, null, 2)}\n`);
 
-  // Update parent: add child relation
-  const parentState = readIssueState({ issueId: input.parentId });
-  const parentRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
-    ...(parentState.relations ?? []),
-    { relation: "child", issueId: input.childId, createdAt: now },
-  ];
-  const parentPaths = getIssuePaths(process.cwd(), input.parentId);
-  const parentRaw = JSON.parse(readFileSync(parentPaths.statePath, "utf8")) as Record<string, unknown>;
-  parentRaw.relations = parentRelations;
-  writeFileSync(parentPaths.statePath, `${JSON.stringify(parentRaw, null, 2)}\n`);
+  // Validate existence (readIssueState throws if missing)
+  let sourceState;
+  try {
+    sourceState = readIssueState({ root, issueId: input.sourceId });
+  } catch {
+    throw new Error(`gxpm issue link: issue not found: ${input.sourceId}`);
+  }
+  let targetState;
+  try {
+    targetState = readIssueState({ root, issueId: input.targetId });
+  } catch {
+    throw new Error(`gxpm issue link: issue not found: ${input.targetId}`);
+  }
 
-  return { ...childState, relations: childRelations.map((r) => ({ ...r, relation: r.relation as "parent" | "child" | "related", createdAt: r.createdAt })) };
+  // Determine relation labels for each side
+  const sourceLabel = input.kind === "parent" ? "parent" : "related";
+  const targetLabel = input.kind === "parent" ? "child" : "related";
+
+  // Duplicate check (on the source side; symmetry implies same outcome on target)
+  const existing = (sourceState.relations ?? []).find(
+    (r) => r.relation === sourceLabel && r.issueId === input.targetId,
+  );
+  if (existing) {
+    throw new Error(
+      `gxpm issue link: relation already exists: ${input.sourceId} --${sourceLabel}--> ${input.targetId}`,
+    );
+  }
+
+  // Write source side
+  const sourceRelations = [
+    ...(sourceState.relations ?? []),
+    { relation: sourceLabel, issueId: input.targetId, createdAt: now },
+  ];
+  const sourcePaths = getIssuePaths(root, input.sourceId);
+  const sourceRaw = JSON.parse(readFileSync(sourcePaths.statePath, "utf8")) as Record<string, unknown>;
+  sourceRaw.relations = sourceRelations;
+  writeFileSync(sourcePaths.statePath, `${JSON.stringify(sourceRaw, null, 2)}\n`);
+
+  // Write target side
+  const targetRelations = [
+    ...(targetState.relations ?? []),
+    { relation: targetLabel, issueId: input.sourceId, createdAt: now },
+  ];
+  const targetPaths = getIssuePaths(root, input.targetId);
+  const targetRaw = JSON.parse(readFileSync(targetPaths.statePath, "utf8")) as Record<string, unknown>;
+  targetRaw.relations = targetRelations;
+  writeFileSync(targetPaths.statePath, `${JSON.stringify(targetRaw, null, 2)}\n`);
+
+  return {
+    ...sourceState,
+    relations: sourceRelations.map((r) => ({
+      ...r,
+      relation: r.relation as "parent" | "child" | "related",
+      createdAt: r.createdAt,
+    })),
+  };
 }
 
 function runIssueBatch(issueId: string) {
