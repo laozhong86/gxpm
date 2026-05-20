@@ -7,6 +7,7 @@
  */
 
 import { ARTIFACT_TYPES, type ArtifactType } from "./artifacts";
+import { evidenceIsWikiOnly } from "./evidence-guard";
 
 export interface ValidationError {
   field: string;
@@ -16,7 +17,16 @@ export interface ValidationError {
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
+  /** GXPM-166: non-blocking warnings (e.g. wiki-only evidence in verify-findings). */
+  warnings?: string[];
 }
+
+// GXPM-166: artifact types whose evidence/findings should not be wiki-only.
+const EVIDENCE_GUARDED_TYPES: ReadonlySet<ArtifactType> = new Set<ArtifactType>([
+  "verify-findings",
+  "qa-findings",
+  "pr-check",
+]);
 
 interface ArtifactSchema {
   requiredFields: string[];
@@ -124,6 +134,7 @@ export function validateArtifact(type: string, payload: Record<string, unknown>)
     };
   }
   const errors: ValidationError[] = [];
+  const warnings: string[] = [];
 
   for (const field of schema.requiredFields) {
     if (!(field in payload) || payload[field] === undefined || payload[field] === null) {
@@ -131,7 +142,22 @@ export function validateArtifact(type: string, payload: Record<string, unknown>)
     }
   }
 
-  return { valid: errors.length === 0, errors };
+  // GXPM-166: warn (do not fail) when verify/qa/pr-check evidence is wiki-only.
+  // We inspect both common fields ('evidence', 'findings', 'browserEvidence',
+  // 'reviewFindings') and the payload as a whole as a last resort.
+  if (EVIDENCE_GUARDED_TYPES.has(type as ArtifactType)) {
+    const candidate =
+      payload.evidence ?? payload.findings ?? payload.browserEvidence ?? payload.reviewFindings ?? payload;
+    if (evidenceIsWikiOnly(candidate)) {
+      warnings.push(
+        `evidence_wiki_only: ${type} evidence appears to be wiki-only. Add git diff, GitNexus impact, test logs, or browser screenshots to make verification reviewable.`,
+      );
+    }
+  }
+
+  const result: ValidationResult = { valid: errors.length === 0, errors };
+  if (warnings.length > 0) result.warnings = warnings;
+  return result;
 }
 
 /**
@@ -163,10 +189,18 @@ function isArtifactType(value: string): value is ArtifactType {
  * Format validation result for CLI output.
  */
 export function formatValidationResult(result: ValidationResult): string {
-  if (result.valid) return "✅ Artifact validation passed";
-  const lines = ["❌ Artifact validation failed:"];
-  for (const err of result.errors) {
-    lines.push(`  - ${err.field}: ${err.message}`);
+  const lines: string[] = [];
+  if (result.valid) {
+    lines.push("✅ Artifact validation passed");
+  } else {
+    lines.push("❌ Artifact validation failed:");
+    for (const err of result.errors) {
+      lines.push(`  - ${err.field}: ${err.message}`);
+    }
+  }
+  // GXPM-166: surface non-blocking warnings.
+  for (const warning of result.warnings ?? []) {
+    lines.push(`⚠️  Warning: ${warning}`);
   }
   return lines.join("\n");
 }
