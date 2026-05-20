@@ -289,4 +289,56 @@ describe("runWorktreeInit integration", () => {
     const owner = JSON.parse(readFileSync(join(wt, ".gxpm-worktree-owner.json"), "utf8"));
     expect(owner.ownerIssueId).toBe("GXPM-42");
   });
+
+  it("port-allocation populates ctx.ports with a queuePrefix and never throws", async () => {
+    // Regression: port-allocation used createHash without importing it,
+    // causing a ReferenceError that left ctx.ports undefined and silently
+    // failed every downstream step (generate-env-local / generate-warp-md /
+    // generate-launch-json). See worktree where warp.md was missing despite
+    // gxpm reporting a dev port.
+    const ctx: WorktreeInitContext = {
+      canonicalRepoPath: main,
+      worktreePath: wt,
+      branchName: "gxpm-99",
+      issueId: "GXPM-99",
+    };
+
+    const result = await runWorktreeInit(ctx, {
+      steps: ["port-allocation"],
+      root: main,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(ctx.ports).toBeDefined();
+    expect(ctx.ports?.queuePrefix).toMatch(/^gxpm_wt_/);
+    expect(ctx.ports?.webPort).toBeGreaterThan(0);
+    expect(ctx.ports?.serverPort).toBeGreaterThan(0);
+    expect(ctx.ports?.studioPort).toBeGreaterThan(0);
+  });
+
+  it("port-allocation + generate-warp-md actually writes warp.md", async () => {
+    // Regression: even when port-allocation crashed, the pipeline marched on
+    // and generate-warp-md returned "port-allocation step must run before
+    // generate-warp-md" — leaving the worktree without warp.md.
+    const ctx: WorktreeInitContext = {
+      canonicalRepoPath: main,
+      worktreePath: wt,
+      branchName: "gxpm-99",
+      issueId: "GXPM-99",
+    };
+
+    const result = await runWorktreeInit(ctx, {
+      steps: ["port-allocation", "generate-warp-md"],
+      root: main,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(existsSync(join(wt, "warp.md"))).toBe(true);
+
+    const content = readFileSync(join(wt, "warp.md"), "utf8");
+    expect(content).toContain("Worktree Port Configuration");
+    expect(content).toContain(String(ctx.ports?.webPort));
+  });
 });

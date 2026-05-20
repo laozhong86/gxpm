@@ -7,6 +7,7 @@
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, basename } from "node:path";
+import { createHash } from "node:crypto";
 import { getResolvedConfigValue } from "./config";
 import { writeWorktreeOwnerMarker, writeIssueContextMd } from "./worktree-owner";
 import {
