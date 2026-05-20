@@ -80,6 +80,11 @@ const COMMAND_USAGE: Record<string, string> = {
   specify: `Usage:
   gxpm specify init <issue-id>
   gxpm specify confirm <issue-id> --by <name>`,
+  skill: `Usage:
+  gxpm skill ack <issue-id> <skill> [--proof <text>]
+  Append a skill.load.satisfied event attesting that the agent invoked the
+  contract-mapped skill before doing phase work. Rejects when <skill> does
+  not match PHASE_GATE_RULES.requiredSkill for the current phase.`,
   hook: `Usage:
   gxpm hook install [--host claude|codex|kimi]
   gxpm hook list`,

@@ -159,6 +159,13 @@ async function main(argv: string[]) {
     return;
   }
 
+  if (command === "skill") {
+    const { runSkillCommand } = await import("./commands/skill");
+    // gxpm skill ack <issue-id> <skill>  — `value` is the skill arg.
+    runSkillCommand(argv, subcommand, issueId, value);
+    return;
+  }
+
   if (command === "artifact") {
     runArtifactCommand(argv, subcommand, issueId, value);
     return;

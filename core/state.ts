@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
-import { getGateCommand, getRequiredArtifactForTransition } from "./phase-gates";
+import { getGateCommand, getRequiredArtifactForTransition, PHASE_GATE_RULES } from "./phase-gates";
 import { resolveAgentIdentity, resolveSessionId } from "./session";
 import { getWorkflowEventEmitter } from "./workflow-event-emitter";
 import { getResolvedConfigValue } from "./config";
@@ -164,7 +164,12 @@ export interface StateEvent {
     | "issue.claim.stale"
     | "cleanup.executed"
     | "gate.brainstorm.skipped"
-    | "ownership.changed";
+    | "ownership.changed"
+    // GXPM-170 PR-1: skill-load attestation events. emitted by transition
+    // (required) and gxpm skill ack (satisfied). PR-1 is telemetry-only; PR-2
+    // will add a gate that reads these events.
+    | "skill.load.required"
+    | "skill.load.satisfied";
   issueId: string;
   timestamp: string;
   sessionId?: string;
@@ -290,6 +295,28 @@ export function createIssueState(input: IssueInput): IssueState {
       payload: { initialPhase: "triage", issueType: state.issueType },
     },
   });
+
+  // GXPM-170 PR-1: emit skill-load-required for the initial triage phase so
+  // the audit chain starts at issue creation rather than only at the first
+  // transition. Closes the triage blind spot CodeRabbit flagged on PR #57.
+  const triageRule = PHASE_GATE_RULES.find((r) => r.fromPhase === "triage");
+  if (triageRule?.requiredSkill) {
+    appendIssueEvent({
+      issueDir: paths.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "skill.load.required",
+        issueId: input.issueId,
+        timestamp: now,
+        sessionId,
+        payload: {
+          phase: "triage",
+          skill: triageRule.requiredSkill,
+          transitionId: `${input.issueId}-issue-created-${now}`,
+        },
+      },
+    });
+  }
 
   getWorkflowEventEmitter().emit({
     type: "issue_created",
@@ -431,6 +458,7 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
   if (ownershipEvent) {
     appendIssueEvent({ issueDir: paths.issueDir, event: ownershipEvent });
   }
+  const transitionId = `${input.issueId}-${state.currentPhase}-to-${nextPhase}-${now}`;
   appendIssueEvent({
     issueDir: paths.issueDir,
     event: {
@@ -439,9 +467,32 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
       issueId: input.issueId,
       timestamp: now,
       sessionId,
-      payload: { fromPhase: state.currentPhase, toPhase: nextPhase },
+      payload: { fromPhase: state.currentPhase, toPhase: nextPhase, transitionId },
     },
   });
+
+  // GXPM-170 PR-1: emit skill-load-required when the new phase's
+  // requiredSkill is non-null. Read from PHASE_GATE_RULES (single source of
+  // truth shared with `gxpm issue next`). null skill = mechanical CLI step,
+  // no attestation needed.
+  const phaseRule = PHASE_GATE_RULES.find((r) => r.fromPhase === nextPhase);
+  if (phaseRule?.requiredSkill) {
+    appendIssueEvent({
+      issueDir: paths.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "skill.load.required",
+        issueId: input.issueId,
+        timestamp: now,
+        sessionId,
+        payload: {
+          phase: nextPhase,
+          skill: phaseRule.requiredSkill,
+          transitionId,
+        },
+      },
+    });
+  }
 
   getWorkflowEventEmitter().emit({
     type: "issue_transitioned",

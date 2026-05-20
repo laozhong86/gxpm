@@ -190,6 +190,26 @@ gxpm issue next <issue-id>          # 必须先查 next，按输出执行
 
 **Red Flag — 进入新 phase 前未 invoke 对应 requiredSkill 即写代码 / 写 artifact。** 这等同于在 implement 阶段跳过 TDD、在 self-review 阶段跳过结构化审查，会让阶段门控失去意义。`null` 行只代表本 phase 是机械 CLI 步骤（如 dispatch / ship），不代表纪律放松。
 
+### Skill Load Attestation
+
+GXPM-170 PR-1 把 skill 加载落到 `events.jsonl` 这条审计链上：
+
+1. **`gxpm issue transition <id> <next-phase>`** 在 `next-phase` 的 `requiredSkill` 非 null 时，**自动 append `skill.load.required` 事件**到 `.gxpm/issues/<id>/events.jsonl`（含 phase、skill、ts、transitionId）。
+2. **Agent invoke 对应 gxpm-* skill** 后，运行 **`gxpm skill ack <id> <skill>`** append `skill.load.satisfied` 事件作为 attestation。
+3. **错配自动 reject**：`gxpm skill ack` 校验 skill 名与当前 phase 的 `PHASE_GATE_RULES.requiredSkill` 一致，否则 reject 并提示正确 skill。
+
+```bash
+# 典型流程
+gxpm issue transition GXPM-X plan              # 写 skill.load.required (skill=gxpm-planning)
+# ... agent invoke /gxpm-planning ...
+gxpm skill ack GXPM-X gxpm-planning            # 写 skill.load.satisfied
+# 现在可以继续 plan 阶段的工作
+```
+
+**当前 PR-1 是 telemetry-only**：缺 ack 不会阻塞 artifact write 或 transition，但事件流永久记录。外部 reviewer 可后置审计任何 issue 是否真正走过 skill 加载，违规会成为可被指认的事实。
+
+**PR-2（追加 gate 物理拦截）**：strict 模式下 artifact write / transition 在缺 satisfied 事件时 reject。默认仍为 warn 模式以兼容存量 issue。
+
 ### 状态优先
 
 在做阶段工作前，先读取 `gxpm issue status <issue-id>`。
