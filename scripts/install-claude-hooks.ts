@@ -70,6 +70,19 @@ export function installClaudeHooks(options: InstallClaudeHooksOptions = {}): Ins
             },
           ],
         },
+        // GXPM-169: trigger the same hook on Bash so role-capability-gate
+        // (GXPM-168) can block phase-forbidden commands at runtime.
+        {
+          matcher: "Bash",
+          hooks: [
+            {
+              type: "command",
+              command: "gxpm hook PreToolUse --host claude",
+              async: false,
+              statusMessage: "gxpm: checking phase tool permissions",
+            },
+          ],
+        },
       ],
     },
   };

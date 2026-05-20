@@ -126,4 +126,26 @@ describe("installClaudeHooks", () => {
     expect(cfg.autoUpdate).toBe(true);
     expect(cfg.hooks.SessionStart).toBeDefined();
   });
+
+  // GXPM-169: PreToolUse must trigger on Bash so role-capability-gate (GXPM-168)
+  // can block phase-forbidden commands at runtime.
+  test("PreToolUse contains both ExitPlanMode and Bash matchers", () => {
+    const fakeRepo = mkdtempSync(join(tmpdir(), "gxpm-claude-bash-"));
+    const result = installClaudeHooks({ target: fakeRepo });
+    const cfg = JSON.parse(readFileSync(result.settingsJsonPath, "utf8"));
+    const matchers = (cfg.hooks?.PreToolUse ?? []).map((e: any) => e.matcher);
+    expect(matchers).toContain("ExitPlanMode");
+    expect(matchers).toContain("Bash");
+  });
+
+  test("PreToolUse Bash matcher is idempotent across reinstalls", () => {
+    const fakeRepo = mkdtempSync(join(tmpdir(), "gxpm-claude-bash-idem-"));
+    installClaudeHooks({ target: fakeRepo });
+    installClaudeHooks({ target: fakeRepo });
+    const cfg = JSON.parse(readFileSync(join(fakeRepo, ".claude/settings.json"), "utf8"));
+    const bashEntries = (cfg.hooks?.PreToolUse ?? []).filter((e: any) => e.matcher === "Bash");
+    expect(bashEntries.length).toBe(1);
+    const cmds = bashEntries[0].hooks?.map((h: any) => h.command) ?? [];
+    expect(cmds.filter((c: string) => c === "gxpm hook PreToolUse --host claude").length).toBe(1);
+  });
 });
