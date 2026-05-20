@@ -39,7 +39,17 @@ export const GXPM_PHASES = [
 
 export type GxpmPhase = (typeof GXPM_PHASES)[number];
 
-export const ISSUE_TYPES = ["feature", "meta", "spike"] as const;
+// GXPM-145: extended with documentation/postmortem/cross-repo-feedback.
+// Defaults: feature=standard, meta/spike=lite, documentation=lite,
+// postmortem=standard, cross-repo-feedback=lite (see createIssueState).
+export const ISSUE_TYPES = [
+  "feature",
+  "meta",
+  "spike",
+  "documentation",
+  "postmortem",
+  "cross-repo-feedback",
+] as const;
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
@@ -226,7 +236,10 @@ export function createIssueState(input: IssueInput): IssueState {
   const now = new Date().toISOString();
   const sessionId = resolveSessionId();
   const agent = resolveAgentIdentity(process.env, root);
-  const defaultRigor = (input.issueType === "spike" || input.issueType === "meta") ? "lite" : "standard";
+  // GXPM-145: lite-default for low-overhead types (meta/spike + new
+  // documentation/cross-repo-feedback). postmortem stays standard.
+  const liteDefaults = new Set<IssueType>(["meta", "spike", "documentation", "cross-repo-feedback"]);
+  const defaultRigor: RigorLevel = liteDefaults.has(input.issueType as IssueType) ? "lite" : "standard";
   const state: IssueState = {
     schemaVersion: 1,
     issueId: input.issueId,
