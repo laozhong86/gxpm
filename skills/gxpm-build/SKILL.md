@@ -1,11 +1,12 @@
 ---
 name: gxpm-build
+type: reference
 description: Compile and type-check verification. Use after implementing code changes, before committing, or when the build fails and root cause is unclear.
 ---
 
 # gxpm-build
 
-## 入口条件
+## When to trigger（入口条件）
 
 在以下场景触发本 skill：
 
@@ -50,14 +51,14 @@ bun run build
 | Build output missing | Build script misconfigured or dependency missing | Check `package.json` scripts and `node_modules` |
 | Module resolution error | Import path wrong or alias unconfigured | Verify path mapping in `tsconfig.json` |
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **Never commit broken build.** A build failure means implementation is incomplete.
 - **Type errors are behavior errors.** Type checking is not optional polish — it is contract verification.
 - **Incremental compilable:** After every increment (even partial), the project must build successfully.
 - **One fix at a time:** If build fails, fix the root cause before running the build again. Do not guess-and-rerun.
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 构建通过的标准：
 
@@ -76,3 +77,8 @@ bun run build
   }
 }
 ```
+
+## Read Next
+
+- `/gxpm-verify` — local verification pipeline
+- `/gxpm-hygiene` — pre-commit hygiene

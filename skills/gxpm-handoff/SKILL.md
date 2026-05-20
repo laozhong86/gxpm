@@ -1,5 +1,6 @@
 ---
 name: gxpm-handoff
+type: reference
 description: Compact the current session into a handoff document so another agent can continue the work. Use when switching agents, ending a session, or passing work between implementer subagents.
 ---
 
@@ -7,7 +8,7 @@ description: Compact the current session into a handoff document so another agen
 
 Write a handoff document summarising the current session so a fresh agent can continue the work without losing context.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 当前 session 即将结束，需要让下一个 session 接续工作。
@@ -88,7 +89,7 @@ gxpm artifact write <issue-id> handoff --stdin
 
 Do not duplicate content already captured in other artifacts (PRDs, plans, ADRs, issues, commits, diffs). Reference them by path or URL instead.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：不要复制粘贴整段代码。** 引用文件路径，不要内联代码块。
 - **STOP：不要遗漏阻塞物。** 如果工作被阻塞，必须明确说明阻塞原因和已尝试的解决方案。
@@ -96,7 +97,7 @@ Do not duplicate content already captured in other artifacts (PRDs, plans, ADRs,
 - **危险信号：** Handoff 文档超过 200 行 → 过度详细，应拆分为 artifact 引用。
 - **危险信号：** 没有 "Next steps" 部分 → 下一个 agent 不知道从何开始。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 当前 phase 和 issue 状态已明确记录。
 - [ ] 已完成工作和剩余工作已区分。
@@ -110,3 +111,8 @@ Do not duplicate content already captured in other artifacts (PRDs, plans, ADRs,
 - 阻塞物需要调试 → `/gxpm-diagnose`
 - 阻塞物是需求不清 → `/gxpm-grill`
 - 需要验证当前工作 → `/gxpm-verify`
+
+## Read Next
+
+- `/gxpm` — main project management runtime
+- `/gxpm-implementer` — subagent implementer template

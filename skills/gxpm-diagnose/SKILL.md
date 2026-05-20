@@ -1,5 +1,6 @@
 ---
 name: diagnose
+type: discipline
 description: Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +9,7 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 
 A discipline for hard bugs where the root cause is **not yet known**.
 
-### 入口条件
+## When to trigger（入口条件）
 
 **Skill boundary:**
 - If you have a **specific symptom, stack trace, or error message** and need to trace its root cause through the codebase, load `/gxpm-debug-issue` first.
@@ -18,7 +19,7 @@ A discipline for hard bugs where the root cause is **not yet known**.
 - **触发时机**：Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
 - **纪律**：Skip phases only when explicitly justified.
 
-### 可操作流程
+## 可操作流程
 
 ## Phase 2 — Reproduce
 
@@ -82,7 +83,7 @@ Required before declaring done:
 **Then ask: what would have prevented this bug?** If the answer involves architectural change, hand off to `/architecture` with the specifics.
 
 
-### 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 ## Phase 1 — Build a feedback loop
 
@@ -120,101 +121,29 @@ Stop and say so explicitly. List what you tried. Ask the user for: (a) access to
 **Do not proceed to Phase 2 until you have a loop you believe in.**
 
 
-### 验证清单 / 出口条件
+## Foundational Principle
 
-- 完成 ## Phase 2 — Reproduce
+> Violating the letter of the diagnosis loop is violating the spirit of root-cause thinking. Diagnose exists because the *first* hypothesis is almost always wrong. **No exceptions:** skipping phases to "save time" delivers a fix to the wrong symptom and leaves the real defect dormant. If you're tempted to skip, that's the strongest signal you can't.
 
-Run the loop. Confirm:
-- [ ] The loop produces the failure mode the **user** described.
-- [ ] The failure is reproducible across multiple runs.
-- [ ] You have captured the exact symptom.
+## Rationalization Table
 
-## Phase 3 — Explore with the codebase
+| Excuse | Reality |
+|---|---|
+| "I've seen this exact bug before, skip to the fix." | Recognition bias. Confirm the reproduction matches before reusing the fix, or you'll patch the wrong subsystem. |
+| "The first hypothesis is obviously right, no need to enumerate alternatives." | Diagnosis without alternatives is just confirmation bias dressed up. Force at least 2 competing hypotheses before testing. |
+| "I can skip the reproduction step — the stack trace tells me enough." | Stack traces show *where* it crashed, not *why*. Reproduction tells you whether your hypothesis predicts the behavior. |
+| "The fix worked, so my hypothesis was right." | A fix that "works" without ruling out alternatives often suppresses the symptom while leaving the root cause. Verify by predicting a related failure. |
+| "Performance regression — I'll just optimize the slow function." | Profiling without hypothesis = treadmill. Form a hypothesis about *why* it regressed, then profile to confirm or reject. |
 
-Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to accelerate understanding:
+## Verification（验证清单 / 出口条件）
 
-1. **Semantic search** to find code related to the symptom.
-2. **Call-chain tracing** to follow `callers_of` / `callees_of` relationships.
-3. **Execution flow analysis** to see full paths through suspected areas.
-4. **Change detection** (`git diff`, `detect_changes`) to check if recent changes caused the issue.
-5. **Impact analysis** on suspected files to see what else is affected.
+- [ ] 已完成 `references/phases.md` 定义的全部诊断阶段（Reproduce → Explore → Hypothesise → Test → Conclude）。
+- [ ] 已按 `references/feedback-loop.md` 的反馈循环约束完成收敛（≥2 个竞争假设、≥1 个被证伪、根因可复现）。
+- [ ] 修复后构造一个相关失败用例并验证仍能抓到 → 确认根因正确，不是症状压制。
+- [ ] 调试日志、临时 print、scratchpad 文件已清理。
+- [ ] 关键结论（症状 / 根因 / 修复 / 验证）已写入 issue 的当前 phase artifact，不仅留在聊天里。
 
-**Token efficiency**: start with the narrowest context possible, then expand. Target ≤5 tool calls and ≤800 total output tokens for the exploration phase.
+## Read Next
 
-## Phase 4 — Hypothesise
-
-Generate **3–5 ranked hypotheses** before testing any of them.
-
-Each hypothesis must be **falsifiable**: state the prediction it makes.
-
-> Format: "If <X> is the cause, then <changing Y> will make the bug disappear."
-
-**Show the ranked list to the user before testing.** They often have domain knowledge that re-ranks instantly.
-
-## Phase 5 — Instrument
-
-Each probe must map to a specific prediction from Phase 4. **Change one variable at a time.**
-
-Tool preference:
-1. **Debugger / REPL inspection** if the env supports it.
-2. **Targeted logs** at the boundaries that distinguish hypotheses.
-3. Never "log everything and grep".
-
-**Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single grep.
-
-**Perf branch.** For performance regressions: establish a baseline measurement first, then bisect. Measure first, fix second.
-
-## Phase 6 — Fix + regression test
-
-Write the regression test **before the fix** — but only if there is a **correct seam** for it.
-
-A correct seam is one where the test exercises the **real bug pattern** as it occurs at the call site.
-
-**If no correct seam exists, that itself is the finding.** Flag this for the next `/architecture` run.
-
-## Phase 7 — Cleanup + post-mortem
-
-Required before declaring done:
-- [ ] Original repro no longer reproduces.
-- [ ] Regression test passes (or absence of seam is documented).
-- [ ] All `[DEBUG-...]` instrumentation removed.
-- [ ] Throwaway prototypes deleted.
-- [ ] The correct hypothesis is stated in the commit / PR message.
-
-**Then ask: what would have prevented this bug?** If the answer involves architectural change, hand off to `/architecture` with the specifics.
- 中定义的全部阶段。
-- 按 ## Phase 1 — Build a feedback loop
-
-**This is the skill.** Everything else is mechanical. If you have a fast, deterministic, agent-runnable pass/fail signal for the bug, you will find the cause.
-
-Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give up.**
-
-### Ways to construct one — try in roughly this order
-
-1. **Failing test** at whatever seam reaches the bug — unit, integration, e2e.
-2. **Curl / HTTP script** against a running dev server.
-3. **CLI invocation** with a fixture input, diffing stdout against a known-good snapshot.
-4. **Headless browser script** (Playwright / Puppeteer).
-5. **Replay a captured trace.** Save a real network request / payload / event log to disk; replay it through the code path in isolation.
-6. **Throwaway harness.** Spin up a minimal subset of the system that exercises the bug code path.
-7. **Property / fuzz loop.** Run 1000 random inputs and look for the failure mode.
-8. **Bisection harness.** Automate `git bisect run` if the bug appeared between two known states.
-9. **Differential loop.** Run old-version vs new-version and diff outputs.
-10. **HITL bash script.** Last resort. If a human must click, drive them with a structured loop.
-
-### Iterate on the loop itself
-
-- Can I make it faster? (Cache setup, skip unrelated init.)
-- Can I make the signal sharper? (Assert on the specific symptom.)
-- Can I make it more deterministic? (Pin time, seed RNG, isolate filesystem.)
-
-### Non-deterministic bugs
-
-The goal is a **higher reproduction rate**. Loop the trigger 100×, parallelise, add stress. A 50%-flake bug is debuggable; 1% is not.
-
-### When you genuinely cannot build a loop
-
-Stop and say so explicitly. List what you tried. Ask the user for: (a) access to the repro environment, (b) a captured artifact, or (c) permission to add temporary production instrumentation.
-
-**Do not proceed to Phase 2 until you have a loop you believe in.**
- 的约束完成收敛。
+- `/gxpm-debug-issue` — issue-scoped debugging
+- `/gxpm-build` — compile + type-check verification

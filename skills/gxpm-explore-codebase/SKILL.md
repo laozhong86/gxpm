@@ -1,11 +1,12 @@
 ---
 name: gxpm-explore-codebase
+type: technique
 description: Navigate and understand codebase structure using the knowledge graph. Use when user asks how code works, wants to understand architecture, trace execution flows, or explore unfamiliar parts of the codebase.
 ---
 
 ## gxpm-explore-codebase
 
-### 入口条件
+## When to trigger（入口条件）
 
 **Skill boundary:**
 - If you are debugging a **specific bug or error**, load `/gxpm-debug-issue` or `/gxpm-diagnose` instead.
@@ -13,7 +14,7 @@ description: Navigate and understand codebase structure using the knowledge grap
 
 Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to explore and understand the codebase.
 
-### 可操作流程
+## 可操作流程
 
 1. Run `list_repos` to discover indexed repositories.
 2. Run `query` with natural language to find execution flows and symbols.
@@ -26,11 +27,16 @@ Use available code intelligence tools (e.g., GitNexus MCP, grep, ReadFile) to ex
 > - Use `cypher` for complex structural queries against the knowledge graph.
 > - Use `detect_changes` to map git diffs to affected execution flows.
 
-### 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - ALWAYS start with the narrowest query possible, then expand.
 - Use compact output modes when available. Only escalate to full dumps when necessary.
 
-### 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - Target: complete any review/debug/refactor task in ≤5 tool calls and ≤800 total output tokens.
+
+## Read Next
+
+- `/gxpm-debug-issue` — graph-driven debugging
+- `/gxpm-refactor-safely` — impact-analysis refactor

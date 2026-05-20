@@ -1,11 +1,12 @@
 ---
 name: gxpm-refactor-safely
+type: technique
 description: Plan and execute safe refactoring using dependency analysis. Use when user asks to rename, extract, split, move, or simplify code, or when a code review suggests refactoring.
 ---
 
 ## gxpm-refactor-safely
 
-### 入口条件
+## When to trigger（入口条件）
 
 **Skill boundary:**
 - If you do **not yet understand** the target code, load `/gxpm-explore-codebase` first.
@@ -14,7 +15,7 @@ description: Plan and execute safe refactoring using dependency analysis. Use wh
 
 Use GitNexus to plan and execute refactoring with confidence. When simplifying code, follow the scan-checklist-incremental-verify loop below.
 
-### 可操作流程
+## 可操作流程
 
 1. **Understand** — Use `impact` with `direction: "upstream"`, `query`, and `context` to understand the target code, its callers, edge cases, and test coverage before touching it.
 2. **Scan for simplification opportunities** (checklist):
@@ -31,7 +32,7 @@ Use GitNexus to plan and execute refactoring with confidence. When simplifying c
    - Only proceed to the next simplification when the current one is green.
 5. **After all changes**, run `detect_changes` to verify the refactoring impact, ensure the build succeeds, and keep the diff clean.
 
-### 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 **Safety Checks**
 - Always preview before applying (rename mode gives you an edit list).
@@ -56,7 +57,13 @@ Supported comment styles: `//`, `/* */`, `#`, `<!-- -->`. The `reason` field is 
 - Start with the narrowest GitNexus query or impact target, then expand.
 - Prefer dry-run previews for coordinated renames.
 
-### 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - run `detect_changes` to verify the refactoring impact, ensure the build succeeds, and keep the diff clean.
 - Target: complete any review/debug/refactor task in ≤5 graph tool calls.
+
+## Read Next
+
+- `/gxpm-review-changes` — verify post-refactor scope
+- `/gxpm-architecture` — find consolidation opportunities
+- `/gxpm-explore-codebase` — understand call-graph first

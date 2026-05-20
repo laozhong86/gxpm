@@ -1,5 +1,6 @@
 ---
 name: gxpm-write-skill
+type: reference
 description: Create new gxpm skills with proper structure, progressive disclosure, and bundled resources. Use when user wants to create, write, or build a new skill.
 ---
 
@@ -7,7 +8,7 @@ description: Create new gxpm skills with proper structure, progressive disclosur
 
 Create new agent skills that follow gxpm conventions.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户说 "create a skill"、"write a skill"、"new skill"。
@@ -52,7 +53,7 @@ description: Brief description. Use when [specific triggers].
 
 # Skill Name
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - ...
@@ -64,11 +65,11 @@ description: Brief description. Use when [specific triggers].
 
 [Step-by-step processes]
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：...**
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] ...
 
@@ -111,14 +112,14 @@ Add utility scripts when:
 - Same code would be generated repeatedly
 - Errors need explicit handling
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：description 超过 1024 字符。** Agent 的上下文有限，过长的 description 降低匹配精度。
 - **STOP：没有 "Use when" 触发句。** Agent 无法判断何时加载该 skill。
 - **STOP：SKILL.md 超过 200 行还不拆分。** 使用 `references/` 子文件做渐进式披露。
 - **STOP：缺少红旗清单或验证清单。** 每个 gxpm skill 必须包含这四个核心 section。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] Description ≤ 1024 chars，包含 "Use when..." 触发句。
 - [ ] SKILL.md 包含：入口条件、可操作流程、红旗清单、验证清单。
@@ -129,3 +130,9 @@ Add utility scripts when:
 **失败时路由**
 - Skill 质量评估 → `/gxpm-eval`
 - 需要更新 skills-lock → `/maintain-hygiene-skills-lock`
+
+## Read Next
+
+- `/gxpm-eval` — verify the skill scores
+- `docs/governance/skill-authoring.md`
+- `docs/governance/template-authoring.md`

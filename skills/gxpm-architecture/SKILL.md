@@ -1,5 +1,6 @@
 ---
 name: gxpm-architecture
+type: technique
 description: Find deepening opportunities in a codebase using domain language and ADRs. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
@@ -7,7 +8,7 @@ description: Find deepening opportunities in a codebase using domain language an
 
 Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
 
-## 入口条件
+## When to trigger（入口条件）
 
 Load this skill when you see:
 - User asks to "improve architecture", "refactor", "make this more testable", or "reduce coupling".
@@ -85,7 +86,7 @@ If the user wants to explore alternative interfaces for the chosen candidate, lo
 - During `self-review`, apply the deletion test to new modules introduced in the PR.
 - After `land`, if architecture recommendations were deferred, create a follow-up issue via `gxpm issue create --auto-id`.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 Do NOT use architecture deepening when:
 
@@ -96,7 +97,7 @@ Do NOT use architecture deepening when:
 
 **Counter-examples:** Proposing full seam extraction for a simple rename is wrong — architecture skill is for structural depth, not naming preferences. Suggesting to split a module that passes the deletion test because it "looks large" is wrong — size is not depth.
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 已阅读 `CONTEXT.md` 和相关 ADR
 - [ ] 已用删除测试（deletion test）排查候选模块
@@ -104,3 +105,10 @@ Do NOT use architecture deepening when:
 - [ ] 用户使用 `CONTEXT.md` 术语确认候选方案
 - [ ] 如需接口设计，已运行并行 sub-agent 模式并给出有主见的推荐
 - [ ] 如需更新 `CONTEXT.md` 或新增 ADR，已 inline 完成
+
+## Read Next
+
+- `/gxpm-grill` — stress-test design
+- `/gxpm-refactor-safely` — apply changes with impact analysis
+- `CONTEXT.md`
+- `docs/adr/`

@@ -1,5 +1,6 @@
 ---
 name: gxpm-grill
+type: technique
 description: Grilling session that challenges plans against the domain model and sharpens terminology. Use when user wants to stress-test a plan, align on requirements, challenge assumptions, or make architecture decisions.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +9,7 @@ description: Grilling session that challenges plans against the domain model and
 
 Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户 utterances: "grill me", "let's align", "challenge this plan", "does this make sense?"
@@ -57,7 +58,7 @@ When the user states how something works, check whether the code agrees. If you 
 > "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：不要对 clear one-line fix 进行 grilling。** User says "Add a login button to the header." → 直接实现。Grill 仅当 login flow 涉及 CONTEXT.md 中没有的新领域概念。
 - **STOP：不要对 fully specified、无歧义的需求 grilling。** 浪费用户时间。
@@ -66,7 +67,7 @@ When the user states how something works, check whether the code agrees. If you 
 - **危险信号：**  grilling 过程中 issue 范围不断扩大 → 停止，要求用户先拆分 issue 再继续。
 - **危险信号：** 同一概念出现多个名称而用户不认为它们是同义词 → 强制选择一个并写入 CONTEXT.md。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 每个设计分支的依赖已逐层解决。
 - [ ] 术语已统一并记录到 `CONTEXT.md`。
@@ -157,3 +158,10 @@ What becomes easier? What becomes harder?
 - Before leaving `triage`, use grilling to clarify issue scope and write the `acceptance-contract`.
 - During `plan`, use grilling to resolve implementation decisions and write the `implementation-plan`.
 - Record any ADR created during grilling in the issue's artifact history via `gxpm artifact write`.
+
+## Read Next
+
+- `/gxpm-architecture` — find deepening opportunities
+- `/gxpm-planning` — convert decisions to issues
+- `CONTEXT.md`
+- `docs/adr/`

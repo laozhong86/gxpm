@@ -1,5 +1,6 @@
 ---
 name: gxpm-triage
+type: discipline
 description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
 ---
 
@@ -7,7 +8,7 @@ description: Triage issues through a state machine of triage roles. Use when use
 
 Move issues through a small state machine of triage roles.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户想创建 issue。
@@ -119,7 +120,7 @@ Concise description.
 - Use `gxpm issue create --auto-id` for new issues; use `gxpm issue transition` to move through phases.
 - Out-of-scope knowledge lives under `.gxpm/out-of-scope/<topic>.md`.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：没有 reproduction，就没有 `ready-for-agent`。** A bug without a reproduction attempt or clear "could not reproduce — insufficient detail" note must NOT be marked `ready-for-agent`.
 - **STOP：范围蔓延。** If the issue grows beyond its original description during triage, stop and ask the user to split it before assigning a state role.
@@ -133,7 +134,7 @@ Concise description.
 
 **Foundational Principle:** Violating the letter of the rules is violating the spirit of the rules. The triage state machine exists to protect downstream phases from garbage-in-garbage-out. Every shortcut at triage becomes a blocker at `implement`, `local-verify`, or `land`. Discipline here is kindness to the future agent.
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 每个 issue 恰好一个 category role 和一个 state role。
 - [ ] Bug 必须有 reproduction（test command / steps / "Could not reproduce — insufficient detail"）。
@@ -149,7 +150,17 @@ Concise description.
 - 需要代码定位或根因分析 → `/gxpm-debug-issue`
 - 已 ready-for-agent 需要实现计划 → `/gxpm-planning`
 
-## 常见说辞表
+## Rationalization Table
+
+| Excuse | Reality |
+|---|---|
+| "This bug is obvious — skip reproduction." | Obvious bugs are the most dangerous to skip; reproduction validates assumptions and seeds the acceptance contract. |
+| "The reporter is trusted — mark `ready-for-agent`." | **No exceptions:** every bug needs a reproduction or an explicit `needs-info` route, regardless of reporter trust. |
+| "I'll attach both `bug` and `enhancement` to be safe." | Exactly one category role. Two categories break routing and the state machine silently fails downstream. |
+| "User seems impatient — skip the grill." | Skipping scope alignment produces `ready-for-agent` issues that fail at `ac-check`; the cost compounds, not disappears. |
+| "Triage can be informal for small issues." | Triage state is the contract every downstream phase relies on. Informal triage is invisible technical debt. |
+
+## 常见说辞表（Chinese aliases）
 
 | 用户 utterance / 借口 | 推荐回应 |
 |-----------------------|----------|
@@ -158,3 +169,9 @@ Concise description.
 | "我把两个 category 都加上以防万一。" | "只能选一个 category role。选两个会破坏状态机，导致路由失败。请根据问题本质选一个。" |
 | "用户好像很急，我就不 grill 了。" | "scope 不清时跳过 grilling，会导致 ready-for-agent 的 issue 在 ac-check 阶段失败。建议先用 /gxpm-grill 对齐。" |
 | "帮我看看有哪些 issue 需要处理。" | 展示 Unlabeled / needs-triage / needs-info with reporter activity 三个 bucket。 |
+
+## Read Next
+
+- `/gxpm-planning` — break triaged issue into vertical slices
+- `/gxpm-grill` — stress-test triage assumptions
+- `/gxpm` — main project management runtime

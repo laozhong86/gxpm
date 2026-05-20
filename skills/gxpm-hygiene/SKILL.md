@@ -1,11 +1,12 @@
 ---
 name: gxpm-hygiene
+type: discipline
 description: Pre-commit hygiene and atomic commit discipline. Use before every commit, or when preparing changes for self-review or ship.
 ---
 
 # gxpm-hygiene
 
-## 入口条件
+## When to trigger（入口条件）
 
 在以下场景触发本 skill：
 
@@ -46,7 +47,7 @@ These are the responsibility of `gxpm-build` (during development) and `gxpm-veri
 - **Issue reference:** Commit message must include `GXPM-N` reference.
 - **Worktree discipline:** Main checkout stays on `main`. Feature work happens in dedicated worktrees.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - Committing with `--no-verify` to bypass checks
 - Build or tests failing at commit time
@@ -56,7 +57,21 @@ These are the responsibility of `gxpm-build` (during development) and `gxpm-veri
 - Committing secrets or `.env` files
 - Running the same check twice without code changes in between
 
-## 验证清单 / 出口条件
+## Foundational Principle
+
+> Violating the letter of the hygiene checklist is violating the spirit of atomic commits. Pre-commit hygiene exists so future-you (and your reviewers) can trust every commit as a self-contained, revertable unit. **No exceptions:** if a hook fails or a check flags something, fix the underlying issue — never bypass with `--no-verify`, never amend to hide the failure, never bundle "while I'm here" cleanups.
+
+## Rationalization Table
+
+| Excuse | Reality |
+|---|---|
+| "It's just a tiny fix, the checklist is overkill." | Tiny fixes that bypass hygiene are how `.env` files get committed and how generated docs drift. The checklist is shortest when nothing is wrong. |
+| "I'll squash everything at PR time." | Squashing hides intent. Atomic commits are the audit trail; the squash is just the merge artifact. |
+| "Hooks are slow — `--no-verify` this once." | Hooks are slow because they catch real problems. `--no-verify` is a confession of "I don't want to know what's wrong." |
+| "The secret scanner produced a false positive, I'll commit anyway." | Even false positives need a documented suppression. Silent bypass means the next real leak slips through too. |
+| "I'll fix the generated-file drift in a follow-up." | Stale generated files are a load-bearing lie. The next agent reads them as truth and acts on outdated information. |
+
+## Verification（验证清单 / 出口条件）
 
 提交前必须确认：
 
@@ -67,3 +82,8 @@ These are the responsibility of `gxpm-build` (during development) and `gxpm-veri
 - [ ] Commit message 包含 `GXPM-N` 引用
 - [ ] 未使用 `--no-verify` 绕过检查
 - [ ] 未提交 `.env` 或密钥文件
+
+## Read Next
+
+- `/gxpm-build` — type-check before commit
+- `/gxpm-verify` — verification pipeline
