@@ -1,5 +1,6 @@
 ---
 name: gxpm
+type: reference
 description: Second-generation agent project management runtime. Use when user mentions gxpm, issue phases, worktrees, artifacts, checkpoint recovery, or asks about project management workflow.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -14,12 +15,68 @@ GXPM_STATE_DIR="${GXPM_STATE_DIR:-$GXPM_ROOT/.gxpm}"
 export GXPM_ROOT GXPM_STATE_DIR
 ```
 
+## CANON（行为宪法）
+
+以下纪律内联自 gxpm 源码仓库 `CANON.md`，所有 gxpm 操作前必须遵守：
+
+> CANON.md 是 gxpm 的最高行为合同。它不描述某个具体技能怎么做，而是规定所有 Agent 在所有阶段都必须遵守的纪律。
+
+## 1. 真值优先
+
+先读本仓库真值和相关上游 skill/source，再改文件。来源冲突时，先指出冲突和建议的最小安全路径。
+
+## 2. Issue 驱动
+
+任何非平凡代码改动开始前，确认有对应 GXPM-N issue 处于正确阶段；否则先 `gxpm issue create --auto-id` 并走完 triage → plan → dispatch。
+
+## 3. Phase 不可臆测
+
+不从聊天记忆推断 phase 或完成状态。不确定下一步时，统一查 `gxpm issue next <id>`，不要自己拼 CLI。
+
+## 4. Artifact 先决
+
+Phase 推进前先写完 artifact，再 `gxpm issue transition`。不要直接编辑 `.gxpm/issues/<id>/*.json`，统一通过 `gxpm artifact write` / `gxpm artifact edit`。
+
+## 5. 设计落盘
+
+方案、取舍、替代选项必须写到对应 artifact（triage-report / implementation-plan / ADR 等），不能只留在聊天里。下一个会话只读 `.gxpm/issues/<id>/` 也能恢复上下文是底线。
+
+## 6. 生成物纪律
+
+编辑 skill 时改 `*.tmpl`，再运行 `bun run gen:skill-docs`。生成物冲突只能通过模板和生成器解决，再重新生成。不手改生成产物当真值。
+
+## 7. Worktree 隔离
+
+进入 implement 前 `git status -sb` 检查未追踪文件；如有 3+ 个来源不明文件，默认走独立 worktree 隔离。`git worktree add` 之后必须 `cd` 进新 worktree 才能动代码。
+
+## 8. 证据可复核
+
+browser/QA/review/ship 相关结论必须落到可复核证据。汇报包含路径、命令和验证证据。
+
+## 9. 安全门控
+
+destructive cleanup、发布、合并、远端写操作前必须确认。不把 gxpm 写成 PMC/gstack wrapper，不引入 PMC/gstack 运行时依赖。不做 yes-machine。
+
+## 10. 失败归因
+
+不声称历史失败与本次无关，除非有 base/main 对照证据或仓库已有记录证明该失败是基线噪声。
+
+## 约束层级
+
+```text
+CANON.md
+  ├─ 约束 Command：阶段不能跳过必要门控
+  ├─ 约束 Agent：角色不能越权自证通过
+  ├─ 约束 Skill：技能只能增加纪律，不能放松宪法
+  └─ 约束 Artifact：产物必须留下可审计证据
+```
+
 # gxpm
 
 gxpm 是面向代理执行的统一项目管理运行时。
 产品目标是替代 PMC 和 gstack，以原生状态图、能力运行时和阶段门控推进 —— 不是包装它们。
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户提到 gxpm、issue phases、worktrees、artifacts、checkpoint recovery。
@@ -27,7 +84,8 @@ gxpm 是面向代理执行的统一项目管理运行时。
 - 任何涉及 `.gxpm/issues/<id>/` 状态或 artifact 的操作。
 
 **前置条件**
-- 无特殊前置；如状态不存在，先创建：`gxpm issue create --auto-id`。
+- [ ] 已阅读本 skill 内嵌的 CANON（行为宪法）章节。
+- 如状态不存在，先创建：`gxpm issue create --auto-id`。
 
 **Skill 边界（什么情况下应该加载别的 skill）**
 - 纪律性调试循环 → `/gxpm-diagnose`
@@ -92,13 +150,37 @@ Agent 不得自行拼凑 checkpoint、issue-intake 或其他非标准命令来�
 
 ### 阶段地图
 
+完整状态机（`full` rigor）共 14 阶段：
+
+```
+triage → plan → dispatch → specify → implement → local-verify → ac-check → self-review → cleanup → ship → pr-check → verify → qa → land
+```
+
+按 `rigorLevel` 自动压缩：
+
+| 模式 | 可见阶段数 | 压缩后流程 |
+|---|---|---|
+| `lite`（spike / meta） | 7 | triage → plan → specify → implement → self-review → ship → land |
+| `standard`（默认） | 9 | triage → plan → dispatch → specify → implement → self-review → ship → qa → land |
+| `full`（核心模块） | 14 | 完整流程，不跳过任何阶段 |
+
+压缩规则（底层 14 阶段不变，transition 允许跨阶段跳跃）：
+- `lite` 跳过：dispatch, local-verify, ac-check, cleanup, pr-check, verify, qa
+- `standard` 跳过：local-verify, ac-check, cleanup, pr-check, verify
+- `full` 不跳过任何阶段
+
+被跳过的阶段仍保留在 `phaseHistory` 和 `events.jsonl` 中（审计链完整），只是不作为必经状态节点。CLI 与 UI 通过 `getVisiblePhases(rigorLevel)` 展示压缩后的流程。
+
+各阶段含义：
 - `triage`: 澄清 issue、范围、风险、下一阶段。
 - `plan`: 产出已批准的实现和验证计划。
 - `dispatch`: 创建 worktree/交接/契约。
+- `specify`: BDD 行为规约，产出 `behavior-spec`。
 - `implement`: 工作者拥有的实现。
 - `local-verify`: 代理拥有的本地验证证据。
 - `ac-check`: 验收契约履行。
 - `self-review`: PR 前内部审查。
+- `cleanup`: 多 issue worktree 合并前的代码清理与简化。
 - `ship`: PR/发布准备。
 - `pr-check`: 审查评论和 PR 风险。
 - `verify`: 独立验收验证。
@@ -113,25 +195,26 @@ Agent 不得自行拼凑 checkpoint、issue-intake 或其他非标准命令来�
 gxpm issue next <issue-id>          # 必须先查 next，按输出执行
 ```
 
-**各阶段 artifact 初始化命令映射（issue next 会提示，此表为速查）：**
+**各阶段 transition 命令映射（issue next 会提示，此表为速查）：**
 
-| 当前阶段 | 初始化命令 | 产出 artifact |
+| 当前阶段 | Transition 命令 | 产出 artifact |
 |---|---|---|
 | `triage` | `gxpm triage init <id>` | `acceptance-contract` draft |
 | `plan` | `gxpm plan init <id>` | `implementation-plan` draft |
 | `dispatch` | `gxpm dispatch init <id>` | `dispatch-handoff` draft |
 | `specify` | `gxpm specify init <id>` | `behavior-spec` draft |
-| `local-verify` | `gxpm local-verify init <id>` | `local-verify` draft |
-| `ac-check` | `gxpm ac-check init <id>` | `acceptance-check` draft |
-| `self-review` | `gxpm self-review init <id>` | `self-review` draft |
-| `ship` | `gxpm ship init <id>` | `ship-readiness` draft |
-| `pr-check` | `gxpm pr-check init <id>` | `pr-check` draft |
-| `verify` | `gxpm verify init <id>` | `verify-findings` draft |
-| `qa` | `gxpm qa init <id>` | `qa-findings` draft |
-| `land` | `gxpm land init <id>` | `land-findings` draft |
+| `implement` | `gxpm implement verify <id>` | `local-verify` draft |
+| `local-verify` | `gxpm local-verify ac-check <id>` | `acceptance-check` draft |
+| `ac-check` | `gxpm ac-check self-review <id>` | `self-review` draft |
+| `self-review` | `gxpm self-review cleanup <id>` | `cleanup-report` draft |
+| `cleanup` | `gxpm cleanup ship <id>` | `ship-readiness` draft |
+| `ship` | `gxpm ship pr-check <id>` | `pr-check` draft |
+| `pr-check` | `gxpm pr-check verify <id>` | `verify-findings` draft |
+| `verify` | `gxpm verify qa <id>` | `qa-findings` draft |
+| `qa` | `gxpm qa land <id>` | `land-findings` draft |
 
 **写入 artifact 的合法方式只有三种：**
-1. `gxpm <phase> init <id>` — 初始化 draft
+1. `gxpm <phase> init <id>` 或对应的 phase transition 命令 — 初始化 draft
 2. `gxpm artifact write <id> <type> --json '...'` — 写入完整 payload
 3. `gxpm artifact edit <id> <type> ...` — 编辑已有 artifact
 
@@ -312,7 +395,7 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 - `wiki-context` 是非门控支持 artifact；它不替代
   GitNexus 影响/调试/审查证据。
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：绝不从聊天记忆推断阶段。** 始终先读 `gxpm issue status`。创建 issue 后必须先执行 `gxpm issue next <id>`。
 - **STOP：绝不跳过 artifact 回写。** 任何非平凡提议在阶段推进前必须写入 artifact。
@@ -333,7 +416,7 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 - **STOP：不要将 wiki 新鲜度用作阶段门。**
 - **危险信号：** `wiki-context` 试图替代 GitNexus 影响/调试/审查证据时拒绝。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 **各阶段 artifact 要求**
 - `triage` → `acceptance-contract`
@@ -374,7 +457,7 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 任何非平凡的提议在阶段推进前**必须**写入 artifact。
 Artifact 树是真相源；聊天历史是易失的。
 
-## 相关 Skills
+## See Also（相关 Skills）
 
 - 纪律性调试循环 → `/gxpm-diagnose`
 - 对齐会议、术语精炼 → `/gxpm-grill`

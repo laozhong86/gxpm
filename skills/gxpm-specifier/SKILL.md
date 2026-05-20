@@ -1,5 +1,6 @@
 ---
 name: gxpm-specifier
+type: discipline
 description: BDD behavior specification design skill. Use during gxpm specify phase, when user mentions BDD, Gherkin, Given-When-Then, behavior spec, or behavior-first development.
 ---
 
@@ -11,7 +12,7 @@ description: BDD behavior specification design skill. Use during gxpm specify ph
 
 在 specify 阶段，**不写一行测试逻辑代码**。产出的仅是 Gherkin 行为注释 + 空函数 stub + 结构化 artifact。
 
-## 入口条件
+## When to trigger（入口条件）
 
 - gxpm issue 处于 `specify` phase
 - 用户要求"先写行为再写代码"、"BDD 先行"、"Given-When-Then"
@@ -100,7 +101,7 @@ NO GUESSING — USE [NEEDS CLARIFICATION] INSTEAD
    - 补充边界场景：增加 scenario → 回到步骤 4
 9. 用户确认后运行 `gxpm specify confirm <issue-id>`
 
-## 红旗清单
+## Red Flags（红旗清单）
 
 立即停止并重新开始：
 
@@ -113,7 +114,21 @@ NO GUESSING — USE [NEEDS CLARIFICATION] INSTEAD
 - 跳过 specify 直接 implement（phase-gate 会拒绝）
 - confirm 时 `<placeholder>` 字符串仍残留（`confirmSpecify` 会拒绝）
 
-## 验证清单
+## Foundational Principle
+
+> Violating the letter of the BDD contract is violating the spirit of behavior-first development. The specify phase exists to capture **what the system should do** in domain language *before* any implementer reasons about *how*. **No exceptions:** smuggling implementation hints into the spec, leaving `[NEEDS CLARIFICATION]` unresolved, or skipping the user confirmation step all collapse the boundary that makes BDD useful. If the spec can't be written without code, the requirements aren't ready — escalate.
+
+## Rationalization Table
+
+| Excuse | Reality |
+|---|---|
+| "I'll add one tiny `expect` to make the stub runnable." | One `expect` makes specify do TDD's job. The empty stub IS the spec — its emptiness is intentional. |
+| "`foo` / `bar` is fine, I'll replace later." | Placeholder data hides domain ambiguity. Real example data forces you to clarify what the domain actually contains. |
+| "12 steps in one scenario isn't that bad." | >10 steps means two scenarios were merged. Split them; the merged scenario will fail at review regardless. |
+| "The user is busy, I'll skip the confirmation." | Unconfirmed specs become "did the user actually want this?" debates at PR time. The confirmation is the contract. |
+| "`[NEEDS CLARIFICATION]` slows things down — I'll just pick something." | Guessed requirements waste the entire implement phase. One paused question costs minutes; a wrong implementation costs days. |
+
+## Verification（验证清单）
 
 每次 `gxpm specify confirm` 前自查：
 
@@ -133,3 +148,9 @@ NO GUESSING — USE [NEEDS CLARIFICATION] INSTEAD
 ## Handoff
 
 `confirmedAt` 写入 → phase 可转 implement → `gxpm-tdd` skill 接管。
+
+## Read Next
+
+- `/gxpm-tdd` — red-green-refactor on the spec
+- `/gxpm-planning` — incoming plan source
+- `/gxpm-prototype` — sanity-check design before specifying

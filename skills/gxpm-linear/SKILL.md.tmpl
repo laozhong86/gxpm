@@ -1,5 +1,6 @@
 ---
 name: gxpm-linear
+type: reference
 description: Linear CLI integration for gxpm issue lifecycle management. Use when creating, updating, or querying Linear issues, syncing gxpm issues to Linear, or managing issue lifecycle via command line.
 status: stable
 ---
@@ -8,7 +9,7 @@ status: stable
 
 Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** — 所有操作走 `linear` 命令。
 
-## 入口条件
+## When to trigger（入口条件）
 
 - 需要创建/更新/查询 Linear issue
 - gxpm issue 需要同步到 Linear（`maybeSyncIssue` 的替代路径）
@@ -65,7 +66,7 @@ linear config        # 查看默认 team/workspace
 - `issue list` 必须加 `--sort`（`manual` 或 `priority`）
 - GraphQL escape hatch: `linear api '{ issues { nodes { id title } } }'`
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **不使用 MCP** — 所有操作走 `linear` 命令，禁止通过 MCP 操作 Linear
 - 禁止绕过查重直接创建 issue
@@ -73,7 +74,7 @@ linear config        # 查看默认 team/workspace
 - 禁止在子 issue 未完成时关闭父 issue
 - 不要混用旧 API key 认证方式（`sync.linearApiKey`、`GXPM_LINEAR_API_KEY` 已废弃）
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] issue 创建/更新/查询结果与预期一致
 - [ ] 同步后的 gxpm issue 与 Linear issue 状态一致

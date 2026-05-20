@@ -1,5 +1,6 @@
 ---
 name: gxpm-zoom-out
+type: technique
 description: Tell the agent to zoom out and give broader context or a higher-level perspective. Use when you're unfamiliar with a section of code, stuck in implementation details, or need to understand how code fits into the bigger picture.
 ---
 
@@ -7,7 +8,7 @@ description: Tell the agent to zoom out and give broader context or a higher-lev
 
 Go up a layer of abstraction. Stop drowning in details and see the map.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 你在 implement 阶段陷入了实现细节，不确定当前修改是否符合架构设计。
@@ -47,7 +48,7 @@ Provide a concise architectural briefing covering:
 - Do not descend into function-level detail unless specifically asked.
 - Do not suggest code changes — this is a viewing skill, not an editing skill.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：不要变成文件浏览器。** Zoom-out 的目标是理解关系，不是枚举文件。
 - **STOP：不要建议重构。** 如果发现了架构问题，交给 `/gxpm-architecture`。
@@ -55,7 +56,7 @@ Provide a concise architectural briefing covering:
 - **危险信号：** 输出变成了目录列表 → 重新组织为模块关系图。
 - **危险信号：** 使用了与 CONTEXT.md 不一致的术语 → 纠正并引用 glossary。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 提供了模块地图（不是文件列表）。
 - [ ] 使用了 CONTEXT.md 中的领域术语。
@@ -67,3 +68,8 @@ Provide a concise architectural briefing covering:
 - 需要具体代码调试 → `/gxpm-debug-issue`
 - 需要架构改进建议 → `/gxpm-architecture`
 - 需要术语对齐 → `/gxpm-grill`
+
+## Read Next
+
+- `/gxpm-explore-codebase` — graph-driven exploration
+- `/gxpm-architecture` — find structural opportunities

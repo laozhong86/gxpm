@@ -1,11 +1,12 @@
 ---
 name: gxpm-verify
+type: technique
 description: Local verification pipeline execution and evidence collection. Use when transitioning from implement to local-verify, or when running the full verification suite for an issue.
 ---
 
 # gxpm-verify
 
-## 入口条件
+## When to trigger（入口条件）
 
 在以下场景触发本 skill：
 
@@ -85,13 +86,13 @@ Step 4: bun run build             (medium — compilation verification)
 
 **Do not fix blindly.** Load the relevant skill, follow its discipline, then re-run the full pipeline from Step 1.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **No skips.** Every relevant step must execute and pass.
 - **Evidence before transition.** `local-verify` artifact is incomplete without `verificationSteps`.
 - **Re-run discipline:** Only re-run a step if the code has changed since the last run. Re-running on unchanged code adds no information.
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 完成 `local-verify` 必须满足：
 
@@ -105,3 +106,9 @@ Step 4: bun run build             (medium — compilation verification)
 - 在 `implement → local-verify` 过渡时加载本 skill
 - `local-verify` artifact 必须包含 `verificationSteps` 后才能推进到 `ac-check`
 - 任何步骤失败，修复后必须从 Step 1 重新运行完整流水线
+
+## Read Next
+
+- `/gxpm-build` — compile verification
+- `/gxpm-tdd` — test-first feedback loop
+- `/gxpm-review-army` — multi-role review after verify

@@ -1,5 +1,6 @@
 ---
 name: gxpm-review-army
+type: technique
 description: Agent Army 并行审查模式的使用指南。在 self-review 和 ship 阶段通过多角色并行扇出提升审查质量。
 status: stable
 ---
@@ -8,7 +9,7 @@ status: stable
 
 在 gxpm 的 `self-review` 和 `ship` 阶段使用 Agent Army 并行审查模式，替代单一 reviewer 视角，显著提升审查覆盖面和问题发现率。
 
-## 入口条件
+## When to trigger（入口条件）
 
 - issue 已进入 `self-review` 或 `ship` 阶段
 - 需要比单一 reviewer 更全面的多维度审查
@@ -19,7 +20,7 @@ status: stable
 ### 在 self-review 阶段启用 Review Army
 
 ```bash
-gxpm self-review --army init <issue-id>
+gxpm self-review cleanup <issue-id> --army
 ```
 
 这会同时创建：
@@ -39,7 +40,7 @@ gxpm self-review --army init <issue-id>
 ### 在 ship 阶段启用 Ship Audit Army
 
 ```bash
-gxpm ship --army init <issue-id>
+gxpm ship pr-check <issue-id> --army
 ```
 
 这会同时创建：
@@ -86,14 +87,14 @@ gxpm ship --army init <issue-id>
 - **有 `--army` 标志时**：Army 审查与单一 reviewer 并行产出，review-report 作为额外输入
 - 单一 reviewer 负责**综合判断**和**合并建议**，Army 角色提供**专业视角**
 
-## 红旗清单 / HARD-GATE
+## Red Flags（红旗清单 / HARD-GATE）
 
 - **Review Army 产出的 blocking finding 未解决就推进到 ship** → 必须 STOP，回到 self-review 修复
 - **在 ship 阶段发现 security auditor 的 blocking 问题** → 必须 STOP，回退到 implement 修复后重新走 review
 - **为赶时间跳过 Accessibility Reviewer** → 可访问性是法律责任，不可跳过
 - **混淆 important 和 blocking 的优先级** → 只有 blocking 会阻止 gate，但 important 需在 ship notes 中说明计划
 
-## 验证清单
+## Verification（验证清单）
 
 - [ ] `--army` 标志正确传递，review-report 或 ship-audit-report 已创建
 - [ ] 每个 Army 角色的 findings 已填入报告

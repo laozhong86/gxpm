@@ -1,5 +1,6 @@
 ---
 name: diagnose
+type: discipline
 description: Disciplined diagnosis loop for hard bugs and performance regressions. Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -8,7 +9,7 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 
 A discipline for hard bugs where the root cause is **not yet known**.
 
-### 入口条件
+## When to trigger（入口条件）
 
 **Skill boundary:**
 - If you have a **specific symptom, stack trace, or error message** and need to trace its root cause through the codebase, load `/gxpm-debug-issue` first.
@@ -18,7 +19,7 @@ A discipline for hard bugs where the root cause is **not yet known**.
 - **触发时机**：Use when user says 'diagnose this', reports a hard bug, describes a performance regression, or asks why something fails.
 - **纪律**：Skip phases only when explicitly justified.
 
-### 可操作流程
+## 可操作流程
 
 ## Phase 2 — Reproduce
 
@@ -82,7 +83,7 @@ Required before declaring done:
 **Then ask: what would have prevented this bug?** If the answer involves architectural change, hand off to `/architecture` with the specifics.
 
 
-### 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 ## Phase 1 — Build a feedback loop
 
@@ -120,7 +121,21 @@ Stop and say so explicitly. List what you tried. Ask the user for: (a) access to
 **Do not proceed to Phase 2 until you have a loop you believe in.**
 
 
-### 验证清单 / 出口条件
+## Foundational Principle
+
+> Violating the letter of the diagnosis loop is violating the spirit of root-cause thinking. Diagnose exists because the *first* hypothesis is almost always wrong. **No exceptions:** skipping phases to "save time" delivers a fix to the wrong symptom and leaves the real defect dormant. If you're tempted to skip, that's the strongest signal you can't.
+
+## Rationalization Table
+
+| Excuse | Reality |
+|---|---|
+| "I've seen this exact bug before, skip to the fix." | Recognition bias. Confirm the reproduction matches before reusing the fix, or you'll patch the wrong subsystem. |
+| "The first hypothesis is obviously right, no need to enumerate alternatives." | Diagnosis without alternatives is just confirmation bias dressed up. Force at least 2 competing hypotheses before testing. |
+| "I can skip the reproduction step — the stack trace tells me enough." | Stack traces show *where* it crashed, not *why*. Reproduction tells you whether your hypothesis predicts the behavior. |
+| "The fix worked, so my hypothesis was right." | A fix that "works" without ruling out alternatives often suppresses the symptom while leaving the root cause. Verify by predicting a related failure. |
+| "Performance regression — I'll just optimize the slow function." | Profiling without hypothesis = treadmill. Form a hypothesis about *why* it regressed, then profile to confirm or reject. |
+
+## Verification（验证清单 / 出口条件）
 
 - 完成 ## Phase 2 — Reproduce
 
@@ -218,3 +233,8 @@ Stop and say so explicitly. List what you tried. Ask the user for: (a) access to
 
 **Do not proceed to Phase 2 until you have a loop you believe in.**
  的约束完成收敛。
+
+## Read Next
+
+- `/gxpm-debug-issue` — issue-scoped debugging
+- `/gxpm-build` — compile + type-check verification

@@ -1,5 +1,6 @@
 ---
 name: gxpm-autopilot
+type: reference
 description: 开启 gxpm 自动驾驶模式。使用 Autopilot Grant 持久化用户授权，让代理在授权 profile 内自主完成 issue delivery。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
@@ -16,7 +17,7 @@ export GXPM_ROOT GXPM_STATE_DIR
 
 # gxpm Autopilot
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户明确要求"自动驾驶模式"。
@@ -79,7 +80,7 @@ gxpm autopilot list
 gxpm autopilot stop <issue-id> --reason "<reason>"
 ```
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：用户明确停止或撤销授权。** 立即停止，写入阻塞原因到当前阶段 artifact。
 - **STOP：需要密钥、账号登录、付费外部 API 或用户私密输入。** 先写入阻塞原因，停止自动驾驶。
@@ -91,7 +92,7 @@ gxpm autopilot stop <issue-id> --reason "<reason>"
 - **STOP：`stop_hook_active` 已经为 true 时不再重复阻止。** 避免无限循环。
 - **危险信号：** 用户未授权不可逆操作却试图 merge/land → 拒绝并请求显式授权。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] `autopilot-grant` artifact 已持久化（含 issue、profile、prompt）。
 - [ ] `gxpm issue status` 和 `gxpm issue next` 已执行。
@@ -114,3 +115,8 @@ gxpm autopilot stop <issue-id> --reason "<reason>"
 | "帮我自动驾驶 GXPM-42。" | 启动 `gxpm autopilot start GXPM-42 --profile full-delivery --prompt "..."`，然后按 `gxpm issue next` 推进。 |
 | "可以停了。" / "暂停 autopilot" | `gxpm autopilot stop <issue-id> --reason "User requested pause"`，报告当前阶段和已产出 artifact。 |
 | "autopilot 到哪了？" | `gxpm autopilot status <issue-id>`，结合 `gxpm issue status` 汇报当前阶段和 next 推荐。 |
+
+## Read Next
+
+- `/gxpm` — main project management runtime
+- `docs/governance/development-contract.md`

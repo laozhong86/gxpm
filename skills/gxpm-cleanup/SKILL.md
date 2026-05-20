@@ -1,5 +1,6 @@
 ---
 name: gxpm-cleanup
+type: technique
 description: 多 issue worktree 合并前的代码清理与简化。在 cleanup 阶段识别跨 issue 重复、命名不一致、接口错位和死代码。
 status: stable
 ---
@@ -8,7 +9,7 @@ status: stable
 
 在 gxpm 的 `cleanup` 阶段对多 issue worktree 进行跨 issue 代码清理，确保进入 `ship` 前的代码是统一、简洁、无重复的。
 
-## 入口条件
+## When to trigger（入口条件）
 
 - issue 已进入 `cleanup` 阶段
 - worktree 中处理了 2+ 个 issue（单 issue 可跳过 cleanup）
@@ -37,6 +38,8 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 
 单 issue worktree 可直接从 self-review 进入 ship，跳过 cleanup 阶段。
 
+**与 rigorLevel 的关系**：gxpm 的 `standard` 和 `lite` rigor 模式已自动跳过 cleanup 阶段（通过 `isCompressedSkip`），无需手动 `--skip-cleanup`。仅在 `full` 模式下需要显式跳过时才使用此 flag。
+
 ### Cleanup 检查清单
 
 - [ ] 扫描 worktree 中所有 issue 的代码变更
@@ -47,13 +50,13 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 - [ ] 检查测试覆盖是否有冗余
 - [ ] 记录所有发现到 cleanup-report
 
-## 红旗清单 / HARD-GATE
+## Red Flags（红旗清单 / HARD-GATE）
 
 - **发现功能完全重复的模块但未提取** → 必须 STOP，提取到共享位置
 - **跨 issue 接口不兼容且无迁移方案** → 必须 STOP，对齐接口后再推进
 - **死代码占比过高** → Important，需在 cleanup-report 中说明清理计划
 
-## 验证清单
+## Verification（验证清单）
 
 - [ ] cleanup-report.json 已创建并包含审计结果
 - [ ] 所有 blocking 级别问题已解决或获得豁免

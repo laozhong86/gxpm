@@ -1,5 +1,6 @@
 ---
 name: gxpm-prototype
+type: technique
 description: Build a throwaway prototype to validate a design before committing to it. Use when you need to sanity-check a data model, state machine, or UI design before writing behavior-spec.
 ---
 
@@ -7,7 +8,7 @@ description: Build a throwaway prototype to validate a design before committing 
 
 A prototype is **throwaway code that answers a question**. The question decides the shape.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户说 "prototype this"、"let me play with it"、"try a few designs"。
@@ -41,7 +42,7 @@ The two branches produce very different artifacts — getting this wrong wastes 
 5. **Surface the state.** After every action (logic) or on every variant switch (UI), print or render the full relevant state so the user can see what changed.
 6. **Delete or absorb when done.** When the prototype has answered its question, either delete it or fold the validated decision into the real code — don't leave it rotting in the repo.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：不要把原型当作生产代码。** 没有测试、没有错误处理、没有抽象 — 这些是故意的，不是 TODO。
 - **STOP：不要在原型中追求完美。** 30 分钟能回答的问题不要花 3 小时。
@@ -50,7 +51,7 @@ The two branches produce very different artifacts — getting this wrong wastes 
 - **危险信号：** 原型代码被 copy-paste 到正式实现 → 这是有意外的技术债务，应重新实现。
 - **危险信号：** 原型运行需要复杂的 setup → 简化它，否则学习成本太高。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 回答了预先定义的 question（logic feel right? or what should it look like?）。
 - [ ] 代码明确标记为 PROTOTYPE / throwaway。
@@ -62,3 +63,8 @@ The two branches produce very different artifacts — getting this wrong wastes 
 - 原型验证后需求仍不清晰 → `/gxpm-grill`
 - 原型验证后需要正式规约 → `/gxpm-specifier`
 - 原型暴露架构问题 → `/gxpm-architecture`
+
+## Read Next
+
+- `/gxpm-specifier` — formalize after prototype validates
+- `/gxpm-tdd` — test-first after spec

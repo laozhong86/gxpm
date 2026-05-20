@@ -1,5 +1,6 @@
 ---
 name: gxpm-tdd
+type: discipline
 description: Test-driven development with red-green-refactor loops via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
 ---
 
@@ -13,7 +14,7 @@ description: Test-driven development with red-green-refactor loops via vertical 
 
 **Violating the letter of the rules is violating the spirit of the rules.**
 
-## 入口条件
+## When to trigger（入口条件）
 
 在以下场景触发本 skill：
 
@@ -112,7 +113,7 @@ Read [references/mocking.md](references/mocking.md) before adding mocks, changin
 
 See [references/interface-design.md](references/interface-design.md) for designing testable interfaces.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 ### 必须立即停止并重新开始的情况
 
@@ -138,7 +139,7 @@ See [references/interface-design.md](references/interface-design.md) for designi
 
 一次性写完全部测试再写全部实现是水平切片，会产生脆弱且脱离实际的测试。必须按垂直切片逐个 RED→GREEN→REFACTOR 推进。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 每个 TDD 循环完成后检查：
 
@@ -185,3 +186,10 @@ No exceptions without your human partner's permission.
 | "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
 | "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
 | "Existing code has no tests" | You're improving it. Add tests for existing code. |
+
+## Read Next
+
+- `references/testing-anti-patterns.md`
+- `/gxpm-specifier` — write behavior spec first
+- `/gxpm-verify` — run local verification pipeline
+- `/gxpm` — main project management runtime

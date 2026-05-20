@@ -1,5 +1,6 @@
 ---
 name: gxpm-implementer
+type: discipline
 description: Subagent implementer behavior template enforcing four-dimension self-review. Use when dispatching a task to an implementer subagent, or when a subagent needs structured self-review and reporting rules.
 ---
 
@@ -7,7 +8,7 @@ description: Subagent implementer behavior template enforcing four-dimension sel
 
 Use this template when dispatching an implementer subagent through gxpm's dispatch phase.
 
-## 入口条件
+## When to trigger（入口条件）
 
 在以下场景使用本模板：
 
@@ -87,7 +88,7 @@ specifically what you're stuck on, what you've tried, and what kind of help you 
 The controller can provide more context, re-dispatch with a more capable model,
 or break the task into smaller pieces.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **不要擅自拆分文件。** 如果文件超出计划预期，报告 DONE_WITH_CONCERNS 而非自行拆分。
 - **不要修改任务范围外的代码结构。** 遵循现有模式，只改进你正在接触的代码。
@@ -95,7 +96,21 @@ or break the task into smaller pieces.
 - **不要忽视警告信号。** 连续阅读文件仍无法理解系统时应立即升级（BLOCKED/NEEDS_CONTEXT），而不是硬推。
 - **不要在需要架构决策时独断。** 存在多个有效方案时必须上报。
 
-## 验证清单 / 出口条件
+## Foundational Principle
+
+> Violating the letter of the implementer contract is violating the spirit of dispatch. The controller dispatched a task with a defined scope so the rest of the system can make parallel progress. **No exceptions:** silent scope expansion, swallowed uncertainty, or "while I'm here" fixes break that contract. When in doubt, report `DONE_WITH_CONCERNS` or `BLOCKED` — those are tools, not failures.
+
+## Rationalization Table
+
+| Excuse | Reality |
+|---|---|
+| "The plan was incomplete, I had to fill in gaps." | Gaps are signals to escalate (`NEEDS_CONTEXT`), not to invent. The controller needs to know the plan was insufficient. |
+| "I noticed a bug in adjacent code, I fixed it too." | Out-of-scope fixes hide in your diff and contaminate the review. File it as a sibling issue instead. |
+| "Splitting this file feels obviously better." | Obvious to you, not in the plan. Report `DONE_WITH_CONCERNS` with the suggestion — let the controller decide. |
+| "I'm 80% sure this is right, I'll just ship it." | 80% is the threshold for asking, not for shipping. `DONE_WITH_CONCERNS` is the honest report. |
+| "Asking again would slow the dispatch." | Wrong implementation slows it more. One clarifying question costs minutes; a wrong implementation costs hours of review + rework. |
+
+## Verification（验证清单 / 出口条件）
 
 报告前必须完成四维自审：
 
@@ -139,3 +154,9 @@ When done, report:
 Use DONE_WITH_CONCERNS if you completed the work but have doubts about correctness.
 Use BLOCKED if you cannot complete the task. Use NEEDS_CONTEXT if you need
 information that wasn't provided. Never silently produce work you're unsure about.
+
+## Read Next
+
+- `/gxpm-tdd` — TDD discipline for the implementation slice
+- `/gxpm-verify` — local verification before handoff
+- `/gxpm-hygiene` — pre-commit hygiene

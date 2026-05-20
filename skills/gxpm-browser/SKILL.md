@@ -1,5 +1,6 @@
 ---
 name: gxpm-browser
+type: reference
 description: Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
 status: stable
 ---
@@ -10,7 +11,7 @@ status: stable
 Minimal headless browser CLI built on Playwright. Designed for gxpm evidence
 capture and QA automation, not general web scraping.
 
-## 入口条件
+## When to trigger（入口条件）
 
 - User asks to "test the site", "open in browser", "take a screenshot"
 - QA phase needs browser/runtime proof
@@ -86,13 +87,13 @@ gxpm artifact write <issue-id> qa-findings --json '{"evidence":["browser/screens
 - cmux browser session investigation is a separate path (see main gxpm skill).
 
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **禁止用于通用网页抓取** — 本 skill 仅限 gxpm 证据捕获与 QA 自动化
 - 不要在没有明确 QA 需求或证据要求时随意截图
 - 不要在 verify-gate 未要求时产生冗余的浏览器证据
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 浏览器操作成功执行（页面加载、元素验证、截图等）
 - [ ] 证据文件保存到正确路径并可在后续 QA 环节引用

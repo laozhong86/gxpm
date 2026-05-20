@@ -1,5 +1,6 @@
 ---
 name: gxpm-planning
+type: technique
 description: Break plans into independently-grabbable issues using vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, break down a feature, or turn discussion into a structured PRD.
 ---
 
@@ -7,7 +8,7 @@ description: Break plans into independently-grabbable issues using vertical slic
 
 Break any plan into independently-grabbable issues using **tracer-bullet vertical slices**.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 用户想将计划转化为 issues。
@@ -110,7 +111,7 @@ Any additional notes.
 - The parent issue's `implementation-plan` should reference child issue IDs.
 - For PRD synthesis, publish the PRD as a new issue with `gxpm issue create --auto-id` and label it `needs-triage`.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：禁止水平层拆分。** 不要按 schema → API → UI → tests 分层拆 issue；必须是端到端垂直切片。
 - **STOP：禁止跳过用户确认直接发布 issue。** 必须在用户批准粒度和依赖后再 publish。
@@ -119,7 +120,7 @@ Any additional notes.
 - **危险信号：** Issue body 描述的是层-by-layer 实现而非端到端行为 → 重写为垂直切片描述。
 - **危险信号：** 子 issue 创建后父 issue 未引用子 issue IDs → 补全引用。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 每个 slice 有明确 Title、Type（HITL/AFK）、Blocked by、覆盖的 User Stories。
 - [ ] 用户已批准粒度和依赖关系。
@@ -132,3 +133,10 @@ Any additional notes.
 - 需求仍不清晰 → `/gxpm-grill`
 - 实现计划仍需进一步拆分 → 重新执行 Planning Process
 - 架构决策受阻 → `/gxpm-architecture`
+
+## Read Next
+
+- `/gxpm-triage` — issue state machine
+- `/gxpm-grill` — stress-test plans
+- `/gxpm-specifier` — convert plans to behavior specs
+- `/gxpm` — main project management runtime

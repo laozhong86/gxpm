@@ -1,5 +1,6 @@
 ---
 name: gxpm-setup
+type: reference
 description: Scaffold per-repo configuration for gxpm skills. Use when first using gxpm in a repo, or when issue tracker, triage labels, or domain doc layout is unclear.
 ---
 
@@ -11,7 +12,7 @@ Scaffold the per-repo configuration that gxpm skills consume:
 - **Triage labels** — the strings used for the five canonical triage roles
 - **Domain docs** — where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 首次在当前 repo 使用 gxpm skills。
@@ -82,13 +83,13 @@ Write to `.gxpm/agents/`:
 
 Also update `AGENTS.md` or `CLAUDE.md` with an `## Agent skills` block if not present.
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：不要假设用户的 issue tracker。** 总是先检查 `git remote` 再提问。
 - **STOP：不要覆盖用户已有的配置。** 如果 `.gxpm/agents/` 已存在，先展示当前内容，询问是否更新。
 - **STOP：不要同时问三个问题。** 一次只问一个 section，得到回答后再继续。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] `.gxpm/agents/issue-tracker.md` 已写入，包含 tracker 类型和 CLI 工具。
 - [ ] `.gxpm/agents/triage-labels.md` 已写入，包含 5 个 canonical roles 的映射。
@@ -99,3 +100,9 @@ Also update `AGENTS.md` or `CLAUDE.md` with an `## Agent skills` block if not pr
 **失败时路由**
 - 配置后需要创建 issue → `/gxpm-triage`
 - 配置后需要制定计划 → `/gxpm-planning`
+
+## Read Next
+
+- `/gxpm` — main project management runtime
+- `docs/governance/development-contract.md`
+- `docs/governance/template-authoring.md`

@@ -1,5 +1,6 @@
 ---
 name: gxpm-feedback
+type: reference
 description: Create feedback issues in the gxpm source repository when the agent discovers problems or improvement opportunities during gxpm workflow execution. Use when the agent notices a gxpm bug, process flaw, skill deficiency, or has a suggestion for the gxpm tool itself.
 ---
 
@@ -7,7 +8,7 @@ description: Create feedback issues in the gxpm source repository when the agent
 
 Create structured feedback issues in the gxpm source repository so that problems and improvements are tracked, triaged, and eventually resolved.
 
-## 入口条件
+## When to trigger（入口条件）
 
 **何时触发**
 - 代理在执行 gxpm 流程时发现 gxpm **自身**的 bug 或缺陷。
@@ -88,7 +89,7 @@ gxpm feedback create --auto-id \
 
 这有助于后续审计时理解为什么当时创建了反馈。
 
-## 红旗清单 / 反模式
+## Red Flags（红旗清单 / 反模式）
 
 - **STOP：把业务 bug 当成 gxpm bug。** 如果问题是当前项目代码导致的，修复业务代码，不要创建 gxpm feedback issue。
 - **STOP：空标题或空描述。** 没有上下文的 feedback issue 对维护者毫无价值；必须包含 Context 和 Impact。
@@ -97,7 +98,7 @@ gxpm feedback create --auto-id \
 - **危险信号：** "这个问题很小，不值得记录。" → 小问题的积累会腐蚀流程纪律。只要确认是 gxpm 的缺陷，就应该记录。
 - **危险信号：** "我现在就顺便修了。" → 如果代理在执行业务 issue 时顺手修 gxpm，会导致业务范围蔓延。创建 feedback issue，让修复走独立的 gxpm 流程。
 
-## 验证清单 / 出口条件
+## Verification（验证清单 / 出口条件）
 
 - [ ] 确认问题是 gxpm 工具本身的问题，不是业务项目的问题。
 - [ ] 已检查是否存在重复反馈。
@@ -120,3 +121,8 @@ gxpm feedback create --auto-id \
 | "我觉得 gxpm 应该增加某某功能。" | "这是个 enhancement 建议。用 `gxpm feedback create --type feature --title ... --description ...` 记录，描述中要包含使用场景和预期行为。" |
 | "这个问题太小了，不值得记录。" | "小问题不记录会积累成流程债务。只要确认是 gxpm 缺陷，就值得一个 feedback issue。" |
 | "我在跑业务 issue，顺便把 gxpm 这个 bug 修了吧。" | "不要范围蔓延。创建 feedback issue 记录它，让修复走独立的 gxpm 流程，保证业务 issue 的聚焦。" |
+
+## Read Next
+
+- `/gxpm` — main project management runtime
+- `docs/governance/development-contract.md`
