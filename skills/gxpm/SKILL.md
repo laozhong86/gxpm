@@ -137,6 +137,30 @@ gxpm issue next <issue-id>          # 必须先查 next，按输出执行
 
 **任何其他命令（如 `checkpoint`、`issue-intake`）都不是 artifact 写入入口。**
 
+### Phase → Required Skill (Contract)
+
+每个 phase 进入前，agent **必须先 invoke 表中指定的 gxpm-* skill**，再做任何代码或 artifact 写入。这是 superpowers 的 REQUIRED SUB-SKILL 衔接机制在 gxpm 的落地：契约由 `core/phase-gates.ts` 的 `PHASE_GATE_RULES.requiredSkill` 单一来源驱动，并被 `gxpm issue next`（文本 + `--json`）和本表同步透出。
+
+`gxpm issue next <id> --json` 输出的 `requiredSkill` 字段与本表同源；agent 应优先信任 CLI 输出（生成时即时反映当前代码），文档仅作 cold-start 速查。
+
+| 当前阶段 | REQUIRED SKILL（进入即 invoke） | 备注 |
+|---|---|---|
+| `triage` | `/gxpm-triage` | 进入 `triage` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `plan` | `/gxpm-planning` | 进入 `plan` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `dispatch` | — | 机械 CLI 步骤，无需 skill 介入 |
+| `specify` | `/gxpm-specifier` | 进入 `specify` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `implement` | `/gxpm-tdd` | 进入 `implement` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `local-verify` | `/gxpm-verify` | 进入 `local-verify` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `ac-check` | `/gxpm-verify` | 进入 `ac-check` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `self-review` | `/gxpm-review-changes` | 进入 `self-review` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `cleanup` | `/gxpm-cleanup` | 进入 `cleanup` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `ship` | — | 机械 CLI 步骤，无需 skill 介入 |
+| `pr-check` | `/gxpm-review-changes` | 进入 `pr-check` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `verify` | `/gxpm-verify` | 进入 `verify` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+| `qa` | `/gxpm-browser` | 进入 `qa` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入 |
+
+**Red Flag — 进入新 phase 前未 invoke 对应 requiredSkill 即写代码 / 写 artifact。** 这等同于在 implement 阶段跳过 TDD、在 self-review 阶段跳过结构化审查，会让阶段门控失去意义。`null` 行只代表本 phase 是机械 CLI 步骤（如 dispatch / ship），不代表纪律放松。
+
 ### 状态优先
 
 在做阶段工作前，先读取 `gxpm issue status <issue-id>`。

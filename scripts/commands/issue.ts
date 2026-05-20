@@ -18,7 +18,7 @@ import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
-import { PHASE_GATE_RULES } from "../../core/phase-gates";
+import { PHASE_GATE_RULES, type PhaseGateRule } from "../../core/phase-gates";
 import {
   claimIssue,
   listIssueReadiness,
@@ -190,8 +190,8 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
   }
 
   if (subcommand === "next") {
-    if (!issueId) throw new Error("Usage: gxpm issue next <issue-id>");
-    runIssueNext(issueId);
+    if (!issueId) throw new Error("Usage: gxpm issue next <issue-id> [--json]");
+    runIssueNext(issueId, { json: argv.includes("--json") });
     return;
   }
 
@@ -490,8 +490,54 @@ function runIssueOwnership(argv: string[], issueId: string) {
   }
 }
 
-function runIssueNext(issueId: string) {
+interface IssueNextPayload {
+  issueId: string;
+  currentPhase: string;
+  terminal: boolean;
+  requiredSkill: string | null;
+  nextPhase: string | null;
+  effectiveNextPhase: string | null;
+  requiredArtifact: string | null;
+  command: string | null;
+  artifactExists: boolean;
+}
+
+export function buildIssueNextPayload(
+  issueId: string,
+  state: { currentPhase: string; rigorLevel?: string },
+  rule: PhaseGateRule | undefined,
+  artifactExists: boolean,
+  effectiveNextPhase: string | null = null,
+): IssueNextPayload {
+  if (!rule) {
+    return {
+      issueId,
+      currentPhase: state.currentPhase,
+      terminal: true,
+      requiredSkill: null,
+      nextPhase: null,
+      effectiveNextPhase: null,
+      requiredArtifact: null,
+      command: null,
+      artifactExists: false,
+    };
+  }
+  return {
+    issueId,
+    currentPhase: state.currentPhase,
+    terminal: false,
+    requiredSkill: rule.requiredSkill,
+    nextPhase: rule.nextPhase,
+    effectiveNextPhase: effectiveNextPhase ?? rule.nextPhase,
+    requiredArtifact: rule.requiredArtifact,
+    command: rule.command.replace("<issue-id>", issueId),
+    artifactExists,
+  };
+}
+
+function runIssueNext(issueId: string, options: { json?: boolean } = {}) {
   const state = readIssueState({ issueId });
+
   // GXPM-141: record that this session has consulted issue next, so subsequent
   // artifact writes from the same session are permitted.
   try {
@@ -499,9 +545,24 @@ function runIssueNext(issueId: string) {
   } catch {
     // best-effort; do not block read-only next display
   }
-  console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
 
   const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === state.currentPhase);
+  const has = rule ? hasArtifact({ issueId, type: rule.requiredArtifact }) : false;
+  // GXPM-150: under lite/standard rigor, recommend the next *visible* phase
+  // rather than the raw PHASE_GATE_RULES next, so agents are not nudged into
+  // phases the rigor level has compressed away (e.g. lite → no dispatch).
+  const effectiveNextPhase = rule
+    ? nextVisiblePhase(state.currentPhase, state.rigorLevel) ?? rule.nextPhase
+    : null;
+  const payload = buildIssueNextPayload(issueId, state, rule, has, effectiveNextPhase);
+
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+
+  console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
+
   if (!rule) {
     console.log("");
     console.log(`Phase ${state.currentPhase} is terminal — no further transition.`);
@@ -511,7 +572,6 @@ function runIssueNext(issueId: string) {
     return;
   }
 
-  const has = hasArtifact({ issueId, type: rule.requiredArtifact });
   console.log("");
 
   // Worktree advisory: when in dispatch on canonical main checkout with a feature branch, warn early
@@ -530,10 +590,7 @@ function runIssueNext(issueId: string) {
     }
   }
 
-  // GXPM-150: under lite/standard rigor, recommend the next *visible* phase
-  // rather than the raw PHASE_GATE_RULES next, so agents are not nudged into
-  // phases the rigor level has compressed away (e.g. lite → no dispatch).
-  const effectiveNextPhase = nextVisiblePhase(state.currentPhase, state.rigorLevel) ?? rule.nextPhase;
+  // effectiveNextPhase already computed above for both --json payload and text output.
 
   // Phase command reference for agent clarity
   console.log(`Available commands for ${state.currentPhase}:`);
@@ -542,6 +599,15 @@ function runIssueNext(issueId: string) {
   console.log(`  edit:    gxpm artifact edit ${issueId} ${rule.requiredArtifact}`);
   console.log(`  transition: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   console.log("");
+
+  // Phase → Required Skill contract (REQUIRED SUB-SKILL pattern).
+  // Surface BEFORE the "Next:" hint so the agent reads the contract first
+  // and invokes the skill before taking the recommended action.
+  if (rule.requiredSkill) {
+    console.log(`Required skill: /${rule.requiredSkill}`);
+    console.log(`      → invoke this skill BEFORE running any "Next:" command below.`);
+    console.log("");
+  }
 
   if (!has) {
     console.log(`Next: ${rule.command.replace("<issue-id>", issueId)}`);
