@@ -37,6 +37,7 @@ export function renderSkillContentForHost(
     ARTIFACT_READ_COMMANDS: buildArtifactReadCommands(),
     PHASE_GATE_COMMANDS: buildPhaseGateCommands(),
     PHASE_TRANSITION_SUMMARY: buildPhaseTransitionSummary(),
+    PHASE_REQUIRED_SKILL_TABLE: buildPhaseRequiredSkillTable(),
     references: buildReferences(root, references),
   });
   return insertGeneratedMark(rendered);
@@ -138,6 +139,25 @@ function buildPhaseGateCommands() {
       "```",
     ].join("\n"),
   ).join("\n\n");
+}
+
+function buildPhaseRequiredSkillTable() {
+  // Phase → Required Skill contract (REQUIRED SUB-SKILL pattern).
+  // Source of truth: PHASE_GATE_RULES.requiredSkill in core/phase-gates.ts.
+  // Surfaced both by `gxpm issue next` (text + --json) and this main SKILL.md
+  // table so cold-start agents see the contract before running any command.
+  const header = [
+    "| 当前阶段 | REQUIRED SKILL（进入即 invoke） | 备注 |",
+    "|---|---|---|",
+  ];
+  const rows = PHASE_GATE_RULES.map((rule) => {
+    const skill = rule.requiredSkill ? `\`/${rule.requiredSkill}\`` : "—";
+    const note = rule.requiredSkill
+      ? `进入 \`${rule.fromPhase}\` 前必须先 invoke 该 skill，再做任何代码或 artifact 写入`
+      : "机械 CLI 步骤，无需 skill 介入";
+    return `| \`${rule.fromPhase}\` | ${skill} | ${note} |`;
+  });
+  return [...header, ...rows].join("\n");
 }
 
 function buildPhaseTransitionSummary() {
