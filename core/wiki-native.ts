@@ -11,7 +11,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
-import ts from "typescript";
+// typescript is an OPTIONAL runtime dep. When @geminix/gxpm is installed
+// globally via npm/bun, `typescript` is not pulled in (it's a devDependency
+// only). Load it lazily and let extractNativeSymbols degrade gracefully when
+// it's absent, so non-wiki subcommands still work. See GXPM-165.
+let ts: typeof import("typescript") | null = null;
+try {
+  ts = (await import("typescript")).default;
+} catch {
+  ts = null;
+}
 import { listArtifacts, readArtifact, type ArtifactType } from "./artifacts";
 import { GXPM_PHASES, isGxpmPhase, readIssueState, type GxpmPhase } from "./state";
 
@@ -2210,6 +2219,12 @@ function extractMarkdownHeadings(content: string) {
 function extractNativeSymbols(filePath: string, content: string): Array<{ name: string; kind: string; line: number }> {
   const ext = extname(filePath);
   if (ext !== ".ts" && ext !== ".tsx" && ext !== ".js" && ext !== ".jsx" && ext !== ".mjs" && ext !== ".cjs") {
+    return [];
+  }
+  // Graceful degradation when typescript is not installed (e.g. global CLI
+  // install without devDeps). Wiki symbol extraction returns empty rather
+  // than crashing the whole subcommand. See GXPM-165.
+  if (!ts) {
     return [];
   }
   let scriptKind: ts.ScriptKind;
