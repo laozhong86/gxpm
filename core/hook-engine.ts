@@ -14,6 +14,8 @@ import {
   getProjectInitializationStatus,
 } from "./project-init-status";
 import { readWorktreeOwner } from "./worktree-owner";
+import { queryToolPermission } from "./role-capability-gate";
+import { readIssueState } from "./state";
 
 export type HookHostName = "claude" | "codex" | "cursor" | "kimi";
 
@@ -313,6 +315,16 @@ async function processPreToolUse(
   const toolName = input.tool_name;
   const cwd = input.cwd;
 
+  // GXPM-168: Bash gate — block forbidden commands in review/qa/verify phases.
+  // Default-allow when there's no issue context or env bypass is set.
+  if (toolName === "Bash" && cwd) {
+    const bashGate = evaluateBashToolGate(input);
+    if (bashGate && !bashGate.allow) {
+      return { action: "block", reason: bashGate.reason, exitCode: 2 };
+    }
+    // Bash tool with no block → continue to recordable check (will fall through)
+  }
+
   const RECORDABLE_TOOLS = ["update_plan", "ExitPlanMode"];
   if (!toolName || !RECORDABLE_TOOLS.includes(toolName) || !cwd) {
     return { action: "allow", exitCode: 0 };
@@ -549,6 +561,55 @@ function getIssueNext(cwd: string, issueId: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * GXPM-168: query role-capability-gate for Bash tool commands.
+ * Returns null when no decision can be made (no issue context / not
+ * initialized / bypass env set), in which case the caller defaults to allow.
+ */
+export function evaluateBashToolGate(
+  input: HookInput,
+): { allow: boolean; reason: string } | null {
+  if (process.env.GXPM_BYPASS_TOOL_GATE === "1") {
+    return { allow: true, reason: "GXPM_BYPASS_TOOL_GATE=1" };
+  }
+  const cwd = input.cwd;
+  if (!cwd) return null;
+  if (getProjectInitializationStatus(cwd).kind !== "initialized") return null;
+
+  const command = extractBashCommand(input);
+  if (!command) return null;
+
+  // GXPM-168: prefer fast/local owner-file resolution; fall back to issue list
+  let issueId: string | null = null;
+  try {
+    const owner = readWorktreeOwner(cwd);
+    issueId = owner?.ownerIssueId ?? null;
+  } catch {
+    // ignore
+  }
+  if (!issueId) issueId = getActiveIssueId(cwd);
+  if (!issueId) return null;
+
+  let phase: string;
+  try {
+    const state = readIssueState({ root: cwd, issueId });
+    phase = state.currentPhase;
+  } catch {
+    return null;
+  }
+
+  const decision = queryToolPermission(command, phase as never);
+  return { allow: decision.allowed, reason: decision.reason };
+}
+
+function extractBashCommand(input: HookInput): string | undefined {
+  const ti = input.tool_input ?? input.arguments;
+  if (!ti || typeof ti !== "object") return undefined;
+  const record = ti as Record<string, unknown>;
+  const cmd = record.command;
+  return typeof cmd === "string" ? cmd : undefined;
 }
 
 function getActiveIssueId(cwd: string): string | null {
