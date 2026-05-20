@@ -63,12 +63,47 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     if (state.claim?.status === "claimed") {
       console.log(`assignee: ${state.claim.actor} (${state.claim.claimedBySession.split(":")[0] ?? "unknown"})`);
     }
+    // GXPM-159: show relations summary so agents can discover batch/epic boundaries
+    const relations = state.relations ?? [];
+    if (relations.length > 0) {
+      const grouped: Record<string, string[]> = { parent: [], child: [], related: [] };
+      for (const r of relations) {
+        (grouped[r.relation] ?? []).push(r.issueId);
+      }
+      for (const kind of ["parent", "child", "related"] as const) {
+        if (grouped[kind].length > 0) {
+          console.log(`${kind}: ${grouped[kind].join(", ")}`);
+        }
+      }
+    }
     const syncState = readSyncState({ issueId });
     if (syncState.targets.length > 0) {
       for (const target of syncState.targets) {
         const syncStatus = target.lastError ? `error: ${target.lastError.message}` : `synced at ${target.syncedAt ?? "unknown"}`;
         console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
       }
+    }
+    return;
+  }
+
+  if (subcommand === "link") {
+    if (!issueId) {
+      throw new Error("Usage: gxpm issue link <source-id> (--parent <target-id> | --related <target-id>)");
+    }
+    const parentTarget = argv.includes("--parent") ? optionRequiredValue(argv, "--parent") : undefined;
+    const relatedTarget = argv.includes("--related") ? optionRequiredValue(argv, "--related") : undefined;
+    if (parentTarget && relatedTarget) {
+      throw new Error("gxpm issue link: --parent and --related are mutually exclusive");
+    }
+    if (!parentTarget && !relatedTarget) {
+      throw new Error("gxpm issue link: must specify --parent <id> or --related <id>");
+    }
+    if (parentTarget) {
+      linkIssues({ sourceId: issueId, targetId: parentTarget, kind: "parent" });
+      console.log(`linked ${issueId} --parent--> ${parentTarget}`);
+    } else if (relatedTarget) {
+      linkIssues({ sourceId: issueId, targetId: relatedTarget, kind: "related" });
+      console.log(`linked ${issueId} <--related--> ${relatedTarget}`);
     }
     return;
   }
@@ -744,30 +779,79 @@ function parseParentOption(argv: string[]): string | undefined {
 }
 
 function addIssueRelation(input: { childId: string; parentId: string }) {
+  return linkIssues({ sourceId: input.childId, targetId: input.parentId, kind: "parent", root: process.cwd() });
+}
+
+/**
+ * GXPM-159: General-purpose post-hoc issue linking.
+ * - kind === "parent": writes child→parent and parent→child
+ * - kind === "related": writes a→related→b and b→related→a (symmetric)
+ *
+ * Validates: existence of both issues, no self-links, no duplicate relations.
+ */
+function linkIssues(input: { sourceId: string; targetId: string; kind: "parent" | "related"; root?: string }) {
+  if (input.sourceId === input.targetId) {
+    throw new Error(`gxpm issue link: cannot link to self (${input.sourceId})`);
+  }
+  const root = input.root ?? process.cwd();
   const now = new Date().toISOString();
-  // Update child: add parent relation
-  const childState = readIssueState({ issueId: input.childId });
-  const childRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
-    ...(childState.relations ?? []),
-    { relation: "parent", issueId: input.parentId, createdAt: now },
-  ];
-  const childPaths = getIssuePaths(process.cwd(), input.childId);
-  const childRaw = JSON.parse(readFileSync(childPaths.statePath, "utf8")) as Record<string, unknown>;
-  childRaw.relations = childRelations;
-  writeFileSync(childPaths.statePath, `${JSON.stringify(childRaw, null, 2)}\n`);
 
-  // Update parent: add child relation
-  const parentState = readIssueState({ issueId: input.parentId });
-  const parentRelations: Array<{ relation: string; issueId: string; createdAt: string }> = [
-    ...(parentState.relations ?? []),
-    { relation: "child", issueId: input.childId, createdAt: now },
-  ];
-  const parentPaths = getIssuePaths(process.cwd(), input.parentId);
-  const parentRaw = JSON.parse(readFileSync(parentPaths.statePath, "utf8")) as Record<string, unknown>;
-  parentRaw.relations = parentRelations;
-  writeFileSync(parentPaths.statePath, `${JSON.stringify(parentRaw, null, 2)}\n`);
+  // Validate existence (readIssueState throws if missing)
+  let sourceState;
+  try {
+    sourceState = readIssueState({ root, issueId: input.sourceId });
+  } catch {
+    throw new Error(`gxpm issue link: issue not found: ${input.sourceId}`);
+  }
+  let targetState;
+  try {
+    targetState = readIssueState({ root, issueId: input.targetId });
+  } catch {
+    throw new Error(`gxpm issue link: issue not found: ${input.targetId}`);
+  }
 
-  return { ...childState, relations: childRelations.map((r) => ({ ...r, relation: r.relation as "parent" | "child" | "related", createdAt: r.createdAt })) };
+  // Determine relation labels for each side
+  const sourceLabel = input.kind === "parent" ? "parent" : "related";
+  const targetLabel = input.kind === "parent" ? "child" : "related";
+
+  // Duplicate check (on the source side; symmetry implies same outcome on target)
+  const existing = (sourceState.relations ?? []).find(
+    (r) => r.relation === sourceLabel && r.issueId === input.targetId,
+  );
+  if (existing) {
+    throw new Error(
+      `gxpm issue link: relation already exists: ${input.sourceId} --${sourceLabel}--> ${input.targetId}`,
+    );
+  }
+
+  // Write source side
+  const sourceRelations = [
+    ...(sourceState.relations ?? []),
+    { relation: sourceLabel, issueId: input.targetId, createdAt: now },
+  ];
+  const sourcePaths = getIssuePaths(root, input.sourceId);
+  const sourceRaw = JSON.parse(readFileSync(sourcePaths.statePath, "utf8")) as Record<string, unknown>;
+  sourceRaw.relations = sourceRelations;
+  writeFileSync(sourcePaths.statePath, `${JSON.stringify(sourceRaw, null, 2)}\n`);
+
+  // Write target side
+  const targetRelations = [
+    ...(targetState.relations ?? []),
+    { relation: targetLabel, issueId: input.sourceId, createdAt: now },
+  ];
+  const targetPaths = getIssuePaths(root, input.targetId);
+  const targetRaw = JSON.parse(readFileSync(targetPaths.statePath, "utf8")) as Record<string, unknown>;
+  targetRaw.relations = targetRelations;
+  writeFileSync(targetPaths.statePath, `${JSON.stringify(targetRaw, null, 2)}\n`);
+
+  return {
+    ...sourceState,
+    relations: sourceRelations.map((r) => ({
+      ...r,
+      relation: r.relation as "parent" | "child" | "related",
+      createdAt: r.createdAt,
+    })),
+  };
 }
 
 function runIssueBatch(issueId: string) {

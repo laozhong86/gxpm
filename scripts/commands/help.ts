@@ -43,6 +43,7 @@ const COMMAND_USAGE: Record<string, string> = {
   gxpm artifact edit <issue-id> <type>`,
   issue: `Usage:
   gxpm issue create [<issue-id>|--auto-id] [--type feature|meta|spike] [--parent <id>]
+  gxpm issue link <source-id> (--parent <target-id> | --related <target-id>)
   gxpm issue list [--all]
   gxpm issue status <issue-id>
   gxpm issue next <issue-id>
