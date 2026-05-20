@@ -10,7 +10,7 @@ export interface SkillStructureViolation {
 const REQUIRED_SECTIONS = [
   {
     id: "entry",
-    names: ["入口条件", "入口", "触发条件", "Entry Conditions", "When to Use", "When to trigger", "When to Trigger", "Trigger", "Commands", "Recognition criteria"],
+    names: ["入口条件", "入口", "触发条件", "Entry Conditions", "When to Use", "When to trigger", "When to Trigger", "Recognition criteria"],
     label: "入口条件 (Entry Conditions)",
   },
   {
