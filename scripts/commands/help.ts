@@ -42,7 +42,7 @@ const COMMAND_USAGE: Record<string, string> = {
   gxpm artifact write <issue-id> <type> [--probe-cli] --json <json> | --from <file> | --stdin
   gxpm artifact edit <issue-id> <type>`,
   issue: `Usage:
-  gxpm issue create [<issue-id>|--auto-id] [--type feature|meta|spike] [--parent <id>]
+  gxpm issue create [<issue-id>|--auto-id] [--type feature|meta|spike] [--parent <id>] [--title "..."] [--description "..."]
   gxpm issue link <source-id> (--parent <target-id> | --related <target-id>)
   gxpm issue list [--all]
   gxpm issue status <issue-id>

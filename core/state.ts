@@ -123,6 +123,10 @@ export interface IssueState {
   ownership?: IssueOwnership;
   /** GXPM-141: last session that consulted `gxpm issue next` for this issue. */
   lastIssueNextSeen?: IssueNextSeen;
+  /** GXPM-148: human-readable title shown in issue list/status. */
+  title?: string;
+  /** GXPM-148: optional long-form description. */
+  description?: string;
   claim?: IssueClaim;
   relations?: IssueRelation[];
   archived?: boolean;
@@ -176,6 +180,10 @@ interface IssueInput {
   root?: string;
   issueId: string;
   issueType?: IssueType;
+  /** GXPM-148: optional human-readable title shown in issue list/status. */
+  title?: string;
+  /** GXPM-148: optional longer description. */
+  description?: string;
 }
 
 interface TransitionInput extends IssueInput {
@@ -229,6 +237,8 @@ export function createIssueState(input: IssueInput): IssueState {
     updatedAt: now,
     stateRoot: paths.issueRoot,
     artifactRoot: paths.artifactRoot,
+    title: input.title,
+    description: input.description,
     creator: {
       host: agent.host,
       sessionId: agent.sessionId,
@@ -561,6 +571,8 @@ function migrateIssueState(raw: RawIssueState): IssueState {
       typeof raw.archivedAt === "string" || raw.archivedAt === null ? raw.archivedAt : undefined,
     ownership: normalizeOwnership(raw.ownership),
     lastIssueNextSeen: normalizeIssueNextSeen((raw as Record<string, unknown>).lastIssueNextSeen),
+    title: typeof (raw as Record<string, unknown>).title === "string" ? String((raw as Record<string, unknown>).title) : undefined,
+    description: typeof (raw as Record<string, unknown>).description === "string" ? String((raw as Record<string, unknown>).description) : undefined,
     phaseHistory: Array.isArray(raw.phaseHistory)
       ? raw.phaseHistory.map((entry) => {
           const record = entry as Record<string, unknown>;

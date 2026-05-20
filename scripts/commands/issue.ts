@@ -35,19 +35,23 @@ import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd } from
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
-const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}] [--parent <parent-issue-id>]`;
+const ISSUE_CREATE_USAGE = `Usage: gxpm issue create <issue-id>  (or --auto-id) [--type ${ISSUE_TYPE_USAGE}] [--parent <parent-issue-id>] [--title "..."] [--description "..."]`;
 
 export async function runIssueCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, value: string | undefined) {
   if (subcommand === "create") {
     const resolvedId = resolveIssueCreateId(argv);
     const issueType = parseIssueTypeOption(argv, "feature");
     const parentId = parseParentOption(argv);
-    let state = createIssueState({ issueId: resolvedId, issueType });
+    // GXPM-148: optional --title / --description carried into state.json
+    const title = argv.includes("--title") ? optionRequiredValue(argv, "--title") : undefined;
+    const description = argv.includes("--description") ? optionRequiredValue(argv, "--description") : undefined;
+    let state = createIssueState({ issueId: resolvedId, issueType, title, description });
     if (parentId) {
       state = addIssueRelation({ childId: resolvedId, parentId });
       console.log(`parent: ${parentId}`);
     }
     console.log(`created ${state.issueId} at ${state.currentPhase}`);
+    if (title) console.log(`title: ${title}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), resolvedId).statePath}`);
     return;
   }
@@ -56,6 +60,9 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     if (!issueId) throw new Error("Usage: gxpm issue status <issue-id>");
     const state = readIssueState({ issueId });
     console.log(`issueId: ${state.issueId}`);
+    // GXPM-148: surface title/description at top of status output
+    console.log(`title: ${state.title ?? "[no title]"}`);
+    if (state.description) console.log(`description: ${state.description}`);
     console.log(`currentPhase: ${state.currentPhase}`);
     console.log(`updatedAt: ${state.updatedAt}`);
     console.log(`statePath: ${getIssuePaths(process.cwd(), issueId).statePath}`);
@@ -833,6 +840,11 @@ function resolveIssueCreateId(argv: string[]) {
       continue;
     }
     if (arg === "--parent") {
+      index += 1;
+      continue;
+    }
+    // GXPM-148: --title / --description take a value
+    if (arg === "--title" || arg === "--description") {
       index += 1;
       continue;
     }
