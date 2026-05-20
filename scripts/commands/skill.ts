@@ -15,6 +15,7 @@
 
 import { getIssuePaths, readIssueState, appendIssueEvent } from "../../core/state";
 import { PHASE_GATE_RULES } from "../../core/phase-gates";
+import { resolveSessionId } from "../../core/session";
 import { optionValue } from "./helpers";
 
 export function runSkillCommand(
@@ -59,6 +60,7 @@ function runSkillAck(argv: string[], issueId: string, skill: string): void {
   const proof = optionValue(argv, "--proof") ?? undefined;
   const paths = getIssuePaths(process.cwd(), issueId);
   const now = new Date().toISOString();
+  const sessionId = resolveSessionId();
 
   appendIssueEvent({
     issueDir: paths.issueDir,
@@ -67,6 +69,7 @@ function runSkillAck(argv: string[], issueId: string, skill: string): void {
       type: "skill.load.satisfied",
       issueId,
       timestamp: now,
+      sessionId,
       payload: {
         phase,
         skill,

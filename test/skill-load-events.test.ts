@@ -103,7 +103,10 @@ describe("events.jsonl skill-load attestation", () => {
     expect(result.code).toBe(0);
 
     const events = readEvents(root, issueId);
-    const required = events.find((e) => e.type === "skill.load.required");
+    // Issue creation also emits skill.load.required for triage; pick the plan one.
+    const required = events.find(
+      (e) => e.type === "skill.load.required" && (e.payload as any).phase === "plan",
+    );
     expect(required, `events: ${JSON.stringify(events, null, 2)}`).toBeDefined();
     const payload = required!.payload as Record<string, unknown>;
     expect(payload.phase).toBe("plan");
@@ -294,5 +297,8 @@ describe("events.jsonl skill-load attestation", () => {
       skills: new Set(["gxpm-specifier"]),
     });
     expect(byPhase["dispatch"]).toBeUndefined();
+    // Issue creation also emits required for triage even without an ack; it
+    // proves the initial phase is on the audit chain (no blind spot).
+    expect(byPhase["triage"]).toEqual({ required: 1, satisfied: 0, skills: new Set(["gxpm-triage"]) });
   });
 });

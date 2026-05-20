@@ -296,6 +296,28 @@ export function createIssueState(input: IssueInput): IssueState {
     },
   });
 
+  // GXPM-170 PR-1: emit skill-load-required for the initial triage phase so
+  // the audit chain starts at issue creation rather than only at the first
+  // transition. Closes the triage blind spot CodeRabbit flagged on PR #57.
+  const triageRule = PHASE_GATE_RULES.find((r) => r.fromPhase === "triage");
+  if (triageRule?.requiredSkill) {
+    appendIssueEvent({
+      issueDir: paths.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "skill.load.required",
+        issueId: input.issueId,
+        timestamp: now,
+        sessionId,
+        payload: {
+          phase: "triage",
+          skill: triageRule.requiredSkill,
+          transitionId: `${input.issueId}-issue-created-${now}`,
+        },
+      },
+    });
+  }
+
   getWorkflowEventEmitter().emit({
     type: "issue_created",
     issueId: input.issueId,
