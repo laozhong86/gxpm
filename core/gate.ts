@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import {
   CODE_COMMIT_PHASES,
@@ -21,7 +21,9 @@ export type GateCode =
   | "phase-ok"
   | "land-pending"
   | "already-landed"
-  | "disabled";
+  | "disabled"
+  | "contamination-detected"
+  | "missing-changed-files";
 
 export interface GateVerdict {
   allowed: boolean;
@@ -177,6 +179,7 @@ export function evaluatePrePush(
   state: IssueState,
   hasArtifactFn: HasArtifactFn,
   env: Env,
+  root?: string,
 ): GateVerdict {
   if (isDisabled(env)) {
     return { allowed: true, code: "disabled", reason: "GXPM_GATE_DISABLE=1" };
@@ -198,6 +201,44 @@ export function evaluatePrePush(
       reason: `pre-push: ${rule.requiredArtifact} required for next transition`,
       details: { requiredArtifact: rule.requiredArtifact, command: rule.command },
     };
+  }
+
+  if (root) {
+    const artifactDir = resolve(root, ".gxpm", "issues", state.issueId, "artifacts");
+
+    // Check for .contaminated files
+    if (existsSync(artifactDir)) {
+      const contaminated = readdirSync(artifactDir).filter((f) => f.startsWith(".contaminated"));
+      if (contaminated.length > 0) {
+        return {
+          allowed: false,
+          code: "contamination-detected",
+          reason: `pre-push: contamination detected (${contaminated.join(", ")}). Run gxpm phase rewind ${state.issueId} --to implement --reason "contamination" and re-verify.`,
+          details: { contaminatedFiles: contaminated },
+        };
+      }
+    }
+
+    // Check local-verify changedFiles is non-empty
+    if (rule.requiredArtifact === "local-verify") {
+      try {
+        const artifactPath = resolve(artifactDir, "local-verify.json");
+        const raw = JSON.parse(readFileSync(artifactPath, "utf8"));
+        const payload = raw.payload ?? raw;
+        const changedFiles = payload.changedFiles ?? [];
+        if (!Array.isArray(changedFiles) || changedFiles.length === 0) {
+          return {
+            allowed: false,
+            code: "missing-changed-files",
+            reason: `pre-push: local-verify changedFiles is empty. Record what was changed before transitioning.`,
+            details: { command: `gxpm artifact edit ${state.issueId} local-verify` },
+          };
+        }
+      } catch {
+        // ignore malformed artifact — missing-artifact check already passed,
+        // so this is an edge case we let through to avoid false blocks
+      }
+    }
   }
 
   return { allowed: true, code: "phase-ok", reason: "required artifact present" };
