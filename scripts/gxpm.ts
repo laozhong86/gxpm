@@ -23,6 +23,7 @@ import { runPresetCommand } from "./commands/preset";
 import { runPhaseCommand } from "./commands/phase";
 import { runSpecifyCommand } from "./commands/specify";
 import { runFeedbackCommand } from "./commands/feedback";
+import { runGuardCommand } from "./commands/guard";
 import { getCommandUsage, getTopLevelUsage, isHelpRequest } from "./commands/help";
 
 async function main(argv: string[]) {
@@ -160,6 +161,11 @@ async function main(argv: string[]) {
 
   if (command === "artifact") {
     runArtifactCommand(argv, subcommand, issueId, value);
+    return;
+  }
+
+  if (command === "guard") {
+    runGuardCommand(argv, subcommand);
     return;
   }
 

@@ -36,6 +36,10 @@ Phase artifact init commands (auto-routed):
 Run 'gxpm <command> --help' to see usage for a specific command.`;
 
 const COMMAND_USAGE: Record<string, string> = {
+  guard: `Usage:
+  gxpm guard tool <tool> [--issue <id>] [--json]
+  Queries whether a tool is allowed in the current issue's phase.
+  Exit 0 = allowed; 1 = blocked.`,
   artifact: `Usage:
   gxpm artifact list <issue-id>
   gxpm artifact read <issue-id> <type>
