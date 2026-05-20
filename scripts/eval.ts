@@ -161,16 +161,86 @@ function listSkills(): string[] {
   return templates.map((t) => t.name);
 }
 
-function runEval(skillName?: string): EvalResult[] {
-  const templates = discoverTemplates(ROOT);
+function runEval(skillName?: string, root?: string): EvalResult[] {
+  const evalRoot = root ?? ROOT;
+  const templates = discoverTemplates(evalRoot);
   const toEval = skillName
     ? templates.filter((t) => t.name === skillName)
     : templates;
 
   return toEval.map((t) => {
-    const content = readFileSync(join(ROOT, t.tmpl.endsWith(".tmpl") ? t.output : t.tmpl), "utf8");
+    const readPath = join(evalRoot, t.tmpl.endsWith(".tmpl") ? t.output : t.tmpl);
+    let content: string;
+    try {
+      content = readFileSync(readPath, "utf8");
+    } catch (err) {
+      // For templated skills, a missing generated SKILL.md typically means
+      // `.tmpl` was edited but `bun run gen:skill-docs` hasn't run yet — the
+      // remediation is to regenerate. For non-templated skills, the source
+      // .md is simply gone and gen-skill-docs cannot help. Tailor the message
+      // so the aggregator surfaces actionable guidance instead of misdirecting
+      // the user to a regeneration step that won't fix anything.
+      const isMissing = (err as NodeJS.ErrnoException)?.code === "ENOENT";
+      const isGenerated = t.tmpl.endsWith(".tmpl");
+      let message: string;
+      if (isMissing && isGenerated) {
+        message = `generated file ${t.output} missing; run 'bun run gen:skill-docs' to regenerate from ${t.tmpl}`;
+      } else if (isMissing) {
+        message = `source file ${t.tmpl} is missing`;
+      } else {
+        message = `failed to read ${readPath}: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      return {
+        skill: t.name,
+        score: 0,
+        maxScore: 60,
+        checks: [{ name: "file-exists", pass: false, message }],
+        type: "unknown",
+      };
+    }
     return evaluateSkill(t.name, content);
   });
+}
+
+export const DEFAULT_SKILL_EVAL_THRESHOLD = 90;
+
+export interface ValidateSkillEvalOptions {
+  root?: string;
+  threshold?: number;
+}
+
+/**
+ * GXPM-155: pure validation entrypoint for skill quality gating.
+ *
+ * Runs the static eval over every discoverable skill and returns one error
+ * string per skill scoring below `threshold` (defaults to 90%). Returns []
+ * when every skill clears the bar. Designed to be composed by gxpm-check.
+ */
+export function validateSkillEval(options: ValidateSkillEvalOptions = {}): string[] {
+  const threshold = options.threshold ?? DEFAULT_SKILL_EVAL_THRESHOLD;
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    throw new Error(
+      `validateSkillEval: threshold must be a finite number >= 0; got ${threshold}`,
+    );
+  }
+  const results = runEval(undefined, options.root);
+  const errors: string[] = [];
+  for (const r of results) {
+    // Compare on the raw percentage to avoid 89.7 rounding up to 90 and
+    // silently slipping past a threshold:90 gate.
+    const rawPct = r.maxScore > 0 ? (r.score / r.maxScore) * 100 : 0;
+    if (rawPct < threshold) {
+      const pct = Math.round(rawPct);
+      const failingChecks = r.checks
+        .filter((c) => !c.pass)
+        .map((c) => c.name)
+        .join(", ");
+      errors.push(
+        `skill ${r.skill}: ${pct}% (${r.score}/${r.maxScore}) below threshold ${threshold}%; failing: ${failingChecks || "(unknown)"}`,
+      );
+    }
+  }
+  return errors;
 }
 
 function formatReport(results: EvalResult[], asJson: boolean): string {
@@ -214,33 +284,38 @@ Commands:
 `);
 }
 
-const args = process.argv.slice(2);
-const command = args[0];
+// Only execute CLI logic when invoked directly. Without this guard, importing
+// validateSkillEval from scaffold-check or tests would print the usage banner
+// and call process.exit(0) on module load.
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const command = args[0];
 
-if (!command || command === "--help" || command === "-h") {
-  usage();
-  process.exit(0);
-}
-
-const asJson = args.includes("--json");
-
-if (command === "list") {
-  const skills = listSkills();
-  if (asJson) {
-    console.log(JSON.stringify({ skills }, null, 2));
-  } else {
-    console.log(skills.join("\n"));
+  if (!command || command === "--help" || command === "-h") {
+    usage();
+    process.exit(0);
   }
-} else if (command === "run") {
-  const skillName = args[1]?.startsWith("-") ? undefined : args[1];
-  const results = runEval(skillName);
-  console.log(formatReport(results, asJson));
-  const totalScore = results.reduce((s, r) => s + r.score, 0);
-  const totalMax = results.reduce((s, r) => s + r.maxScore, 0);
-  const totalPct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
-  if (totalPct < 50) process.exit(1);
-} else {
-  console.error(`Unknown command: ${command}`);
-  usage();
-  process.exit(1);
+
+  const asJson = args.includes("--json");
+
+  if (command === "list") {
+    const skills = listSkills();
+    if (asJson) {
+      console.log(JSON.stringify({ skills }, null, 2));
+    } else {
+      console.log(skills.join("\n"));
+    }
+  } else if (command === "run") {
+    const skillName = args[1]?.startsWith("-") ? undefined : args[1];
+    const results = runEval(skillName);
+    console.log(formatReport(results, asJson));
+    const totalScore = results.reduce((s, r) => s + r.score, 0);
+    const totalMax = results.reduce((s, r) => s + r.maxScore, 0);
+    const totalPct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
+    if (totalPct < 50) process.exit(1);
+  } else {
+    console.error(`Unknown command: ${command}`);
+    usage();
+    process.exit(1);
+  }
 }
