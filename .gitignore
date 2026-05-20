@@ -17,3 +17,7 @@ coverage/
 .gstack/
 .omc/
 *.log
+
+# GXPM-151: worktree-local state files (auto-generated per worktree)
+.gxpm-worktree-owner.json
+ISSUE_CONTEXT.md

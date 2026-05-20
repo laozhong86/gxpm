@@ -29,6 +29,23 @@ describe("GXPM-160: .gitignore patterns must not collide with tracked files", ()
     expect(gi).toMatch(/^node_modules\/?$/m);
   });
 
+  // GXPM-151: worktree-local state files
+  test(".gxpm-worktree-owner.json is no longer tracked", () => {
+    const r = spawnSync("git", ["ls-files", ".gxpm-worktree-owner.json"], { cwd: REPO_ROOT, encoding: "utf-8" });
+    expect((r.stdout ?? "").trim()).toBe("");
+  });
+
+  test("ISSUE_CONTEXT.md is no longer tracked", () => {
+    const r = spawnSync("git", ["ls-files", "ISSUE_CONTEXT.md"], { cwd: REPO_ROOT, encoding: "utf-8" });
+    expect((r.stdout ?? "").trim()).toBe("");
+  });
+
+  test(".gitignore lists both worktree-local state files", () => {
+    const gi = readFileSync(join(REPO_ROOT, ".gitignore"), "utf-8");
+    expect(gi).toMatch(/^\.gxpm-worktree-owner\.json$/m);
+    expect(gi).toMatch(/^ISSUE_CONTEXT\.md$/m);
+  });
+
   test("no gitignore root entry is simultaneously tracked at top level", () => {
     // Only check simple top-level entries (no slashes, no globs) to keep this
     // O(n) and avoid false positives on complex patterns.
