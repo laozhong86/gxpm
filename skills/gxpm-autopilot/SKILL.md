@@ -1,6 +1,6 @@
 ---
 name: gxpm-autopilot
-description: Enable gxpm autopilot mode with Autopilot Grant for autonomous issue delivery. Use when user asks for autopilot, self-driving mode, or autonomous issue completion within an approved profile.
+description: 开启 gxpm 自动驾驶模式。使用 Autopilot Grant 持久化用户授权，让代理在授权 profile 内自主完成 issue delivery。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 

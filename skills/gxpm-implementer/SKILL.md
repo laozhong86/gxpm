@@ -96,35 +96,9 @@ or break the task into smaller pieces.
 - **不要忽视警告信号。** 连续阅读文件仍无法理解系统时应立即升级（BLOCKED/NEEDS_CONTEXT），而不是硬推。
 - **不要在需要架构决策时独断。** 存在多个有效方案时必须上报。
 
-## Phase Gate 检查清单（Pre-Implementation Gates）
-
-在写第一行实现代码前，必须逐项检查并记录结果：
-
-### Simplicity Gate（简洁性门）
-- [ ] 使用 ≤3 个核心模块/项目？
-- [ ] 没有为未来做过度设计（no future-proofing）？
-- [ ] 每个新增文件都有单一、明确的职责？
-
-### Anti-Abstraction Gate（反抽象门）
-- [ ] 直接使用框架原语，没有不必要的包装层？
-- [ ] 数据模型单一表示，没有 DTO/VO/Entity 多层转换？
-- [ ] 接口数量 ≤ 实现类数量？
-
-### Integration-First Gate（集成优先门）
-- [ ] 契约（contracts/API）在实现前已定义？
-- [ ] 至少有一个集成测试或契约测试？
-- [ ] 没有使用 mock 替代真实依赖（除非外部服务不可达）？
-
-### Constitution Gate（宪法门）
-- [ ] 实现方案与 CANON.md 相关条款一致？
-- [ ] 如有违反，已在实现文档中记录理由？
-- [ ] 没有引入与现有架构冲突的新模式？
-
-**记录方式**：在实现文档顶部添加 `## Phase Gate Results` 小节，逐项填写通过/不通过及理由。任何 gate 不通过都必须先解决才能继续 implement。
-
 ## 验证清单 / 出口条件
 
-报告前必须完成四维自审 + Phase Gate：
+报告前必须完成四维自审：
 
 **Completeness:**
 - Did I fully implement everything in the spec?

@@ -1,7 +1,11 @@
 {
-  "ownerIssueId": "GXPM-134",
   "linkedIssues": [
-    "GXPM-134"
+    "GXPM-137"
   ],
-  "createdAt": "2026-05-19T01:45:11.089Z"
+  "createdAt": "2026-05-19T11:00:50.589Z",
+  "ownerIssueId": "GXPM-137",
+  "currentPhase": "implement",
+  "updatedAt": "2026-05-19T11:02:44.561Z",
+  "branchName": "gxpm-GXPM-137",
+  "workspacePath": "/Users/x/Desktop/Project/gxpm/.gxpm/worktrees/gxpm-GXPM-137"
 }

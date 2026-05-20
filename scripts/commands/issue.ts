@@ -472,6 +472,12 @@ function runIssueNext(issueId: string) {
     }
   }
 
+  console.log(`Available commands for ${state.currentPhase}:`);
+  console.log(`  init:    ${rule.command.replace("<issue-id>", issueId)}`);
+  console.log(`  write:   gxpm artifact write ${issueId} ${rule.requiredArtifact} --json '...'`);
+  console.log(`  edit:    gxpm artifact edit ${issueId} ${rule.requiredArtifact}`);
+  console.log("");
+
   if (!has) {
     console.log(`Next: ${rule.command.replace("<issue-id>", issueId)}`);
     console.log(`      → creates draft of artifact: ${rule.requiredArtifact}`);
