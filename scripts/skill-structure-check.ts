@@ -149,9 +149,17 @@ export function formatSkillStructureErrors(violations: SkillStructureViolation[]
 if (import.meta.main) {
   const root = process.argv[2] ?? resolve(import.meta.dir, "..");
   const violations = validateSkillStructure(root);
-  if (violations.length > 0) {
-    console.error(formatSkillStructureErrors(violations).join("\n"));
+  // GXPM-162: formatSkillStructureErrors returns {errors, warnings}, not an
+  // array. The previous code called .join on the object and crashed with
+  // TypeError whenever there were violations to report. Destructure to match
+  // the scaffold-check.ts contract and route each stream appropriately.
+  const { errors, warnings } = formatSkillStructureErrors(violations);
+  if (warnings.length > 0) {
+    console.warn(warnings.join("\n"));
+  }
+  if (errors.length > 0) {
+    console.error(errors.join("\n"));
     process.exit(1);
   }
-  console.log("All SKILL.md files conform to the five-section structure.");
+  console.log("All SKILL.md files conform to the four-section structure.");
 }
