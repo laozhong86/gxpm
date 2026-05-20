@@ -177,7 +177,10 @@ mkdir -p "$STATE_DIR"
 REMOTE_RAW="$(fetch_remote_version)"
 REMOTE="$(extract_version_from_payload "$REMOTE_RAW")"
 
-if ! echo "$REMOTE" | grep -qE '^[0-9]+(\.[0-9]+)+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+# GXPM-173: semver-shape gate. Mirrors the strict pattern in scripts/version.ts
+# so a malformed remote payload (e.g. `1.4`, `01.2.3`) can't emit a bogus
+# UPGRADE_AVAILABLE notification.
+if ! echo "$REMOTE" | grep -qE '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
   echo "UP_TO_DATE $LOCAL" > "$CACHE_FILE"
   exit 0
 fi
