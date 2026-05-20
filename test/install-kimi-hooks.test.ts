@@ -75,6 +75,9 @@ describe("installKimiHooks", () => {
 
     const content = readFileSync(join(fakeHome, ".kimi", "config.toml"), "utf8");
     expect(content).toContain('matcher = "startup|clear|compact"');
-    expect(content).toContain('matcher = "edit_file|write_file"');
+    // GXPM-171: PreToolUse matcher extended with shell-class tools for gate.
+    expect(content).toContain('edit_file|write_file');
+    expect(content).toContain('shell');
+    expect(content).toContain('run_command');
   });
 });

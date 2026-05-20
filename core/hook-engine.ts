@@ -315,14 +315,14 @@ async function processPreToolUse(
   const toolName = input.tool_name;
   const cwd = input.cwd;
 
-  // GXPM-168: Bash gate — block forbidden commands in review/qa/verify phases.
-  // Default-allow when there's no issue context or env bypass is set.
-  if (toolName === "Bash" && cwd) {
+  // GXPM-168/171: shell gate — block forbidden commands in review/qa/verify
+  // phases. Recognizes multiple shell-style tool names across hosts
+  // (Bash=Claude, shell/bash=Codex, run_command=Kimi).
+  if (toolName && SHELL_TOOL_NAMES.has(toolName) && cwd) {
     const bashGate = evaluateBashToolGate(input);
     if (bashGate && !bashGate.allow) {
       return { action: "block", reason: bashGate.reason, exitCode: 2 };
     }
-    // Bash tool with no block → continue to recordable check (will fall through)
   }
 
   const RECORDABLE_TOOLS = ["update_plan", "ExitPlanMode"];
@@ -604,11 +604,24 @@ export function evaluateBashToolGate(
   return { allow: decision.allowed, reason: decision.reason };
 }
 
+// GXPM-171: shell tool names across hosts. Bash=Claude Code; shell/bash
+// commonly appear in Codex hooks; run_command is Kimi's convention.
+export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Bash",
+  "bash",
+  "shell",
+  "run_command",
+]);
+
 function extractBashCommand(input: HookInput): string | undefined {
   const ti = input.tool_input ?? input.arguments;
-  if (!ti || typeof ti !== "object") return undefined;
+  if (ti == null) return undefined;
+  // GXPM-171: Codex-style hosts may pass tool_input as a raw command string.
+  if (typeof ti === "string") return ti;
+  if (typeof ti !== "object") return undefined;
   const record = ti as Record<string, unknown>;
-  const cmd = record.command;
+  // Common keys across hosts: 'command' (Claude/Codex), 'cmd' (Kimi alt)
+  const cmd = record.command ?? record.cmd;
   return typeof cmd === "string" ? cmd : undefined;
 }
 

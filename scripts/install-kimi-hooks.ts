@@ -36,7 +36,7 @@ timeout = 30
 [[hooks]]
 event = "PreToolUse"
 command = "gxpm hook PreToolUse --host kimi"
-matcher = "edit_file|write_file"
+matcher = "edit_file|write_file|shell|bash|run_command"
 timeout = 10`;
 
 export function installKimiHooks(options: InstallKimiHooksOptions = {}): InstallResult {
