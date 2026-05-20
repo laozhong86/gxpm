@@ -6,12 +6,21 @@ import { join, resolve } from "node:path";
 const repoRoot = resolve(import.meta.dir, "..");
 const gxpmBin = join(repoRoot, "bin", "gxpm");
 const updateCheckBin = join(repoRoot, "bin", "gxpm-update-check");
-const localVersion = readFileSync(join(repoRoot, "VERSION"), "utf8").trim();
+// GXPM-173: package.json.version is the single source of truth; the legacy
+// repo-root VERSION file was removed in 0.2.0.
+const localVersion = (
+  JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as { version: string }
+).version;
 
 function makeRemote(version: string) {
+  // The remote URL now points at a package.json (see bin/gxpm-update-check
+  // GXPM-173 migration); emit a minimal JSON payload so the script's
+  // extract_version_from_payload picks it up. extract_version_from_payload
+  // also accepts the legacy raw-string format for back-compat with custom
+  // GXPM_REMOTE_URL overrides.
   const dir = mkdtempSync(join(tmpdir(), "gxpm-remote-version-"));
-  const path = join(dir, "VERSION");
-  writeFileSync(path, `${version}\n`);
+  const path = join(dir, "package.json");
+  writeFileSync(path, JSON.stringify({ name: "@geminix/gxpm", version }, null, 2) + "\n");
   return path;
 }
 
@@ -42,23 +51,23 @@ function runUpdateCheck(input: {
 
 describe("gxpm-update-check", () => {
   test("emits UPGRADE_AVAILABLE for newer remote VERSION", () => {
-    const result = runUpdateCheck({ remoteVersion: "9.9.9.9", args: ["--force"] });
+    const result = runUpdateCheck({ remoteVersion: "9.9.9", args: ["--force"] });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9.9`);
+    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9`);
   });
 
   test("emits JUST_UPGRADED once from marker", () => {
     const home = mkdtempSync(join(tmpdir(), "gxpm-update-just-home-"));
     const stateDir = join(home, ".gxpm");
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(join(stateDir, "just-upgraded-from"), "0.0.9.0\n");
+    writeFileSync(join(stateDir, "just-upgraded-from"), "0.0.9\n");
 
     const first = runUpdateCheck({ home, remoteVersion: localVersion });
     const second = runUpdateCheck({ home, remoteVersion: localVersion });
 
     expect(first.exitCode).toBe(0);
-    expect(first.stdout.toString().trim()).toBe(`JUST_UPGRADED 0.0.9.0 ${localVersion}`);
+    expect(first.stdout.toString().trim()).toBe(`JUST_UPGRADED 0.0.9 ${localVersion}`);
     expect(second.exitCode).toBe(0);
     expect(second.stdout.toString().trim()).toBe("");
   });
@@ -81,7 +90,7 @@ describe("gxpm-update-check", () => {
       stderr: "pipe",
     });
 
-    const result = runUpdateCheck({ home, cwd, remoteVersion: "9.9.9.9", args: ["--force"] });
+    const result = runUpdateCheck({ home, cwd, remoteVersion: "9.9.9", args: ["--force"] });
 
     expect(setConfig.exitCode).toBe(0);
     expect(result.exitCode).toBe(0);
@@ -93,16 +102,16 @@ describe("gxpm-update-check", () => {
     const stateDir = join(home, ".gxpm");
     mkdirSync(stateDir, { recursive: true });
     const now = Math.floor(Date.now() / 1000);
-    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9.9 1 ${now}\n`);
+    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9 1 ${now}\n`);
 
-    const snoozed = runUpdateCheck({ home, remoteVersion: "9.9.9.9" });
-    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9.9 1 ${now - 86401}\n`);
-    const expired = runUpdateCheck({ home, remoteVersion: "9.9.9.9" });
+    const snoozed = runUpdateCheck({ home, remoteVersion: "9.9.9" });
+    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9 1 ${now - 86401}\n`);
+    const expired = runUpdateCheck({ home, remoteVersion: "9.9.9" });
 
     expect(snoozed.exitCode).toBe(0);
     expect(snoozed.stdout.toString().trim()).toBe("");
     expect(expired.exitCode).toBe(0);
-    expect(expired.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9.9`);
+    expect(expired.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9`);
   });
 
   test("new remote version ignores old snooze", () => {
@@ -112,10 +121,10 @@ describe("gxpm-update-check", () => {
     const now = Math.floor(Date.now() / 1000);
     writeFileSync(join(stateDir, "update-snoozed"), `9.9.9.8 3 ${now}\n`);
 
-    const result = runUpdateCheck({ home, remoteVersion: "9.9.9.9" });
+    const result = runUpdateCheck({ home, remoteVersion: "9.9.9" });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9.9`);
+    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9`);
     expect(readFileSync(join(stateDir, "update-snoozed"), "utf8").trim()).toBe(`9.9.9.8 3 ${now}`);
   });
 
@@ -125,12 +134,12 @@ describe("gxpm-update-check", () => {
     mkdirSync(stateDir, { recursive: true });
     const now = Math.floor(Date.now() / 1000);
     writeFileSync(join(stateDir, "last-update-check"), `UP_TO_DATE ${localVersion}\n`);
-    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9.9 3 ${now}\n`);
+    writeFileSync(join(stateDir, "update-snoozed"), `9.9.9 3 ${now}\n`);
 
-    const result = runUpdateCheck({ home, remoteVersion: "9.9.9.9", args: ["--force"] });
+    const result = runUpdateCheck({ home, remoteVersion: "9.9.9", args: ["--force"] });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9.9`);
+    expect(result.stdout.toString().trim()).toBe(`UPGRADE_AVAILABLE ${localVersion} 9.9.9`);
     expect(existsSync(join(stateDir, "update-snoozed"))).toBe(false);
   });
 });
