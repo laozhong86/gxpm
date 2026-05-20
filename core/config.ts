@@ -151,6 +151,71 @@ const CONFIG_REGISTRY = {
     description: "Absolute path to the gxpm source repository where feedback issues are created. When empty, feedback creation is disabled.",
     normalize: (value: unknown) => (typeof value === "string" ? value : ""),
   },
+  "worktree.initSteps": {
+    defaultValue: ["owner-marker", "issue-context"] as string[],
+    description: "Ordered list of worktree initialization step names run after worktree creation.",
+    normalize: (value: unknown) => normalizeStringArray("worktree.initSteps", value),
+  },
+  "worktree.nodeModulesMode": {
+    defaultValue: "symlink" as "symlink" | "overlay" | "none",
+    description: "How to set up node_modules in worktrees: symlink (direct), overlay (root overlay + local packages), or none.",
+    normalize: (value: unknown) => normalizeEnum("worktree.nodeModulesMode", value, ["symlink", "overlay", "none"]),
+  },
+  "worktree.envFiles": {
+    defaultValue: [] as string[],
+    description: "Relative paths of .env files to symlink from the main repo into worktrees.",
+    normalize: (value: unknown) => normalizeStringArray("worktree.envFiles", value),
+  },
+  "worktree.envLocalFiles": {
+    defaultValue: [] as string[],
+    description: "Relative paths of .env.local files to generate in worktrees with isolated ports.",
+    normalize: (value: unknown) => normalizeStringArray("worktree.envLocalFiles", value),
+  },
+  "worktree.sharedDirs": {
+    defaultValue: [] as string[],
+    description: "Relative paths of directories to symlink from main repo into worktrees (e.g. .gstack, .qoder).",
+    normalize: (value: unknown) => normalizeStringArray("worktree.sharedDirs", value),
+  },
+  "worktree.portSlots": {
+    defaultValue: 10,
+    description: "Number of port slots for worktree isolation. Each slot gets a unique port offset.",
+    normalize: (value: unknown) => normalizePositiveInteger("worktree.portSlots", value),
+  },
+  "worktree.portBaseWeb": {
+    defaultValue: 5173,
+    description: "Base port for the web dev server in worktrees.",
+    normalize: (value: unknown) => normalizePositiveInteger("worktree.portBaseWeb", value),
+  },
+  "worktree.portBaseServer": {
+    defaultValue: 3000,
+    description: "Base port for the API server in worktrees.",
+    normalize: (value: unknown) => normalizePositiveInteger("worktree.portBaseServer", value),
+  },
+  "worktree.portBaseStudio": {
+    defaultValue: 4111,
+    description: "Base port for the Mastra Studio / debug server in worktrees.",
+    normalize: (value: unknown) => normalizePositiveInteger("worktree.portBaseStudio", value),
+  },
+  "worktree.warpMdPath": {
+    defaultValue: "warp.md",
+    description: "Relative path inside the worktree where warp.md should be written.",
+    normalize: (value: unknown) => normalizeNonEmptyString("worktree.warpMdPath", value),
+  },
+  "worktree.launchJsonPath": {
+    defaultValue: ".claude/launch.json",
+    description: "Relative path inside the worktree where .claude/launch.json should be written.",
+    normalize: (value: unknown) => normalizeNonEmptyString("worktree.launchJsonPath", value),
+  },
+  "worktree.hooksScript": {
+    defaultValue: "",
+    description: "Relative path to a script that installs git hooks in the worktree (e.g. scripts/setup/git-hooks/install-hooks.mjs). Empty = skip.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
+  "worktree.baselineFreshnessScript": {
+    defaultValue: "",
+    description: "Relative path to a script that checks baseline freshness (e.g. scripts/test/guards/assert-worktree-baseline-freshness.mjs). Empty = use built-in check.",
+    normalize: (value: unknown) => (typeof value === "string" ? value : ""),
+  },
 } as const;
 
 export type KnownConfigKey = keyof typeof CONFIG_REGISTRY;
@@ -193,6 +258,19 @@ function getEnvConfigValue(key: string): unknown | undefined {
     update_check: "GXPM_UPDATE_CHECK",
     "agent.name": "GXPM_AGENT_NAME",
     "feedback.gxpmSourceRoot": "GXPM_FEEDBACK_SOURCE_ROOT",
+    "worktree.initSteps": "GXPM_WORKTREE_INIT_STEPS",
+    "worktree.nodeModulesMode": "GXPM_WORKTREE_NODE_MODULES_MODE",
+    "worktree.envFiles": "GXPM_WORKTREE_ENV_FILES",
+    "worktree.envLocalFiles": "GXPM_WORKTREE_ENV_LOCAL_FILES",
+    "worktree.sharedDirs": "GXPM_WORKTREE_SHARED_DIRS",
+    "worktree.portSlots": "GXPM_WORKTREE_PORT_SLOTS",
+    "worktree.portBaseWeb": "GXPM_WORKTREE_PORT_BASE_WEB",
+    "worktree.portBaseServer": "GXPM_WORKTREE_PORT_BASE_SERVER",
+    "worktree.portBaseStudio": "GXPM_WORKTREE_PORT_BASE_STUDIO",
+    "worktree.warpMdPath": "GXPM_WORKTREE_WARP_MD_PATH",
+    "worktree.launchJsonPath": "GXPM_WORKTREE_LAUNCH_JSON_PATH",
+    "worktree.hooksScript": "GXPM_WORKTREE_HOOKS_SCRIPT",
+    "worktree.baselineFreshnessScript": "GXPM_WORKTREE_BASELINE_SCRIPT",
   };
   const envKey = envMap[key];
   if (!envKey) return undefined;
@@ -433,6 +511,18 @@ function normalizeEnum<T extends readonly string[]>(key: string, value: unknown,
     throw new Error(`${key} must be one of: ${allowed.join(", ")}`);
   }
   return value as T[number];
+}
+
+function normalizeStringArray(key: string, value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    if (value.every((v) => typeof v === "string")) return value as string[];
+    throw new Error(`${key} must be an array of strings`);
+  }
+  if (typeof value === "string") {
+    return value.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  throw new Error(`${key} must be an array of strings or a comma-separated string`);
 }
 
 function normalizeValue(raw: string): unknown {

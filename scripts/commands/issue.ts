@@ -29,6 +29,7 @@ import { ensureIssueWorkspaceWithResolver } from "../../core/workspace-runtime";
 import { readArtifact, writeArtifact } from "../../core/artifacts";
 import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 import { getResolvedConfigValue } from "../../core/config";
+import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd } from "../../core/worktree-owner";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -190,8 +191,13 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
   }
 
   if (subcommand === "context") {
+    const asJson = argv.includes("--json");
+    if (argv.includes("--auto")) {
+      runIssueContext("--auto", asJson);
+      return;
+    }
     if (!issueId) throw new Error("Usage: gxpm issue context <issue-id> [--json]");
-    runIssueContext(issueId, argv.includes("--json"));
+    runIssueContext(issueId, asJson);
     return;
   }
 
@@ -205,7 +211,7 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
       try {
         // Build linkedIssues from relations so child issues reuse parent worktree
         const linkedIssues = (before.relations ?? []).map((r) => r.issueId);
-        const result = await ensureIssueWorkspaceWithResolver({ issueId, hints: linkedIssues.length > 0 ? { linkedIssues } : undefined });
+        const result = await ensureIssueWorkspaceWithResolver({ issueId, existingEnvId: issueId, hints: linkedIssues.length > 0 ? { linkedIssues } : undefined });
         if (result.resolution?.status === "resolved" && result.resolution.env) {
           const handoff = readArtifact({ issueId, type: "dispatch-handoff" });
           writeArtifact({
@@ -217,18 +223,23 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
               worktreeDecision: result.method?.type === "created" ? "created" : "reused",
             },
           });
-          // Write worktree ownership marker
+          // Write enhanced worktree ownership marker + passive context recovery file
           const allLinked = [issueId, ...linkedIssues];
-          const ownerMarker = {
-            ownerIssueId: issueId,
-            linkedIssues: allLinked,
-            createdAt: new Date().toISOString(),
-          };
           try {
-            writeFileSync(
-              join(result.workspacePath, ".gxpm-worktree-owner.json"),
-              `${JSON.stringify(ownerMarker, null, 2)}\n`,
-            );
+            writeWorktreeOwnerMarker(result.workspacePath, {
+              ownerIssueId: issueId,
+              linkedIssues: allLinked,
+              currentPhase: after.currentPhase,
+              branchName: result.resolution.env.branchName,
+              workspacePath: result.resolution.env.workspacePath,
+            });
+            writeIssueContextMd(result.workspacePath, {
+              issueId,
+              currentPhase: after.currentPhase,
+              branchName: result.resolution.env.branchName,
+              workspacePath: result.resolution.env.workspacePath,
+              updatedAt: new Date().toISOString(),
+            });
           } catch {
             // best-effort; marker is advisory
           }
@@ -249,6 +260,9 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
         console.error(`worktree ensure failed: ${message}`);
       }
     }
+
+    // Refresh passive context recovery files on any transition while in a worktree
+    refreshWorktreeContextFiles(after.issueId, after.currentPhase);
 
     console.log(`transitioned ${after.issueId}: ${before.currentPhase} -> ${after.currentPhase}`);
     if (after.currentPhase === "land") {
@@ -472,10 +486,12 @@ function runIssueNext(issueId: string) {
     }
   }
 
+  // Phase command reference for agent clarity
   console.log(`Available commands for ${state.currentPhase}:`);
   console.log(`  init:    ${rule.command.replace("<issue-id>", issueId)}`);
   console.log(`  write:   gxpm artifact write ${issueId} ${rule.requiredArtifact} --json '...'`);
   console.log(`  edit:    gxpm artifact edit ${issueId} ${rule.requiredArtifact}`);
+  console.log(`  transition: gxpm issue transition ${issueId} ${rule.nextPhase}`);
   console.log("");
 
   if (!has) {
@@ -517,9 +533,84 @@ function runIssueCheckpoint(argv: string[], issueId: string) {
     branch: currentGitBranch(),
     payload,
   });
+  // Refresh passive context recovery files so the agent can recover after context compaction
+  try {
+    const state = readIssueState({ issueId });
+    refreshWorktreeContextFiles(issueId, state.currentPhase, title);
+  } catch {
+    // best-effort
+  }
   console.log(`checkpoint saved for ${issueId}`);
   console.log(`file: ${record.path}`);
   console.log(`resume: ${record.resumePacketPath}`);
+}
+
+function refreshWorktreeContextFiles(issueId: string, currentPhase: string, title?: string) {
+  // Try to locate the worktree path from multiple sources
+  let workspacePath: string | undefined;
+
+  // 1. Check current directory first
+  const cwd = process.cwd();
+  const owner = readWorktreeOwner(cwd);
+  if (owner && (owner.ownerIssueId === issueId || owner.linkedIssues.includes(issueId))) {
+    workspacePath = owner.workspacePath ?? cwd;
+  }
+
+  // 2. Fall back to dispatch-handoff artifact worktreePath
+  if (!workspacePath) {
+    try {
+      const handoff = readArtifact({ issueId, type: "dispatch-handoff" });
+      const payload = (handoff.payload ?? {}) as Record<string, unknown>;
+      const candidate =
+        (payload.worktreePath as string) ??
+        (payload.workspace as string) ??
+        (payload.worktree as string);
+      if (candidate && typeof candidate === "string") {
+        workspacePath = candidate;
+      }
+    } catch {
+      // no dispatch-handoff
+    }
+  }
+
+  if (!workspacePath) return;
+
+  // Read existing owner from the worktree to preserve createdAt / linkedIssues
+  const existingOwner = readWorktreeOwner(workspacePath);
+  const linkedIssues = existingOwner?.linkedIssues ?? [issueId];
+  const createdAt = existingOwner?.createdAt ?? new Date().toISOString();
+
+  const phaseOrder = [
+    "triage", "plan", "dispatch", "specify", "implement",
+    "local-verify", "ac-check", "self-review", "ship",
+    "pr-check", "verify", "qa", "land",
+  ] as const;
+  const idx = phaseOrder.indexOf(currentPhase as (typeof phaseOrder)[number]);
+  const nextPhase = idx >= 0 && idx < phaseOrder.length - 1 ? phaseOrder[idx + 1] : undefined;
+
+  try {
+    writeWorktreeOwnerMarker(workspacePath, {
+      ownerIssueId: existingOwner?.ownerIssueId ?? issueId,
+      linkedIssues,
+      createdAt,
+      currentPhase,
+      title: title ?? existingOwner?.title,
+      updatedAt: new Date().toISOString(),
+      branchName: existingOwner?.branchName ?? currentGitBranch(),
+      workspacePath,
+    });
+    writeIssueContextMd(workspacePath, {
+      issueId: existingOwner?.ownerIssueId ?? issueId,
+      currentPhase,
+      title: title ?? existingOwner?.title,
+      nextPhase,
+      branchName: existingOwner?.branchName ?? currentGitBranch(),
+      workspacePath,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 function runIssueResume(issueId: string) {
@@ -559,7 +650,24 @@ function runIssueResume(issueId: string) {
 }
 
 function runIssueContext(issueId: string, asJson: boolean) {
-  const context = buildIssueContext({ issueId });
+  let resolvedId = issueId;
+  if (issueId === "--auto") {
+    const owner = readWorktreeOwner(process.cwd());
+    if (!owner) {
+      const msg = "No .gxpm-worktree-owner.json found in current directory. Are you in a worktree?";
+      if (asJson) {
+        console.log(JSON.stringify({ error: msg }, null, 2));
+      } else {
+        console.error(msg);
+      }
+      process.exit(1);
+    }
+    resolvedId = owner.ownerIssueId;
+    if (!asJson) {
+      console.log(`(auto-resolved from worktree owner: ${resolvedId})\n`);
+    }
+  }
+  const context = buildIssueContext({ issueId: resolvedId });
 
   if (asJson) {
     console.log(JSON.stringify(context, null, 2));

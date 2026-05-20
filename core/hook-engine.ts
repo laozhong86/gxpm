@@ -13,6 +13,7 @@ import {
   formatProjectInitializationContext,
   getProjectInitializationStatus,
 } from "./project-init-status";
+import { readWorktreeOwner } from "./worktree-owner";
 
 export type HookHostName = "claude" | "codex" | "cursor" | "kimi";
 
@@ -562,25 +563,4 @@ function getActiveIssueId(cwd: string): string | null {
   }
 }
 
-interface WorktreeOwner {
-  ownerIssueId: string;
-  linkedIssues: string[];
-  createdAt: string;
-}
 
-function readWorktreeOwner(cwd: string): WorktreeOwner | null {
-  try {
-    const path = join(cwd, ".gxpm-worktree-owner.json");
-    if (!existsSync(path)) return null;
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    const ownerIssueId = typeof raw.ownerIssueId === "string" ? raw.ownerIssueId : "";
-    const linkedIssues = Array.isArray(raw.linkedIssues)
-      ? raw.linkedIssues.filter((item): item is string => typeof item === "string")
-      : [];
-    const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : "";
-    if (!ownerIssueId || !createdAt) return null;
-    return { ownerIssueId, linkedIssues, createdAt };
-  } catch {
-    return null;
-  }
-}

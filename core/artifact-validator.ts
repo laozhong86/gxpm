@@ -41,6 +41,9 @@ const ARTIFACT_SCHEMAS: Record<ArtifactType, ArtifactSchema> = {
   "dispatch-handoff": {
     requiredFields: ["status", "inputArtifacts", "workerTasks"],
   },
+  "behavior-spec": {
+    requiredFields: ["feature", "scenarios"],
+  },
   "wiki-context": {
     requiredFields: [],
   },

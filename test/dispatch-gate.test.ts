@@ -29,6 +29,8 @@ describe("dispatch gate", () => {
       validation: [],
       worktreePath: "",
       worktreeDecision: "pending",
+      workflowType: "issue",
+      workflowId: "GXPM-51",
       workerTasks: [],
     });
   });

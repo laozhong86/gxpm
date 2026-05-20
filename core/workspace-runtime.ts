@@ -17,6 +17,8 @@ import {
   type IsolationMethod,
   type IsolationResolution,
 } from "./isolation-resolver";
+import { runWorktreeInit, type WorktreeInitContext } from "./worktree-init";
+import "./worktree-init-steps"; // side-effect: registers built-in init steps
 
 export interface WorkspacePlanInput {
   root?: string;
@@ -106,6 +108,8 @@ export async function ensureIssueWorkspaceWithResolver(
   let plan: WorkspacePlan;
   let created = false;
 
+  let initWarnings: string[] = [];
+
   if (resolution.status === "resolved" && resolution.env) {
     // Use the resolved workspace path
     const workspacePath = resolution.env.workspacePath;
@@ -121,6 +125,29 @@ export async function ensureIssueWorkspaceWithResolver(
     if (!plan.exists) {
       mkdirSync(workspacePath, { recursive: true });
       created = true;
+    }
+
+    // Run worktree init pipeline for reused worktrees (new worktrees are
+    // already initialized inside the provider). Idempotent — safe to re-run.
+    const repoResult = Bun.spawnSync({
+      cmd: ["git", "rev-parse", "--show-toplevel"],
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (repoResult.exitCode === 0) {
+      const canonicalRepoPath = repoResult.stdout.toString().trim();
+      const initCtx: WorktreeInitContext = {
+        canonicalRepoPath,
+        worktreePath: workspacePath,
+        branchName: resolution.env.branchName ?? `gxpm-${issueId}`,
+        issueId,
+      };
+      const initResult = await runWorktreeInit(initCtx);
+      initWarnings = initResult.warnings;
+      if (!initResult.ok) {
+        initWarnings.push(...initResult.errors);
+      }
     }
   } else if (resolution.status === "none") {
     // No git repo: fall back to plain directory workspace
@@ -142,7 +169,7 @@ export async function ensureIssueWorkspaceWithResolver(
     exists: true,
     created,
     method: resolution.method,
-    warnings: resolution.warnings,
+    warnings: [...(resolution.warnings ?? []), ...initWarnings],
     userMessage: resolution.userMessage,
     resolution,
   };

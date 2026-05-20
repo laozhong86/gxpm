@@ -115,6 +115,35 @@ describe("gxpm CLI", () => {
     expect(Array.isArray(json.requiredReads)).toBe(true);
     expect(Array.isArray(json.agentInstructions)).toBe(true);
   });
+
+  test("issue context --auto resolves from worktree owner", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-context-auto-"));
+    expect(runCli(root, ["issue", "create", "GXPM-14"]).exitCode).toBe(0);
+
+    // Simulate being inside a worktree by writing the owner marker
+    writeFileSync(
+      join(root, ".gxpm-worktree-owner.json"),
+      JSON.stringify({
+        ownerIssueId: "GXPM-14",
+        linkedIssues: ["GXPM-14"],
+        createdAt: new Date().toISOString(),
+        workspacePath: root,
+      }, null, 2) + "\n",
+    );
+
+    const result = runCli(root, ["issue", "context", "--auto"]);
+    expect(result.exitCode).toBe(0);
+    expect(output(result)).toContain("auto-resolved from worktree owner: GXPM-14");
+    expect(output(result)).toContain("issueId: GXPM-14");
+  });
+
+  test("issue context --auto fails when not in a worktree", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cli-context-auto-fail-"));
+
+    const result = runCli(root, ["issue", "context", "--auto"]);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("No .gxpm-worktree-owner.json found");
+  });
 });
 
 describe("gxpm issue ownership CLI", () => {
@@ -228,6 +257,47 @@ describe("gxpm issue next CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-next-missing-"));
     const r = runCli(root, ["issue", "next", "GXPM-NOPE"]);
     expect(r.exitCode).toBe(1);
+  });
+
+  test("outputs phase command reference for current phase", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-commands-"));
+    expect(runCli(root, ["issue", "create", "GXPM-33"]).exitCode).toBe(0);
+
+    const r = runCli(root, ["issue", "next", "GXPM-33"]);
+    expect(r.exitCode).toBe(0);
+    const out = output(r);
+    expect(out).toContain("Available commands for triage:");
+    expect(out).toContain("gxpm triage init GXPM-33");
+    expect(out).toContain("gxpm artifact write GXPM-33 acceptance-contract");
+    expect(out).toContain("gxpm artifact edit GXPM-33 acceptance-contract");
+    expect(out).toContain("gxpm issue transition GXPM-33 plan");
+  });
+
+  test("hand-editing artifact file bypasses event audit", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-hand-edit-audit-"));
+    expect(runCli(root, ["issue", "create", "GXPM-34"]).exitCode).toBe(0);
+
+    // Simulate an Agent hand-editing the artifact JSON directly
+    const artifactPath = join(root, ".gxpm", "issues", "GXPM-34", "artifacts", "acceptance-contract.json");
+    mkdirSync(join(root, ".gxpm", "issues", "GXPM-34", "artifacts"), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify({
+      schemaVersion: 1,
+      issueId: "GXPM-34",
+      type: "acceptance-contract",
+      writtenAt: new Date().toISOString(),
+      payload: { criteria: [] },
+    }, null, 2) + "\n");
+
+    // artifact read works because file exists
+    const read = runCli(root, ["artifact", "read", "GXPM-34", "acceptance-contract"]);
+    expect(read.exitCode).toBe(0);
+
+    // But history shows no artifact.written event — the hand-edit bypassed the audit trail
+    const history = runCli(root, ["issue", "history", "GXPM-34"]);
+    expect(history.exitCode).toBe(0);
+    const histOut = output(history);
+    expect(histOut).toContain("issue.created");
+    expect(histOut).not.toContain("artifact.written");
   });
 });
 

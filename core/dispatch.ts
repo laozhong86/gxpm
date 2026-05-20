@@ -10,6 +10,8 @@ interface DispatchHandoffPayload {
   validation: string[];
   worktreePath: string;
   worktreeDecision: "pending" | "created" | "reused" | "existing";
+  workflowType: string;
+  workflowId: string;
   workerTasks: Array<{ id: string; description: string; status: "pending" | "in_progress" | "done" }>;
 }
 
@@ -109,6 +111,8 @@ export function initializeDispatch(input: PhaseArtifactInput) {
     validation: buildValidation(planPayload),
     worktreePath: "",
     worktreeDecision: "pending",
+    workflowType: "issue",
+    workflowId: input.issueId,
     workerTasks: buildWorkerTasks(planPayload),
   };
 
