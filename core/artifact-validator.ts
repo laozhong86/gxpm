@@ -71,7 +71,38 @@ const ARTIFACT_SCHEMAS: Record<ArtifactType, ArtifactSchema> = {
   "land-findings": {
     requiredFields: ["status", "landReady", "mergePlan"],
   },
+  "cleanup-report": {
+    requiredFields: [
+      "status",
+      "duplicatesExtracted",
+      "renamesUnified",
+      "interfacesAligned",
+      "deadCodeRemoved",
+      "testsDeduplicated",
+    ],
+  },
+  "review-report": {
+    requiredFields: ["status", "findings"],
+  },
+  "ship-audit-report": {
+    requiredFields: ["status", "findings"],
+  },
+  "feedback-description": {
+    requiredFields: [],
+  },
 };
+
+// GXPM-149: guard that ARTIFACT_SCHEMAS stays in sync with ARTIFACT_TYPES.
+// Without this, a new type in artifacts.ts but missing in this map would cause
+// validateArtifact to throw TypeError instead of a clear validation error.
+for (const type of ARTIFACT_TYPES) {
+  if (!(type in ARTIFACT_SCHEMAS)) {
+    throw new Error(
+      `[artifact-validator] ARTIFACT_SCHEMAS is missing entry for '${type}'. ` +
+        `Every ArtifactType must have a registered schema (use { requiredFields: [] } for unrestricted types).`,
+    );
+  }
+}
 
 export function listValidatedArtifactTypes(): ArtifactType[] {
   return [...ARTIFACT_TYPES];
@@ -86,6 +117,12 @@ export function validateArtifact(type: string, payload: Record<string, unknown>)
   }
 
   const schema = ARTIFACT_SCHEMAS[type];
+  if (!schema) {
+    return {
+      valid: false,
+      errors: [{ field: "type", message: `No schema registered for artifact type: ${type}` }],
+    };
+  }
   const errors: ValidationError[] = [];
 
   for (const field of schema.requiredFields) {

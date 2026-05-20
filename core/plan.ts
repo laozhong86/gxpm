@@ -24,8 +24,14 @@ export function initializePlan(input: PlanInput) {
     status: "pending",
   };
 
+  // GXPM-149: include approach + validation even in lite payload so the draft
+  // passes the validator schema (implementation-plan requires
+  // [objective, approach, validation]). Lite issues can leave them empty;
+  // schema satisfaction matters more than minimalism.
   const litePayload = {
     objective: "",
+    approach: "",
+    validation: [],
     scope: "",
     nonGoals: "",
     constitutionCheck,
