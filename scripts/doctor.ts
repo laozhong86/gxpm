@@ -186,6 +186,34 @@ export function runDoctor(input: RunDoctorInput = {}): DoctorReport {
     });
   }
 
+  // --- GXPM-143: init hardening — .gitignore hygiene ---
+  if (repo.isGitRepo) {
+    const giHygiene = checkGitignoreHygiene(cwd);
+    if (giHygiene.missing.length === 0) {
+      checks.push({
+        name: "gitignore_hygiene",
+        status: "ok",
+        message: `.gitignore covers all required entries (${giHygiene.required.length})`,
+      });
+    } else {
+      checks.push({
+        name: "gitignore_hygiene",
+        status: "warn",
+        message: `.gitignore missing: ${giHygiene.missing.join(", ")}. Add these to prevent state-file churn and node_modules tracking.`,
+      });
+    }
+  }
+
+  // --- GXPM-143: init hardening — base branch resolution ---
+  if (repo.isGitRepo) {
+    const baseBranch = checkBaseBranchResolution(cwd, home);
+    checks.push({
+      name: "base_branch_resolution",
+      status: "ok",
+      message: `worktree.baseBranch = '${baseBranch.value}' (source: ${baseBranch.source})`,
+    });
+  }
+
   // --- Upgrade error trail ---
   const upgradeErrors = loadUpgradeErrors();
   if (upgradeErrors.length > 0) {
@@ -226,6 +254,59 @@ export function runDoctor(input: RunDoctorInput = {}): DoctorReport {
     skill: skillChecks,
     repo,
   };
+}
+
+/**
+ * GXPM-143: scan .gitignore for the entries gxpm relies on to keep
+ * worktree-local state out of git history. Returns missing entries (warn-only).
+ */
+export interface GitignoreHygieneResult {
+  required: string[];
+  missing: string[];
+}
+
+export function checkGitignoreHygiene(cwd: string): GitignoreHygieneResult {
+  const required = [".gxpm/", "node_modules", ".gxpm-worktree-owner.json", "ISSUE_CONTEXT.md"];
+  const giPath = join(cwd, ".gitignore");
+  let content = "";
+  try {
+    content = readFileSync(giPath, "utf-8");
+  } catch {
+    return { required, missing: required };
+  }
+  const lines = content
+    .split("\n")
+    .map((line) => line.trim().replace(/\/$/, ""))
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"));
+  const set = new Set(lines);
+  const missing = required.filter((r) => !set.has(r.replace(/\/$/, "")));
+  return { required, missing };
+}
+
+/**
+ * GXPM-143: explain where worktree.baseBranch comes from. Prefers explicit
+ * config value; falls back to detection via git symbolic-ref refs/remotes/origin/HEAD.
+ */
+export interface BaseBranchResolution {
+  value: string;
+  source: "config" | "detected-origin-head" | "fallback-main";
+}
+
+export function checkBaseBranchResolution(cwd: string, home: string): BaseBranchResolution {
+  const configured = getConfigValue({ root: cwd, home, key: "worktree.baseBranch" }).value as string | undefined;
+  if (configured && typeof configured === "string" && configured.length > 0) {
+    return { value: configured, source: "config" };
+  }
+  // Try git symbolic-ref to find origin's HEAD branch
+  try {
+    const out = execSync("git symbolic-ref refs/remotes/origin/HEAD", { cwd, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    // Format: refs/remotes/origin/main
+    const match = out.match(/refs\/remotes\/origin\/(.+)$/);
+    if (match) return { value: match[1], source: "detected-origin-head" };
+  } catch {}
+  return { value: "main", source: "fallback-main" };
 }
 
 function checkRuntime(gxpmRoot: string): RuntimeCheck {
