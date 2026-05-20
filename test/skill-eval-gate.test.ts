@@ -104,6 +104,47 @@ test("DEFAULT_SKILL_EVAL_THRESHOLD is 90", () => {
   expect(DEFAULT_SKILL_EVAL_THRESHOLD).toBe(90);
 });
 
+// Regression: CodeRabbit P2 on PR #54 — when a templated skill's generated
+// SKILL.md is missing (typical state right after editing .tmpl but before
+// gen-skill-docs runs), runEval must not throw ENOENT; it must surface a
+// readable validation error so scaffold-check can aggregate it.
+describe("missing generated SKILL.md for templated skill (PR #54 regression)", () => {
+  let sandbox: string;
+
+  beforeAll(() => {
+    sandbox = mkdtempSync(join(tmpdir(), "gxpm-eval-gate-missing-md-"));
+    mkdirSync(join(sandbox, "skills", "gxpm-tmpl-only"), { recursive: true });
+    // Only .tmpl exists — no generated SKILL.md
+    const tmpl = `---
+name: gxpm-tmpl-only
+type: technique
+description: Synthetic skill with only a tmpl file. Use when validating the missing-generated-md handling path.
+---
+
+# tmpl-only
+
+## When to trigger
+
+stub
+`;
+    writeFileSync(join(sandbox, "skills", "gxpm-tmpl-only", "SKILL.md.tmpl"), tmpl, "utf8");
+  });
+
+  afterAll(() => {
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  test("validateSkillEval returns structured error, not throws", () => {
+    expect(() => {
+      const errors = validateSkillEval({ root: sandbox, threshold: 90 });
+      expect(errors.length).toBeGreaterThan(0);
+      const missingErr = errors.find((e) => e.includes("gxpm-tmpl-only"));
+      expect(missingErr).toBeDefined();
+      expect(missingErr).toMatch(/file-exists|missing/);
+    }).not.toThrow();
+  });
+});
+
 // Regression: CodeRabbit on PR #54 — non-finite threshold must not silently
 // disable the gate; comparison must use the raw percentage, not the rounded.
 describe("threshold input validation (PR #54 regression)", () => {

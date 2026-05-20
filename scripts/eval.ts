@@ -169,7 +169,27 @@ function runEval(skillName?: string, root?: string): EvalResult[] {
     : templates;
 
   return toEval.map((t) => {
-    const content = readFileSync(join(evalRoot, t.tmpl.endsWith(".tmpl") ? t.output : t.tmpl), "utf8");
+    const readPath = join(evalRoot, t.tmpl.endsWith(".tmpl") ? t.output : t.tmpl);
+    let content: string;
+    try {
+      content = readFileSync(readPath, "utf8");
+    } catch (err) {
+      // Generated SKILL.md may be missing when .tmpl was edited but
+      // `bun run gen:skill-docs` has not been re-run yet. Return a structured
+      // EvalResult so the scaffold-check aggregator surfaces a readable error
+      // instead of crashing the whole pipeline with ENOENT.
+      const isMissing = (err as NodeJS.ErrnoException)?.code === "ENOENT";
+      const message = isMissing
+        ? `generated file ${t.output} missing; run 'bun run gen:skill-docs' to regenerate from ${t.tmpl}`
+        : `failed to read ${readPath}: ${err instanceof Error ? err.message : String(err)}`;
+      return {
+        skill: t.name,
+        score: 0,
+        maxScore: 60,
+        checks: [{ name: "file-exists", pass: false, message }],
+        type: "unknown",
+      };
+    }
     return evaluateSkill(t.name, content);
   });
 }
