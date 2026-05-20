@@ -2,6 +2,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   writeFileSync,
@@ -959,7 +960,40 @@ function assertPhaseGate(input: {
   issueDir: string;
 }) {
   assertWorktreeGate(input);
+  assertContaminationGate(input);
   assertArtifactGate(input);
+}
+
+/**
+ * GXPM-140: refuse to transition when the artifact directory contains any
+ * *.contaminated-* archive. This used to be enforced only by the pre-push
+ * git hook, but `gxpm issue transition` would silently bypass it, allowing
+ * a contaminated artifact to advance phases.
+ *
+ * Recovery path: `gxpm phase rewind <id> --to <safe-phase> --reason "contamination"`,
+ * re-run the verification, then either delete the archive or replace the
+ * tainted artifact with a clean write (future: supersedes field).
+ */
+function assertContaminationGate(input: {
+  issueId: string;
+  fromPhase: GxpmPhase;
+  nextPhase: GxpmPhase;
+  issueDir: string;
+}) {
+  const artifactDir = join(input.issueDir, "artifacts");
+  if (!existsSync(artifactDir)) return;
+  const contaminated: string[] = [];
+  // dirent traversal: any file whose name contains ".contaminated" is treated
+  // as a contamination archive marker. This covers historical patterns like
+  // `local-verify.contaminated-2026-05-19T14-00.json` and explicit `.contaminated-*`.
+  for (const entry of readdirSync(artifactDir)) {
+    if (entry.includes(".contaminated")) contaminated.push(entry);
+  }
+  if (contaminated.length === 0) return;
+  throw new Error(
+    `Phase transition blocked: contamination archive(s) present in artifacts/ — ${contaminated.join(", ")}. ` +
+      `Run 'gxpm phase rewind ${input.issueId} --to <safe-phase> --reason "contamination"' and re-verify before continuing.`,
+  );
 }
 
 function getCurrentGitBranch(): string | undefined {
