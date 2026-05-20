@@ -433,6 +433,26 @@ export function getVisiblePhases(rigorLevel?: RigorLevel): readonly GxpmPhase[] 
   return GXPM_PHASES.filter((p) => !skipSet.has(p));
 }
 
+/**
+ * GXPM-150: returns the next visible phase under the given rigor level,
+ * skipping any phases in PHASE_SKIP_MAP[rigorLevel]. Used by CLI commands
+ * like `gxpm issue next` so recommendations don't drag agents into hidden
+ * phases (e.g. lite issues should never see `dispatch`).
+ */
+export function nextVisiblePhase(
+  fromPhase: GxpmPhase,
+  rigorLevel?: RigorLevel,
+): GxpmPhase | null {
+  const fromIndex = GXPM_PHASES.indexOf(fromPhase);
+  if (fromIndex < 0 || fromIndex >= GXPM_PHASES.length - 1) return null;
+  const skipSet = !rigorLevel || rigorLevel === "full" ? new Set<GxpmPhase>() : PHASE_SKIP_MAP[rigorLevel];
+  for (let i = fromIndex + 1; i < GXPM_PHASES.length; i++) {
+    const candidate = GXPM_PHASES[i];
+    if (!skipSet.has(candidate)) return candidate;
+  }
+  return null;
+}
+
 export function isGxpmPhase(value: string): value is GxpmPhase {
   return GXPM_PHASES.includes(value as GxpmPhase);
 }
