@@ -42,8 +42,11 @@ A discipline for hard bugs where the root cause is **not yet known**.
 
 ## Verification（验证清单 / 出口条件）
 
-- 完成 {{REFERENCE:phases}} 中定义的全部阶段。
-- 按 {{REFERENCE:feedback-loop}} 的约束完成收敛。
+- [ ] 已完成 `references/phases.md` 定义的全部诊断阶段（Reproduce → Explore → Hypothesise → Test → Conclude）。
+- [ ] 已按 `references/feedback-loop.md` 的反馈循环约束完成收敛（≥2 个竞争假设、≥1 个被证伪、根因可复现）。
+- [ ] 修复后构造一个相关失败用例并验证仍能抓到 → 确认根因正确，不是症状压制。
+- [ ] 调试日志、临时 print、scratchpad 文件已清理。
+- [ ] 关键结论（症状 / 根因 / 修复 / 验证）已写入 issue 的当前 phase artifact，不仅留在聊天里。
 
 ## Read Next
 

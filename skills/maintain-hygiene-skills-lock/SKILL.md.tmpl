@@ -24,9 +24,15 @@ import json, hashlib
 from pathlib import Path
 lock = {'version': 1, 'skills': {}}
 for d in sorted(Path('skills').iterdir()):
-    p = d / 'SKILL.md'
-    if p.exists():
-        lock['skills'][d.name] = hashlib.sha256(p.read_bytes()).hexdigest()
+    if not d.is_dir():
+        continue
+    # Hash the SOURCE OF TRUTH: prefer .tmpl when it exists (templated skill),
+    # fall back to SKILL.md only for non-templated skills.
+    tmpl = d / 'SKILL.md.tmpl'
+    md = d / 'SKILL.md'
+    src = tmpl if tmpl.exists() else md
+    if src.exists():
+        lock['skills'][d.name] = hashlib.sha256(src.read_bytes()).hexdigest()
 print(json.dumps(lock, indent=2, ensure_ascii=False))
 "
 ```

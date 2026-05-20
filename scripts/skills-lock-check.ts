@@ -31,12 +31,17 @@ export function validateSkillsLock(options: { root?: string } = {}): string[] {
   const expectedSkills = new Set(Object.keys(lock.skills));
 
   for (const [skillName, expectedHash] of Object.entries(lock.skills)) {
-    const skillPath = resolve(skillsDir, skillName, "SKILL.md");
-    if (!existsSync(skillPath)) {
-      errors.push(`skill ${skillName}: SKILL.md missing`);
+    // Hash the source of truth: prefer SKILL.md.tmpl when present (templated
+    // skill), fall back to SKILL.md only for static skills. This prevents
+    // bypassing the lock by editing AUTO-GENERATED SKILL.md directly.
+    const tmplPath = resolve(skillsDir, skillName, "SKILL.md.tmpl");
+    const mdPath = resolve(skillsDir, skillName, "SKILL.md");
+    const srcPath = existsSync(tmplPath) ? tmplPath : mdPath;
+    if (!existsSync(srcPath)) {
+      errors.push(`skill ${skillName}: SKILL.md(.tmpl) missing`);
       continue;
     }
-    const content = readFileSync(skillPath);
+    const content = readFileSync(srcPath);
     const actualHash = createHash("sha256").update(content).digest("hex");
     if (actualHash !== expectedHash) {
       errors.push(`skill ${skillName}: hash mismatch (expected ${expectedHash}, got ${actualHash})`);

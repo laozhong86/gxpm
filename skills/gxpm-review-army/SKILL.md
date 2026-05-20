@@ -94,7 +94,7 @@ gxpm ship pr-check <issue-id> --army
 - **为赶时间跳过 Accessibility Reviewer** → 可访问性是法律责任，不可跳过
 - **混淆 important 和 blocking 的优先级** → 只有 blocking 会阻止 gate，但 important 需在 ship notes 中说明计划
 
-## Verification（验证清单）
+## Verification（验证清单 / 出口条件）
 
 - [ ] `--army` 标志正确传递，review-report 或 ship-audit-report 已创建
 - [ ] 每个 Army 角色的 findings 已填入报告

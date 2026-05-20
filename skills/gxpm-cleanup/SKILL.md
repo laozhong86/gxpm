@@ -56,7 +56,7 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 - **跨 issue 接口不兼容且无迁移方案** → 必须 STOP，对齐接口后再推进
 - **死代码占比过高** → Important，需在 cleanup-report 中说明清理计划
 
-## Verification（验证清单）
+## Verification（验证清单 / 出口条件）
 
 - [ ] cleanup-report.json 已创建并包含审计结果
 - [ ] 所有 blocking 级别问题已解决或获得豁免
@@ -73,5 +73,5 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 
 ## Read Next
 
-- `agents/cleanup-auditor/cleanup-auditor.md` — 审计角色详细定义
-- `skills/gxpm-refactor-safely/SKILL.md` — 安全重构指南
+- `/gxpm-cleanup-auditor` — 审计角色详细定义
+- `/gxpm-refactor-safely` — 安全重构指南
