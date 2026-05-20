@@ -29,7 +29,10 @@ const phaseAlignedSkills = Array.from(
 const ANNOUNCE_PHRASE = "Announce at start";
 
 describe("phase-aligned gxpm-* skills — Announce at start", () => {
-  test("scn-01: every phase-aligned skill SKILL.md contains Announce phrase with its own name", () => {
+  // The scenario number naming covers BOTH scn-01 (announce phrase + skill
+  // name verbatim) AND scn-02 (white-list derived from PHASE_GATE_RULES at
+  // runtime, not hardcoded — satisfied by the comprehension at file top).
+  test("scn-01+02: every phase-aligned skill SKILL.md contains Announce phrase with its own name (white-list derived from PHASE_GATE_RULES)", () => {
     expect(phaseAlignedSkills.length).toBeGreaterThan(0);
 
     const missing: string[] = [];
