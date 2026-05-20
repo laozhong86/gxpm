@@ -136,6 +136,11 @@ export function formatHookOutput(
       return JSON.stringify({ additionalContext: result.additionalContext });
     }
     if (result.action === "block") {
+      // Claude Stop hook schema rejects `hookSpecificOutput.hookEventName="Stop"`;
+      // it only accepts the top-level `{decision:"block", reason}` shape (same as Codex Stop).
+      if (event === "Stop" && result.reason) {
+        return JSON.stringify({ decision: "block", reason: result.reason });
+      }
       return JSON.stringify({
         hookSpecificOutput: {
           hookEventName: event,
