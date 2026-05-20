@@ -1,13 +1,13 @@
-# ISSUE_CONTEXT — GXPM-159
+# ISSUE_CONTEXT — GXPM-150
 
 > 这是 gxpm 自动生成的上下文恢复文件。
 > 如果 AI 代理忘记了当前正在处理的 issue，请阅读此文件。
 
-- **Issue ID**: `GXPM-159`
+- **Issue ID**: `GXPM-150`
 - **当前阶段**: `dispatch`
-- **分支**: `gxpm-GXPM-159`
-- **工作目录**: `/Users/x/Desktop/Project/gxpm/.gxpm/worktrees/gxpm-GXPM-159`
-- **更新时间**: 2026-05-20T11:57:01.224Z
+- **分支**: `gxpm-GXPM-150`
+- **工作目录**: `/Users/x/Desktop/Project/gxpm/.gxpm/worktrees/gxpm-GXPM-150`
+- **更新时间**: 2026-05-20T12:05:08.513Z
 
 ## 快速恢复
 

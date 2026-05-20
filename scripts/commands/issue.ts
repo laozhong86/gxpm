@@ -5,6 +5,7 @@ import {
   getIssuePaths,
   isIssueType,
   ISSUE_TYPES,
+  nextVisiblePhase,
   readIssueState,
   setIssueArchived,
   transitionIssuePhase,
@@ -521,12 +522,17 @@ function runIssueNext(issueId: string) {
     }
   }
 
+  // GXPM-150: under lite/standard rigor, recommend the next *visible* phase
+  // rather than the raw PHASE_GATE_RULES next, so agents are not nudged into
+  // phases the rigor level has compressed away (e.g. lite → no dispatch).
+  const effectiveNextPhase = nextVisiblePhase(state.currentPhase, state.rigorLevel) ?? rule.nextPhase;
+
   // Phase command reference for agent clarity
   console.log(`Available commands for ${state.currentPhase}:`);
   console.log(`  init:    ${rule.command.replace("<issue-id>", issueId)}`);
   console.log(`  write:   gxpm artifact write ${issueId} ${rule.requiredArtifact} --json '...'`);
   console.log(`  edit:    gxpm artifact edit ${issueId} ${rule.requiredArtifact}`);
-  console.log(`  transition: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+  console.log(`  transition: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   console.log("");
 
   if (!has) {
@@ -534,7 +540,7 @@ function runIssueNext(issueId: string) {
     console.log(`      → creates draft of artifact: ${rule.requiredArtifact}`);
     console.log("");
     console.log(`Then: edit the artifact (or use 'gxpm artifact write ${issueId} ${rule.requiredArtifact} --json ...')`);
-    console.log(`Then: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+    console.log(`Then: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   } else {
     console.log(`Artifact ${rule.requiredArtifact} already exists.`);
     // Worktree advisory: when dispatch-handoff exists but worktree is still pending
@@ -551,7 +557,7 @@ function runIssueNext(issueId: string) {
         // ignore missing dispatch-handoff
       }
     }
-    console.log(`Next: gxpm issue transition ${issueId} ${rule.nextPhase}`);
+    console.log(`Next: gxpm issue transition ${issueId} ${effectiveNextPhase}`);
   }
 }
 
