@@ -135,13 +135,15 @@ stub
   });
 
   test("validateSkillEval returns structured error, not throws", () => {
+    let errors: string[] = [];
     expect(() => {
-      const errors = validateSkillEval({ root: sandbox, threshold: 90 });
-      expect(errors.length).toBeGreaterThan(0);
-      const missingErr = errors.find((e) => e.includes("gxpm-tmpl-only"));
-      expect(missingErr).toBeDefined();
-      expect(missingErr).toMatch(/file-exists|missing/);
+      errors = validateSkillEval({ root: sandbox, threshold: 90 });
     }).not.toThrow();
+
+    expect(errors.length).toBeGreaterThan(0);
+    const missingErr = errors.find((e) => e.includes("gxpm-tmpl-only"));
+    expect(missingErr).toBeDefined();
+    expect(missingErr).toMatch(/file-exists|missing/);
   });
 });
 

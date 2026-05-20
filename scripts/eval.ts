@@ -174,14 +174,22 @@ function runEval(skillName?: string, root?: string): EvalResult[] {
     try {
       content = readFileSync(readPath, "utf8");
     } catch (err) {
-      // Generated SKILL.md may be missing when .tmpl was edited but
-      // `bun run gen:skill-docs` has not been re-run yet. Return a structured
-      // EvalResult so the scaffold-check aggregator surfaces a readable error
-      // instead of crashing the whole pipeline with ENOENT.
+      // For templated skills, a missing generated SKILL.md typically means
+      // `.tmpl` was edited but `bun run gen:skill-docs` hasn't run yet — the
+      // remediation is to regenerate. For non-templated skills, the source
+      // .md is simply gone and gen-skill-docs cannot help. Tailor the message
+      // so the aggregator surfaces actionable guidance instead of misdirecting
+      // the user to a regeneration step that won't fix anything.
       const isMissing = (err as NodeJS.ErrnoException)?.code === "ENOENT";
-      const message = isMissing
-        ? `generated file ${t.output} missing; run 'bun run gen:skill-docs' to regenerate from ${t.tmpl}`
-        : `failed to read ${readPath}: ${err instanceof Error ? err.message : String(err)}`;
+      const isGenerated = t.tmpl.endsWith(".tmpl");
+      let message: string;
+      if (isMissing && isGenerated) {
+        message = `generated file ${t.output} missing; run 'bun run gen:skill-docs' to regenerate from ${t.tmpl}`;
+      } else if (isMissing) {
+        message = `source file ${t.tmpl} is missing`;
+      } else {
+        message = `failed to read ${readPath}: ${err instanceof Error ? err.message : String(err)}`;
+      }
       return {
         skill: t.name,
         score: 0,
