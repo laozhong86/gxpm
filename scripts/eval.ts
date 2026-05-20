@@ -190,11 +190,19 @@ export interface ValidateSkillEvalOptions {
  */
 export function validateSkillEval(options: ValidateSkillEvalOptions = {}): string[] {
   const threshold = options.threshold ?? DEFAULT_SKILL_EVAL_THRESHOLD;
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    throw new Error(
+      `validateSkillEval: threshold must be a finite number >= 0; got ${threshold}`,
+    );
+  }
   const results = runEval(undefined, options.root);
   const errors: string[] = [];
   for (const r of results) {
-    const pct = r.maxScore > 0 ? Math.round((r.score / r.maxScore) * 100) : 0;
-    if (pct < threshold) {
+    // Compare on the raw percentage to avoid 89.7 rounding up to 90 and
+    // silently slipping past a threshold:90 gate.
+    const rawPct = r.maxScore > 0 ? (r.score / r.maxScore) * 100 : 0;
+    if (rawPct < threshold) {
+      const pct = Math.round(rawPct);
       const failingChecks = r.checks
         .filter((c) => !c.pass)
         .map((c) => c.name)

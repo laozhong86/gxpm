@@ -103,3 +103,25 @@ Body.
 test("DEFAULT_SKILL_EVAL_THRESHOLD is 90", () => {
   expect(DEFAULT_SKILL_EVAL_THRESHOLD).toBe(90);
 });
+
+// Regression: CodeRabbit on PR #54 — non-finite threshold must not silently
+// disable the gate; comparison must use the raw percentage, not the rounded.
+describe("threshold input validation (PR #54 regression)", () => {
+  test("NaN threshold throws", () => {
+    expect(() => validateSkillEval({ root: REPO_ROOT, threshold: Number.NaN })).toThrow(
+      /threshold must be a finite number/,
+    );
+  });
+
+  test("negative threshold throws", () => {
+    expect(() => validateSkillEval({ root: REPO_ROOT, threshold: -1 })).toThrow(
+      /threshold must be a finite number/,
+    );
+  });
+
+  test("Infinity threshold throws", () => {
+    expect(() => validateSkillEval({ root: REPO_ROOT, threshold: Infinity })).toThrow(
+      /threshold must be a finite number/,
+    );
+  });
+});
