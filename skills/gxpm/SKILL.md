@@ -323,6 +323,8 @@ bun run scripts/wait-pr-ready.ts <pr-number-or-url> --timeout-sec 900 --interval
 - **STOP：绝不因上下文压缩而盲推。** 如果你不确定当前 issue，先运行 `gxpm issue context --auto` 或阅读 `ISSUE_CONTEXT.md`。
 - **STOP：绝不在忘记当前 issue 的情况下修改代码。** 上下文压缩后必须先恢复，再行动。
 - **STOP：绝不未经用户明确确认或 active Autopilot Grant 授权就执行不可逆的 land 操作。**
+- **STOP：ownership 切换后必须先恢复上下文再写 artifact。** 新 session 接管 issue 时，先运行 `gxpm issue context --auto` 或阅读 `ISSUE_CONTEXT.md`，确认理解 scope 后再操作。
+- **STOP：发现当前 issue 范围外的新问题时，不要直接在当前 worktree 中解决。** 创建子 issue：`gxpm issue create --auto-id --parent <当前issueid>`，让子 issue 复用父 worktree。
 - **STOP：绝不在 worktree 中创建按 worktree 分布的 `.gxpm/` 目录。** 状态始终在主仓库。
 - **STOP：不要将 PMC/gstack 视为最终运行时依赖。** 它们是上游参考；优先使用 gxpm 原生能力。
 - **STOP：不要硬编码主机假设。** 使用 gxpm 原生能力。
