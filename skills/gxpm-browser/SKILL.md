@@ -6,6 +6,8 @@ status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-browser skill to capture headless-browser QA evidence — screenshots, asserts on rendered DOM, form interactions — that the local test suite cannot prove on its own."
+
 # gxpm-browser
 
 Minimal headless browser CLI built on Playwright. Designed for gxpm evidence

@@ -4,6 +4,8 @@ type: discipline
 description: BDD behavior specification design skill. Use during gxpm specify phase, when user mentions BDD, Gherkin, Given-When-Then, behavior spec, or behavior-first development.
 ---
 
+**Announce at start:** "I am using the gxpm-specifier skill to capture domain-level behavior in Gherkin-style scenarios — no test logic, no implementation hints — and to gate transition on user confirmation."
+
 # gxpm-specifier
 
 ## Core Principle

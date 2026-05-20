@@ -5,6 +5,8 @@ description: 多 issue worktree 合并前的代码清理与简化。在 cleanup 
 status: stable
 ---
 
+**Announce at start:** "I am using the gxpm-cleanup skill to look for cross-issue duplication, naming inconsistency, dead code, and interface drift before ship — and to record what was and was not cleaned up."
+
 # gxpm-cleanup
 
 在 gxpm 的 `cleanup` 阶段对多 issue worktree 进行跨 issue 代码清理，确保进入 `ship` 前的代码是统一、简洁、无重复的。

@@ -4,6 +4,8 @@ type: discipline
 description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
 ---
 
+**Announce at start:** "I am using the gxpm-triage skill to classify this issue into one category role and one state role, and to write a triage-grade acceptance contract before any phase transition."
+
 # Triage
 
 Move issues through a small state machine of triage roles.
