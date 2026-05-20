@@ -1,9 +1,8 @@
 {
-  "name": "gxpm",
-  "version": "0.1.0.0",
+  "name": "@geminix/gxpm",
+  "version": "0.2.0",
   "description": "Second-generation project management runtime designed to replace PMC and gstack.",
   "type": "module",
-  "private": true,
   "bin": {
     "gxpm": "./bin/gxpm",
     "gxpm-config": "./bin/gxpm-config",
@@ -12,12 +11,30 @@
     "gxpm-uninstall": "./bin/gxpm-uninstall",
     "gxpm-update-check": "./bin/gxpm-update-check"
   },
+  "files": [
+    "bin/",
+    "core/",
+    "scripts/",
+    "hosts/",
+    "skills/",
+    "templates/",
+    "agents/",
+    "docs/",
+    "commands/",
+    "CANON.md",
+    "AGENTS.md",
+    "CONTEXT.md",
+    "CLAUDE.md",
+    "DEBUG.md",
+    "README.md"
+  ],
   "scripts": {
     "check": "bun run scripts/gxpm-check.ts",
     "dev:skill": "bun run scripts/dev-skill.ts",
     "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
     "sync:markdown": "bun run scripts/sync-markdown-artifacts.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "bun run scripts/gxpm-check.ts && bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
