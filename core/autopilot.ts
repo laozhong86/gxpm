@@ -3,6 +3,7 @@ import { readArtifact, writeArtifact } from "./artifacts";
 import { listIssues } from "./issues";
 import { readIssueState, type GxpmPhase } from "./state";
 import { resolveSessionId } from "./session";
+import { appendBlockRecord } from "./autopilot-telemetry";
 
 export const AUTOPILOT_PROFILES = ["full-delivery"] as const;
 
@@ -117,7 +118,7 @@ export function startAutopilotGrant(input: StartAutopilotGrantInput): AutopilotG
 
 export function stopAutopilotGrant(input: StopAutopilotGrantInput): AutopilotGrant {
   const root = input.root ?? process.cwd();
-  readIssueState({ root, issueId: input.issueId });
+  const state = readIssueState({ root, issueId: input.issueId });
   const existing = readAutopilotGrant({ root, issueId: input.issueId });
   if (!existing) {
     throw new Error(`Autopilot grant not found for ${input.issueId}`);
@@ -132,6 +133,23 @@ export function stopAutopilotGrant(input: StopAutopilotGrantInput): AutopilotGra
     stopReason: input.reason ?? "manual_stop",
   };
   writeArtifact({ root, issueId: input.issueId, type: "autopilot-grant", payload: stopped });
+
+  // GXPM-164: record the block for later aggregation (Top-N analysis).
+  // Best-effort: telemetry failure must not break the stop flow.
+  try {
+    appendBlockRecord({
+      root,
+      issueId: input.issueId,
+      record: {
+        at: now.toISOString(),
+        reason: stopped.stopReason ?? "manual_stop",
+        phase: state.currentPhase,
+      },
+    });
+  } catch {
+    // ignore — telemetry is observational
+  }
+
   return stopped;
 }
 
