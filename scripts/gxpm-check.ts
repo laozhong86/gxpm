@@ -1,7 +1,13 @@
 import { runScaffoldCheck } from "./scaffold-check";
+import { checkCliPromises, formatCheckResult } from "./check-cli-promises";
 
 function main() {
   console.log(runScaffoldCheck());
+  const cliResult = checkCliPromises();
+  console.log(formatCheckResult(cliResult));
+  if (!cliResult.ok) {
+    throw new Error("check-cli-promises failed; see output above.");
+  }
 }
 
 try {
