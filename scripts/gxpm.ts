@@ -23,6 +23,7 @@ import { runPresetCommand } from "./commands/preset";
 import { runPhaseCommand } from "./commands/phase";
 import { runSpecifyCommand } from "./commands/specify";
 import { runFeedbackCommand } from "./commands/feedback";
+import { getCommandUsage, getTopLevelUsage, isHelpRequest } from "./commands/help";
 
 async function main(argv: string[]) {
   if (argv.includes("--verbose-events")) {
@@ -31,9 +32,28 @@ async function main(argv: string[]) {
       console.error(`[event] ${JSON.stringify(event)}`);
     });
   }
-  // Filter out flags like --army before positional parsing
+  // Filter out flags like --army / --help / -h before positional parsing.
+  // --help / -h are preserved as a signal but stripped from positional so they
+  // don't get treated as commands. Subcommand routers receive the full argv so
+  // they can still detect query flags if needed.
+  const wantsHelp = isHelpRequest(argv);
   const positional = argv.filter((arg) => !arg.startsWith("--"));
   const [command, subcommand, issueId, value] = positional;
+
+  if (wantsHelp && (!command || command === "help")) {
+    console.log(getTopLevelUsage());
+    return;
+  }
+
+  if (wantsHelp && command) {
+    console.log(getCommandUsage(command, subcommand));
+    return;
+  }
+
+  if (command === "help") {
+    console.log(getCommandUsage(subcommand));
+    return;
+  }
 
   if (!command || command === "check") {
     console.log(runScaffoldCheck());
