@@ -37,11 +37,15 @@ L5: 证据与恢复层 — .gxpm/issues/<id>/{state,artifacts,evidence,memory}/
 3. 所有 transition 都必须可审计、可重放、可恢复 —— 事件 append-only 写入 `events.jsonl`。
 4. Command 只路由，Agent 只担责，Skill 只注入，Artifact 只存真值 —— 分层边界不可漂移。
 
-**Phase 顺序（13 阶段）：**
+**Phase 顺序（14 阶段，按 `rigorLevel` 压缩）：**
 
-```
-triage → plan → dispatch → specify → implement → local-verify → ac-check → self-review → ship → pr-check → verify → qa → land
-```
+完整：`triage → plan → dispatch → specify → implement → local-verify → ac-check → self-review → cleanup → ship → pr-check → verify → qa → land`
+
+- `lite`（spike/meta）：7 阶段，跳过 dispatch, local-verify, ac-check, cleanup, pr-check, verify, qa
+- `standard`（默认）：9 阶段，跳过 local-verify, ac-check, cleanup, pr-check, verify
+- `full`：14 阶段，不跳过
+
+底层阶段不变，transition 允许跨阶段跳跃；跳过阶段仍记入 `phaseHistory` 保持审计链。
 
 - **specify**：BDD 行为规约阶段。产出 `behavior-spec.json` artifact + 空测试 stub；必须由用户通过 `gxpm specify confirm <id>` 显式确认后才能进入 implement。Owner：`specifier`。Skill：`gxpm-specifier`。规则：`docs/governance/gherkin-style.md`。
 - 进入 `implement` 之前，phase-gate 校验 `behavior-spec.confirmedAt` 非空；老 issue（在 `SPECIFY_PHASE_CUTOFF = 2026-05-14T00:00:00Z` 前已进入 implement）可豁免。

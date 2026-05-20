@@ -289,7 +289,11 @@ export function transitionIssuePhase(input: TransitionInput): IssueState {
   const isSkipCleanup =
     input.skipCleanup && state.currentPhase === "self-review" && nextPhase === "ship";
 
-  if (nextPhase !== allowedNextPhase && !isSkipCleanup) {
+  // Allow skipping compressed phases according to rigorLevel (e.g. standard mode
+  // collapses local-verify + ac-check, allowing implement -> self-review).
+  const isSkipCompressed = isCompressedSkip(state.currentPhase, nextPhase, state.rigorLevel);
+
+  if (nextPhase !== allowedNextPhase && !isSkipCleanup && !isSkipCompressed) {
     throw new Error(
       `Invalid phase transition: ${state.currentPhase} -> ${nextPhase}; allowed next phase: ${
         allowedNextPhase ?? "<none>"
@@ -390,6 +394,43 @@ export function setIssueArchived(input: IssueInput & { archived: boolean }): Iss
 export function getNextPhase(phase: GxpmPhase) {
   const index = GXPM_PHASES.indexOf(phase);
   return GXPM_PHASES[index + 1] ?? null;
+}
+
+/** Phases that may be compressed (skipped) under each rigor level. */
+export const PHASE_SKIP_MAP: Record<RigorLevel, ReadonlySet<GxpmPhase>> = {
+  lite: new Set(["dispatch", "local-verify", "ac-check", "cleanup", "pr-check", "verify", "qa"]),
+  standard: new Set(["local-verify", "ac-check", "cleanup", "pr-check", "verify"]),
+  full: new Set([]),
+};
+
+/**
+ * Determines whether a transition from `fromPhase` to `toPhase` is allowed
+ * under the given `rigorLevel` by skipping intermediate compressed phases.
+ *
+ * Example: in "standard" mode, implement -> self-review is allowed because
+ * local-verify and ac-check are in the skip set.
+ */
+export function isCompressedSkip(
+  fromPhase: GxpmPhase,
+  toPhase: GxpmPhase,
+  rigorLevel?: RigorLevel,
+): boolean {
+  if (!rigorLevel || rigorLevel === "full") return false;
+  const skipSet = PHASE_SKIP_MAP[rigorLevel];
+  const fromIndex = GXPM_PHASES.indexOf(fromPhase);
+  const toIndex = GXPM_PHASES.indexOf(toPhase);
+  if (toIndex <= fromIndex) return false;
+  for (let i = fromIndex + 1; i < toIndex; i++) {
+    if (!skipSet.has(GXPM_PHASES[i])) return false;
+  }
+  return true;
+}
+
+/** Returns the phases visible for a given rigor level (used by CLI/UI). */
+export function getVisiblePhases(rigorLevel?: RigorLevel): readonly GxpmPhase[] {
+  if (!rigorLevel || rigorLevel === "full") return GXPM_PHASES;
+  const skipSet = PHASE_SKIP_MAP[rigorLevel];
+  return GXPM_PHASES.filter((p) => !skipSet.has(p));
 }
 
 export function isGxpmPhase(value: string): value is GxpmPhase {

@@ -5,7 +5,7 @@ import {
   PHASE_GATE_RULES,
   PROTECTED_PATH_PATTERNS,
 } from "./phase-gates";
-import type { GxpmPhase, IssueState } from "./state";
+import { PHASE_SKIP_MAP, type GxpmPhase, type IssueState } from "./state";
 
 export type GateType = "pre-commit" | "commit-msg" | "pre-push" | "post-merge";
 
@@ -191,6 +191,17 @@ export function evaluatePrePush(
       allowed: true,
       code: "phase-ok",
       reason: `phase=${state.currentPhase} has no outbound artifact gate`,
+    };
+  }
+
+  // Under compressed rigor levels, skip artifact gates for phases that are
+  // collapsed (e.g. standard mode skips local-verify / ac-check / cleanup gates).
+  const skipSet = state.rigorLevel ? PHASE_SKIP_MAP[state.rigorLevel] : new Set<GxpmPhase>();
+  if (skipSet.has(rule.nextPhase)) {
+    return {
+      allowed: true,
+      code: "phase-ok",
+      reason: `phase=${state.currentPhase} outbound gate skipped under rigor=${state.rigorLevel}`,
     };
   }
 
