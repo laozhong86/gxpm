@@ -44,9 +44,21 @@ describe("published @geminix/gxpm — runtime boot without typescript", () => {
           join(installDir, "package.json"),
           JSON.stringify({ name: "gxpm-pack-smoke", private: true }),
         );
+        // --ignore-scripts: don't run lifecycle hooks (security + predictability).
+        // --prefer-offline: use cached deps when possible so this test is less
+        // flaky in restricted-network CI. Online runs fall back to registry as
+        // usual. CodeRabbit P2 on PR #55.
         const install = spawnSync(
           "npm",
-          ["install", "--no-fund", "--no-audit", "--silent", tarballPath],
+          [
+            "install",
+            "--ignore-scripts",
+            "--prefer-offline",
+            "--no-fund",
+            "--no-audit",
+            "--silent",
+            tarballPath,
+          ],
           { cwd: installDir, encoding: "utf-8", env: { ...process.env, npm_config_loglevel: "error" } },
         );
         if (install.status !== 0) {
