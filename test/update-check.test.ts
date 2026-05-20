@@ -6,12 +6,21 @@ import { join, resolve } from "node:path";
 const repoRoot = resolve(import.meta.dir, "..");
 const gxpmBin = join(repoRoot, "bin", "gxpm");
 const updateCheckBin = join(repoRoot, "bin", "gxpm-update-check");
-const localVersion = readFileSync(join(repoRoot, "VERSION"), "utf8").trim();
+// GXPM-173: package.json.version is the single source of truth; the legacy
+// repo-root VERSION file was removed in 0.2.0.
+const localVersion = (
+  JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as { version: string }
+).version;
 
 function makeRemote(version: string) {
+  // The remote URL now points at a package.json (see bin/gxpm-update-check
+  // GXPM-173 migration); emit a minimal JSON payload so the script's
+  // extract_version_from_payload picks it up. extract_version_from_payload
+  // also accepts the legacy raw-string format for back-compat with custom
+  // GXPM_REMOTE_URL overrides.
   const dir = mkdtempSync(join(tmpdir(), "gxpm-remote-version-"));
-  const path = join(dir, "VERSION");
-  writeFileSync(path, `${version}\n`);
+  const path = join(dir, "package.json");
+  writeFileSync(path, JSON.stringify({ name: "@geminix/gxpm", version }, null, 2) + "\n");
   return path;
 }
 

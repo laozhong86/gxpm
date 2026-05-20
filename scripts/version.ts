@@ -3,10 +3,12 @@ import { join, resolve } from "node:path";
 
 const DEFAULT_GXPM_ROOT = resolve(import.meta.dir, "..");
 
-// GXPM-173: 3-segment semver with optional prerelease/build metadata, matching
-// what npm publish accepts. Examples that pass: 0.2.0, 1.4.7, 0.2.0-beta.1,
-// 0.2.0+meta. Examples that fail: 0.1.0.0 (legacy 4-segment), 1.4 (too short).
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+// GXPM-173: official semver.org regex. Rejects leading zeros in numeric
+// components (e.g. 01.2.3), malformed prerelease/build groupings, and any
+// 4-segment legacy form. Examples that pass: 0.2.0, 1.4.7, 0.2.0-beta.1,
+// 0.2.0+meta. Examples that fail: 0.1.0.0, 01.2.3, 1.4.
+const SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 interface PackageJsonShape {
   version?: string;

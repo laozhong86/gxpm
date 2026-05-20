@@ -71,6 +71,31 @@ describe("scn-02: validateVersionTruth enforces semver", () => {
     rmSync(sandbox, { recursive: true, force: true });
   });
 
+  // CodeRabbit on PR #58: SEMVER_PATTERN must reject leading-zero components.
+  test("rejects leading-zero major", () => {
+    const sandbox = makeSandbox("01.2.3");
+    const errors = validateVersionTruth({ root: sandbox });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toMatch(/must be valid semver/);
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  test("rejects leading-zero minor", () => {
+    const sandbox = makeSandbox("1.02.3");
+    const errors = validateVersionTruth({ root: sandbox });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toMatch(/must be valid semver/);
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  test("rejects empty prerelease group", () => {
+    const sandbox = makeSandbox("1.2.3-");
+    const errors = validateVersionTruth({ root: sandbox });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toMatch(/must be valid semver/);
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
   test("reports missing package.json.version", () => {
     const sandbox = makeSandbox(undefined);
     const errors = validateVersionTruth({ root: sandbox });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { validateVersionTruth } from "../scripts/version";
@@ -26,10 +26,14 @@ describe("gxpm version CLI", () => {
 
   test("validateVersionTruth rejects 4-segment legacy versions", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-version-drift-"));
-    writeFileSync(join(root, "package.json"), JSON.stringify({ version: "0.1.1.0" }));
-    const errors = validateVersionTruth({ root });
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/must be valid semver/);
+    try {
+      writeFileSync(join(root, "package.json"), JSON.stringify({ version: "0.1.1.0" }));
+      const errors = validateVersionTruth({ root });
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]).toMatch(/must be valid semver/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("'gxpm --version' is an alias for 'gxpm version'", () => {
