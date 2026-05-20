@@ -59,6 +59,17 @@ export interface IssueOwnership {
   history: IssueOwnershipHistoryEntry[];
 }
 
+/**
+ * GXPM-141: tracks which session last consulted `gxpm issue next <id>` for
+ * this issue. Used by CLI-layer artifact write/edit/transition checks to
+ * refuse non-trivial writes from a new session that hasn't re-anchored
+ * via issue next after an ownership change.
+ */
+export interface IssueNextSeen {
+  sessionId: string;
+  at: string;
+}
+
 export interface IssueCreator {
   host: string;
   sessionId: string;
@@ -110,6 +121,8 @@ export interface IssueState {
   artifactRoot: string;
   creator?: IssueCreator;
   ownership?: IssueOwnership;
+  /** GXPM-141: last session that consulted `gxpm issue next` for this issue. */
+  lastIssueNextSeen?: IssueNextSeen;
   claim?: IssueClaim;
   relations?: IssueRelation[];
   archived?: boolean;
@@ -277,6 +290,57 @@ export function readIssueState(input: IssueInput): IssueState {
 
   const raw = JSON.parse(readFileSync(paths.statePath, "utf8")) as RawIssueState;
   return migrateIssueState(raw);
+}
+
+/**
+ * GXPM-141: record that the current session consulted `gxpm issue next` for
+ * this issue. Stored in state.lastIssueNextSeen so subsequent CLI writes can
+ * verify ownership re-anchoring after a session handoff.
+ */
+export function markIssueNextSeen(input: { root?: string; issueId: string }): void {
+  const root = input.root ?? process.cwd();
+  const paths = getIssuePaths(root, input.issueId);
+  if (!existsSync(paths.statePath)) return;
+  const raw = JSON.parse(readFileSync(paths.statePath, "utf8")) as Record<string, unknown>;
+  raw.lastIssueNextSeen = {
+    sessionId: resolveSessionId(),
+    at: new Date().toISOString(),
+  };
+  writeFileSync(paths.statePath, `${JSON.stringify(raw, null, 2)}\n`);
+}
+
+/**
+ * GXPM-141: verify the current session has consulted `gxpm issue next` for
+ * this issue at least once after the latest ownership change. Throws with
+ * an actionable message otherwise. Exempted callsites should not invoke this.
+ */
+export function assertIssueNextSeen(input: { root?: string; issueId: string }): void {
+  if (process.env.GXPM_BYPASS_ISSUE_NEXT_CHECK === "1") return;
+  const root = input.root ?? process.cwd();
+  const state = readIssueState({ root, issueId: input.issueId });
+  const currentSession = resolveSessionId();
+  // First check: if ownership hasn't changed (creator == current session, or
+  // ownership.currentSession == current session and no prior switches), exempt.
+  const ownership = state.ownership;
+  const creator = state.creator;
+  const ownershipChanged =
+    ownership !== undefined &&
+    ownership.history.length > 1 &&
+    ownership.currentSession === currentSession;
+  const isCreatorSession = creator?.sessionId === currentSession;
+  // If this is the creator session and there's no ownership history beyond
+  // the initial entry, no anchoring is required.
+  if (isCreatorSession && (!ownership || ownership.history.length <= 1)) return;
+  // If ownership never changed, exempt.
+  if (!ownershipChanged && ownership && ownership.history.length <= 1) return;
+  // Otherwise require a recorded issue next consult from this same session.
+  const seen = state.lastIssueNextSeen;
+  if (seen && seen.sessionId === currentSession) return;
+  throw new Error(
+    `gxpm: session has not consulted 'gxpm issue next ${input.issueId}' since taking over this issue. ` +
+      `Run 'gxpm issue context --auto' (or 'gxpm issue next ${input.issueId}') to re-anchor before writing artifacts. ` +
+      `Bypass for non-interactive flows: set GXPM_BYPASS_ISSUE_NEXT_CHECK=1.`,
+  );
 }
 
 export function transitionIssuePhase(input: TransitionInput): IssueState {
@@ -496,6 +560,7 @@ function migrateIssueState(raw: RawIssueState): IssueState {
     archivedAt:
       typeof raw.archivedAt === "string" || raw.archivedAt === null ? raw.archivedAt : undefined,
     ownership: normalizeOwnership(raw.ownership),
+    lastIssueNextSeen: normalizeIssueNextSeen((raw as Record<string, unknown>).lastIssueNextSeen),
     phaseHistory: Array.isArray(raw.phaseHistory)
       ? raw.phaseHistory.map((entry) => {
           const record = entry as Record<string, unknown>;
@@ -595,6 +660,15 @@ export function buildOwnershipChangedEvent(input: {
       changedAt: input.timestamp,
     },
   };
+}
+
+function normalizeIssueNextSeen(value: unknown): IssueNextSeen | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const sessionId = typeof record.sessionId === "string" ? record.sessionId : undefined;
+  const at = typeof record.at === "string" ? record.at : undefined;
+  if (!sessionId || !at) return undefined;
+  return { sessionId, at };
 }
 
 function normalizeOwnership(value: unknown): IssueOwnership | undefined {

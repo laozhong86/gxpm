@@ -1,13 +1,13 @@
-# ISSUE_CONTEXT — GXPM-140
+# ISSUE_CONTEXT — GXPM-141
 
 > 这是 gxpm 自动生成的上下文恢复文件。
 > 如果 AI 代理忘记了当前正在处理的 issue，请阅读此文件。
 
-- **Issue ID**: `GXPM-140`
+- **Issue ID**: `GXPM-141`
 - **当前阶段**: `dispatch`
-- **分支**: `gxpm-GXPM-140`
-- **工作目录**: `/Users/x/Desktop/Project/gxpm/.gxpm/worktrees/gxpm-GXPM-140`
-- **更新时间**: 2026-05-20T12:19:12.337Z
+- **分支**: `gxpm-GXPM-141`
+- **工作目录**: `/Users/x/Desktop/Project/gxpm/.gxpm/worktrees/gxpm-GXPM-141`
+- **更新时间**: 2026-05-20T12:24:50.686Z
 
 ## 快速恢复
 

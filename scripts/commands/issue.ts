@@ -5,6 +5,7 @@ import {
   getIssuePaths,
   isIssueType,
   ISSUE_TYPES,
+  markIssueNextSeen,
   nextVisiblePhase,
   readIssueState,
   setIssueArchived,
@@ -491,6 +492,13 @@ function runIssueOwnership(argv: string[], issueId: string) {
 
 function runIssueNext(issueId: string) {
   const state = readIssueState({ issueId });
+  // GXPM-141: record that this session has consulted issue next, so subsequent
+  // artifact writes from the same session are permitted.
+  try {
+    markIssueNextSeen({ issueId });
+  } catch {
+    // best-effort; do not block read-only next display
+  }
   console.log(`${issueId}  currentPhase: ${state.currentPhase}`);
 
   const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === state.currentPhase);

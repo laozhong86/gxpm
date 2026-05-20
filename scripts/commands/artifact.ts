@@ -5,6 +5,11 @@ import { hasArtifact, listArtifacts, readArtifact, writeArtifact } from "../../c
 import { probeArtifactPayloadCommands } from "../../core/command-probe";
 import { readJsonPayloadFromArgs } from "./helpers";
 import { validateArtifact, formatValidationResult } from "../../core/artifact-validator";
+import { assertIssueNextSeen } from "../../core/state";
+
+// GXPM-141: artifact types that don't require issue-next anchoring.
+// feedback-description is read-mostly cross-repo signal; allow without anchor.
+const ANCHOR_EXEMPT_TYPES = new Set(["feedback-description"]);
 
 export function runArtifactCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined, type: string | undefined) {
   if (subcommand === "list") {
@@ -30,12 +35,21 @@ export function runArtifactCommand(argv: string[], subcommand: string | undefine
     if (!issueId || !type) {
       throw new Error("Usage: gxpm artifact write <issue-id> <type> [--probe-cli] --json <json> | --from <file> | --stdin");
     }
+    // GXPM-141: refuse writes from sessions that haven't re-anchored via
+    // `gxpm issue next` after an ownership change. Exempts read-mostly types
+    // (e.g. feedback-description).
+    if (!ANCHOR_EXEMPT_TYPES.has(type)) {
+      assertIssueNextSeen({ issueId });
+    }
     runArtifactWrite(argv, issueId, type);
     return;
   }
 
   if (subcommand === "edit") {
     if (!issueId || !type) throw new Error("Usage: gxpm artifact edit <issue-id> <type>");
+    if (!ANCHOR_EXEMPT_TYPES.has(type)) {
+      assertIssueNextSeen({ issueId });
+    }
     runArtifactEdit(issueId, type);
     return;
   }
