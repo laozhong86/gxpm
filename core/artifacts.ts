@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   appendIssueEvent,
   buildOwnershipChangedEvent,
@@ -70,6 +70,47 @@ interface ReadArtifactInput extends ArtifactInput {
   type: ArtifactType | string;
 }
 
+function getGitDiffFiles(worktreeRoot: string): string[] {
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "diff", "--name-only", "HEAD"],
+      cwd: worktreeRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return [];
+    return result.stdout
+      .toString()
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function validateLocalVerifyPayload(
+  payload: unknown,
+  worktreeRoot: string,
+  now: string,
+): unknown {
+  if (!payload || typeof payload !== "object") return payload;
+  const p = payload as Record<string, unknown>;
+  const changedFiles = Array.isArray(p.changedFiles) ? (p.changedFiles as string[]) : [];
+  if (changedFiles.length === 0) return payload;
+
+  const gitDiffFiles = getGitDiffFiles(worktreeRoot);
+  if (gitDiffFiles.length === 0) return payload;
+
+  const gitSet = new Set(gitDiffFiles);
+  const extraneous = changedFiles.filter((f) => !gitSet.has(f));
+  if (extraneous.length === 0) return payload;
+
+  const log = Array.isArray(p.verificationLog) ? [...p.verificationLog] : [];
+  log.push(`[${now}] SCOPE_DRIFT_WARNING: changedFiles contains ${extraneous.length} file(s) not in git diff: ${extraneous.join(", ")}`);
+  return { ...p, verificationLog: log };
+}
+
 export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
   const root = input.root ?? process.cwd();
   const type = assertValidArtifactType(input.type);
@@ -79,12 +120,19 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
   const now = new Date().toISOString();
   const sessionId = resolveSessionId();
   const relativePath = `artifacts/${type}.json`;
+
+  let payload = input.payload;
+  if (type === "local-verify") {
+    const worktreeRoot = resolve(root, ".gxpm", "worktrees", `gxpm-${input.issueId}`);
+    payload = validateLocalVerifyPayload(payload, worktreeRoot, now);
+  }
+
   const artifact: StoredArtifact = {
     schemaVersion: 1,
     issueId: input.issueId,
     type,
     writtenAt: now,
-    payload: input.payload,
+    payload,
   };
   writeFileSync(join(paths.issueDir, relativePath), `${JSON.stringify(artifact, null, 2)}\n`);
 

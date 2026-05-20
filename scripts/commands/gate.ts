@@ -194,6 +194,7 @@ function runPrePushGate(issueId: string | undefined) {
     state,
     (id, t) => hasArtifact({ root: stateRoot, issueId: id, type: t }),
     process.env,
+    stateRoot,
   );
   if (!verdict.allowed) {
     console.error(`[gxpm gate pre-push] ${verdict.code}: ${verdict.reason}`);
