@@ -4,6 +4,8 @@ type: technique
 description: Local verification pipeline execution and evidence collection. Use when transitioning from implement to local-verify, or when running the full verification suite for an issue.
 ---
 
+**Announce at start:** "I am using the gxpm-verify skill to run the local verification pipeline in cost order, stop at the first failure, and record per-step evidence in the local-verify artifact before any phase advance."
+
 # gxpm-verify
 
 ## When to trigger（入口条件）

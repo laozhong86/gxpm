@@ -4,6 +4,8 @@ type: discipline
 description: Test-driven development with red-green-refactor loops via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
 ---
 
+**Announce at start:** "I am using the gxpm-tdd skill to drive every production change via a failing test first, vertical slice by vertical slice — red, green, refactor — never code-before-test."
+
 # Test-Driven Development
 
 **Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.

@@ -4,6 +4,8 @@ type: technique
 description: Break plans into independently-grabbable issues using vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, break down a feature, or turn discussion into a structured PRD.
 ---
 
+**Announce at start:** "I am using the gxpm-planning skill to decompose this plan into tracer-bullet vertical slices with explicit blocked-by edges and per-slice acceptance criteria."
+
 # Planning
 
 Break any plan into independently-grabbable issues using **tracer-bullet vertical slices**.

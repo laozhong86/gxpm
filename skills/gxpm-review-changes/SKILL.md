@@ -3,6 +3,9 @@ name: gxpm-review-changes
 type: technique
 description: Structured code review using change detection and impact analysis. Use when reviewing a pull request, assessing risk before merging, or checking for missing test coverage after changes.
 ---
+
+
+**Announce at start:** "I am using the gxpm-review-changes skill to map the diff to symbols and execution flows, surface highest-risk changes first, and produce a structured review-findings record gated on diff impact."
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
 ## gxpm-review-changes
