@@ -371,10 +371,18 @@ async function processStop(
   if (!cwd) {
     return { action: "allow", exitCode: 0 };
   }
-  const { buildAutopilotStopContinuation, listActiveAutopilotGrants } = await import("./autopilot");
-  const continuation = buildAutopilotStopContinuation(
-    listActiveAutopilotGrants({ root: cwd, limit: 3 }),
-  );
+  const {
+    buildAutopilotStopContinuation,
+    listActiveAutopilotGrants,
+    filterAutopilotGrantsForHook,
+  } = await import("./autopilot");
+  const allActive = listActiveAutopilotGrants({ root: cwd, limit: 3 });
+  const owner = readWorktreeOwner(cwd);
+  const scoped = filterAutopilotGrantsForHook(allActive, {
+    sessionId: input.session_id,
+    ownerIssueId: owner?.ownerIssueId,
+  });
+  const continuation = buildAutopilotStopContinuation(scoped);
   if (continuation) {
     return { action: "block", reason: continuation, exitCode: 2 };
   }

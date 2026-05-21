@@ -343,17 +343,26 @@ describe("processHook Stop", () => {
   test("active autopilot grant blocks stop with continuation instruction", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-autopilot-"));
     createIssueState({ root: cwd, issueId: "GXPM-1" });
-    startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
 
-    const result = await processHook("codex", "Stop", baseInput({
-      hook_event_name: "Stop",
-      cwd,
-      stop_hook_active: false,
-    }));
+    const orig = process.env.CODEX_COMPANION_SESSION_ID;
+    try {
+      process.env.CODEX_COMPANION_SESSION_ID = "owner-session";
+      startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
 
-    expect(result.action).toBe("block");
-    expect(result.reason).toContain("Continue the gxpm workflow now");
-    expect(result.exitCode).toBe(2);
+      const result = await processHook("codex", "Stop", baseInput({
+        hook_event_name: "Stop",
+        cwd,
+        session_id: "codex:owner-session",
+        stop_hook_active: false,
+      }));
+
+      expect(result.action).toBe("block");
+      expect(result.reason).toContain("Continue the gxpm workflow now");
+      expect(result.exitCode).toBe(2);
+    } finally {
+      if (orig === undefined) delete process.env.CODEX_COMPANION_SESSION_ID;
+      else process.env.CODEX_COMPANION_SESSION_ID = orig;
+    }
   });
 
   test("already active stop hook fails open", async () => {
@@ -368,6 +377,103 @@ describe("processHook Stop", () => {
     }));
 
     expect(result.action).toBe("allow");
+  });
+
+  test("unrelated session in same cwd is not hijacked by another session's grant", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-unrelated-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+
+    const orig = process.env.CODEX_COMPANION_SESSION_ID;
+    try {
+      process.env.CODEX_COMPANION_SESSION_ID = "grant-creator";
+      startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+      const result = await processHook("codex", "Stop", baseInput({
+        hook_event_name: "Stop",
+        cwd,
+        session_id: "codex:unrelated-session",
+        stop_hook_active: false,
+      }));
+
+      expect(result.action).toBe("allow");
+      expect(result.reason).toBeUndefined();
+    } finally {
+      if (orig === undefined) delete process.env.CODEX_COMPANION_SESSION_ID;
+      else process.env.CODEX_COMPANION_SESSION_ID = orig;
+    }
+  });
+
+  test("session-matched stop is blocked to continue autopilot", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-session-match-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+
+    const orig = process.env.CODEX_COMPANION_SESSION_ID;
+    try {
+      process.env.CODEX_COMPANION_SESSION_ID = "matched-session";
+      startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+      const result = await processHook("codex", "Stop", baseInput({
+        hook_event_name: "Stop",
+        cwd,
+        session_id: "codex:matched-session",
+        stop_hook_active: false,
+      }));
+
+      expect(result.action).toBe("block");
+      expect(result.reason).toContain("Continue the gxpm workflow now");
+      expect(result.exitCode).toBe(2);
+    } finally {
+      if (orig === undefined) delete process.env.CODEX_COMPANION_SESSION_ID;
+      else process.env.CODEX_COMPANION_SESSION_ID = orig;
+    }
+  });
+
+  test("worktree-owned session is blocked even when grant was opened by another session", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-worktree-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+
+    const orig = process.env.CODEX_COMPANION_SESSION_ID;
+    try {
+      process.env.CODEX_COMPANION_SESSION_ID = "previous-session";
+      startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+
+      writeFileSync(
+        join(cwd, ".gxpm-worktree-owner.json"),
+        JSON.stringify({
+          ownerIssueId: "GXPM-1",
+          linkedIssues: [],
+          createdAt: new Date().toISOString(),
+        }),
+      );
+
+      const result = await processHook("codex", "Stop", baseInput({
+        hook_event_name: "Stop",
+        cwd,
+        session_id: "codex:different-session",
+        stop_hook_active: false,
+      }));
+
+      expect(result.action).toBe("block");
+      expect(result.reason).toContain("Continue the gxpm workflow now");
+    } finally {
+      if (orig === undefined) delete process.env.CODEX_COMPANION_SESSION_ID;
+      else process.env.CODEX_COMPANION_SESSION_ID = orig;
+    }
+  });
+
+  test("no active grants leaves stop unblocked", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-hook-stop-empty-"));
+    createIssueState({ root: cwd, issueId: "GXPM-1" });
+
+    const result = await processHook("codex", "Stop", baseInput({
+      hook_event_name: "Stop",
+      cwd,
+      session_id: "codex:any-session",
+      stop_hook_active: false,
+    }));
+
+    expect(result.action).toBe("allow");
+    expect(result.reason).toBeUndefined();
   });
 });
 
