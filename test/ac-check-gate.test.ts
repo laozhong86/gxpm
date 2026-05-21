@@ -59,7 +59,7 @@ describe("ac-check gate", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(events.at(-2)).toMatchObject({
+    expect(events.findLast((e) => e.type === "gate.passed")).toMatchObject({
       type: "gate.passed",
       payload: { requiredArtifact: "acceptance-check" },
     });

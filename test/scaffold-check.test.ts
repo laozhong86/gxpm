@@ -22,8 +22,13 @@ describe("scaffold check", () => {
 
     expect(cliCheck.exitCode).toBe(0);
     expect(configCheck.exitCode).toBe(0);
-    expect(output(cliCheck)).toBe(output(configCheck));
+    // Both entrypoints must surface the shared scaffold check line. The
+    // `scripts/gxpm-check.ts` wrapper additionally runs check-cli-promises
+    // (GXPM-139), so its output is a superset of `gxpm check` rather than an
+    // exact match.
     expect(output(cliCheck)).toContain("gxpm scaffold check passed (3 hosts)");
+    expect(output(configCheck)).toContain("gxpm scaffold check passed (3 hosts)");
+    expect(output(configCheck)).toContain("check-cli-promises");
   });
 
   test("passes when CLI is invoked from outside the gxpm repo", () => {

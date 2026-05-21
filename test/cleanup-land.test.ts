@@ -82,9 +82,8 @@ describe("cleanup land command", () => {
     const result = runCli(root, ["cleanup", "land", "GXPM-717"]);
 
     expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain(
-      "cleanup requires one of dispatch-handoff.payload.worktree, dispatch-handoff.payload.workspace, or dispatch-handoff.payload.worktreePath",
-    );
+    expect(output(result)).toContain("cleanup requires worktree");
+    expect(output(result)).toContain("payload.worktree/workspace/worktreePath");
   });
 
   test("execute-path: no cleanup.executed event written when execution fails", () => {
