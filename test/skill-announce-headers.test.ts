@@ -19,7 +19,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // automatically enrolls it into the announce contract — no test edit needed.
 // GXPM-175 widened the contract from the 8 phase-aligned skills (GXPM-161)
 // to every gxpm-* member.
-const phaseAlignedSkills = readdirSync(resolve(REPO_ROOT, "skills"), {
+const allGxpmSkills = readdirSync(resolve(REPO_ROOT, "skills"), {
   withFileTypes: true,
 })
   .filter((entry) => entry.isDirectory() && entry.name.startsWith("gxpm-"))
@@ -33,10 +33,10 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
   // name verbatim) AND scn-02 (white-list derived from PHASE_GATE_RULES at
   // runtime, not hardcoded — satisfied by the comprehension at file top).
   test("scn-01+02: every phase-aligned skill SKILL.md contains Announce phrase with its own name (white-list derived from PHASE_GATE_RULES)", () => {
-    expect(phaseAlignedSkills.length).toBeGreaterThan(0);
+    expect(allGxpmSkills.length).toBeGreaterThan(0);
 
     const missing: string[] = [];
-    for (const skill of phaseAlignedSkills) {
+    for (const skill of allGxpmSkills) {
       const skillMdPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md");
       if (!existsSync(skillMdPath)) {
         missing.push(`${skill}: SKILL.md does not exist at ${skillMdPath}`);
@@ -64,7 +64,7 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
 
     if (missing.length > 0) {
       throw new Error(
-        `[${missing.length}/${phaseAlignedSkills.length}] phase-aligned skills failed Announce header check:\n` +
+        `[${missing.length}/${allGxpmSkills.length}] phase-aligned skills failed Announce header check:\n` +
           missing.map((m) => `  - ${m}`).join("\n"),
       );
     }
@@ -72,7 +72,7 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
 
   test("scn-03: Announce line in .tmpl is identical in the generated SKILL.md (no drift)", () => {
     const drift: string[] = [];
-    for (const skill of phaseAlignedSkills) {
+    for (const skill of allGxpmSkills) {
       const tmplPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md.tmpl");
       const mdPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md");
       if (!existsSync(tmplPath) || !existsSync(mdPath)) continue; // covered by scn-01
