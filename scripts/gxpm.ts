@@ -64,6 +64,7 @@ async function main(argv: string[]) {
     "--related",
     "--root",
     "--run",
+    "--set",
     "--sha",
     "--status",
     "--title",
