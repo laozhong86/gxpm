@@ -145,15 +145,71 @@ function buildArtifactProvenance(
   return provenance;
 }
 
-function getGitDiffFiles(worktreeRoot: string): string[] {
+/**
+ * GXPM-174: prefer the issue's full worktree-scope diff over the index-only
+ * diff. Three-dot 'baseRef...HEAD' covers both committed work and unstaged
+ * edits since the worktree's dispatch point. Falls back to plain 'HEAD' diff
+ * when no baseline can be resolved (preserves legacy behavior).
+ */
+function resolveWorktreeBaselineRef(worktreeRoot: string): string | null {
+  try {
+    const ownerPath = join(worktreeRoot, ".gxpm-worktree-owner.json");
+    if (existsSync(ownerPath)) {
+      const raw = JSON.parse(readFileSync(ownerPath, "utf-8")) as { baselineRef?: string };
+      if (typeof raw.baselineRef === "string" && raw.baselineRef.length > 0) {
+        return raw.baselineRef;
+      }
+    }
+  } catch {
+    // ignore — fall through
+  }
+  // Default heuristic: prefer origin/main when reachable.
   try {
     const result = Bun.spawnSync({
-      cmd: ["git", "diff", "--name-only", "HEAD"],
+      cmd: ["git", "rev-parse", "--verify", "origin/main"],
       cwd: worktreeRoot,
       stdout: "pipe",
       stderr: "pipe",
     });
-    if (result.exitCode !== 0) return [];
+    if (result.exitCode === 0 && result.stdout.toString().trim().length > 0) {
+      return "origin/main";
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function getGitDiffFiles(worktreeRoot: string): string[] {
+  const baseRef = resolveWorktreeBaselineRef(worktreeRoot);
+  const cmd = baseRef
+    ? ["git", "diff", "--name-only", `${baseRef}...HEAD`]
+    : ["git", "diff", "--name-only", "HEAD"];
+  try {
+    const result = Bun.spawnSync({
+      cmd,
+      cwd: worktreeRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      // baseRef resolution may have stale ref; fall back to plain HEAD diff
+      if (baseRef) {
+        const fallback = Bun.spawnSync({
+          cmd: ["git", "diff", "--name-only", "HEAD"],
+          cwd: worktreeRoot,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        if (fallback.exitCode !== 0) return [];
+        return fallback.stdout
+          .toString()
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+      }
+      return [];
+    }
     return result.stdout
       .toString()
       .split("\n")
