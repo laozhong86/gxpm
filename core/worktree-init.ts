@@ -141,7 +141,7 @@ export function createPipeline(input: CreatePipelineInput = {}): WorktreeInitPip
     input.steps ??
     (() => {
       const cfg = getResolvedConfigValue({ root, key: "worktree.initSteps" });
-      return Array.isArray(cfg.value) ? (cfg.value as string[]) : ["owner-marker", "issue-context"];
+      return Array.isArray(cfg.value) ? (cfg.value as string[]) : ["toolchain-env", "owner-marker", "issue-context"];
     })();
 
   const pipeline = new WorktreeInitPipeline();

@@ -152,7 +152,7 @@ const CONFIG_REGISTRY = {
     normalize: (value: unknown) => (typeof value === "string" ? value : ""),
   },
   "worktree.initSteps": {
-    defaultValue: ["owner-marker", "issue-context"] as string[],
+    defaultValue: ["toolchain-env", "owner-marker", "issue-context"] as string[],
     description: "Ordered list of worktree initialization step names run after worktree creation.",
     normalize: (value: unknown) => normalizeStringArray("worktree.initSteps", value),
   },
