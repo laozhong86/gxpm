@@ -15,7 +15,12 @@ import { regenerateSkillsLock } from "./skills-lock-check";
 
 function parseRoot(argv: string[]): string | undefined {
   const idx = argv.indexOf("--root");
-  return idx >= 0 ? argv[idx + 1] : undefined;
+  if (idx < 0) return undefined;
+  const value = argv[idx + 1];
+  if (value === undefined || value.startsWith("--")) {
+    throw new Error("--root requires a directory path (got missing value or another flag)");
+  }
+  return value;
 }
 
 if (import.meta.main) {

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface SkillsLock {
@@ -18,11 +18,19 @@ interface SkillsLockOptions {
  * regenerator. GXPM-177 — extracted to retire the ad-hoc bun -e regenerators
  * that kept drifting (REV-2 of GXPM-156).
  */
+function isRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function resolveSkillSource(skillsDir: string, skillName: string): string | null {
   const tmpl = resolve(skillsDir, skillName, "SKILL.md.tmpl");
-  if (existsSync(tmpl)) return tmpl;
+  if (isRegularFile(tmpl)) return tmpl;
   const md = resolve(skillsDir, skillName, "SKILL.md");
-  if (existsSync(md)) return md;
+  if (isRegularFile(md)) return md;
   return null;
 }
 
@@ -92,19 +100,23 @@ export function regenerateSkillsLock(
   const lockPath = resolve(root, "skills-lock.json");
   const skillsDir = resolve(root, "skills");
 
+  if (!existsSync(skillsDir)) {
+    throw new Error(
+      `skills directory not found: ${skillsDir} — refusing to write an empty lock (likely wrong --root)`,
+    );
+  }
+
+  const entries = readdirSync(skillsDir, { withFileTypes: true }) as unknown as {
+    name: string;
+    isDirectory: () => boolean;
+  }[];
+  const sorted = [...entries].sort((a, b) => a.name.localeCompare(b.name));
   const skills: Record<string, string> = {};
-  if (existsSync(skillsDir)) {
-    const entries = readdirSync(skillsDir, { withFileTypes: true }) as unknown as {
-      name: string;
-      isDirectory: () => boolean;
-    }[];
-    const sorted = [...entries].sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of sorted) {
-      if (!entry.isDirectory()) continue;
-      const srcPath = resolveSkillSource(skillsDir, entry.name);
-      if (!srcPath) continue;
-      skills[entry.name] = hashSkillSource(srcPath);
-    }
+  for (const entry of sorted) {
+    if (!entry.isDirectory()) continue;
+    const srcPath = resolveSkillSource(skillsDir, entry.name);
+    if (!srcPath) continue;
+    skills[entry.name] = hashSkillSource(srcPath);
   }
 
   const lock: SkillsLock = { version: 1, skills };

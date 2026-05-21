@@ -84,7 +84,17 @@ describe("skills-lock helper — shared regenerate + validate path", () => {
     expect(validateSkillsLock({ root })).toEqual([]);
   });
 
-  test("scn-04: adding a new skill folder auto enrolls into the lock on regenerate", () => {
+  test("scn-04-defense: regenerate throws when skills/ is missing instead of writing empty lock", () => {
+    // Wrong --root used to silently clobber the lock to {skills:{}}. CodeRabbit P-major.
+    const root = mkdtempSync(join(tmpdir(), "gxpm-lock-helper-no-skills-"));
+    cleanups.push(root);
+    // intentionally NO skills/ dir under root
+
+    expect(() => regenerateSkillsLock({ root })).toThrow(/skills directory not found/);
+    expect(existsSync(join(root, "skills-lock.json"))).toBe(false);
+  });
+
+  test("scn-05: adding a new skill folder auto enrolls into the lock on regenerate", () => {
     const { root } = setupFixture([{ name: "alpha", md: "# alpha" }]);
     cleanups.push(root);
 
