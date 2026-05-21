@@ -252,6 +252,19 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
   const sessionId = resolveSessionId();
   const relativePath = `artifacts/${type}.json`;
 
+  // GXPM-189 PR-1: telemetry-only identity-read middleware. If the current
+  // session has not yet read issue context / worktree identity for this issue,
+  // emit identity.read.missing before the write proceeds. Warn-only; never
+  // blocks. GXPM_IDENTITY_GATE=strict is reserved for PR-2.
+  emitIdentityReadMissingIfNeeded({
+    issueDir: paths.issueDir,
+    issueId: input.issueId,
+    sessionId,
+    timestamp: now,
+    phase: state.currentPhase,
+    artifactType: type,
+  });
+
   let payload = input.payload;
   if (type === "local-verify") {
     const worktreeRoot = resolve(root, ".gxpm", "worktrees", `gxpm-${input.issueId}`);
@@ -460,4 +473,59 @@ function assertValidArtifactType(value: string): ArtifactType {
     throw new Error(`Invalid artifact type: ${value}`);
   }
   return value as ArtifactType;
+}
+
+// GXPM-189 PR-1: walk events.jsonl, check current sessionId for any
+// issue.context.read / worktree.identity.read entry. If absent, append one
+// identity.read.missing event. Telemetry-only — never throws or blocks. The
+// strict-gate behavior is reserved for PR-2 via GXPM_IDENTITY_GATE=strict.
+// feedback-description writes are exempt (matches GXPM-141 anchor exemption).
+const IDENTITY_READ_TYPES = new Set(["issue.context.read", "worktree.identity.read"]);
+const IDENTITY_EXEMPT_ARTIFACTS = new Set(["feedback-description"]);
+
+function emitIdentityReadMissingIfNeeded(input: {
+  issueDir: string;
+  issueId: string;
+  sessionId: string;
+  timestamp: string;
+  phase: string;
+  artifactType: string;
+}): void {
+  if (IDENTITY_EXEMPT_ARTIFACTS.has(input.artifactType)) return;
+  const eventsPath = join(input.issueDir, "events.jsonl");
+  if (!existsSync(eventsPath)) return;
+  let hasIdentityRead = false;
+  try {
+    for (const line of readFileSync(eventsPath, "utf8").split("\n")) {
+      if (!line) continue;
+      const parsed = JSON.parse(line) as { type?: string; sessionId?: string };
+      if (parsed.sessionId !== input.sessionId) continue;
+      if (parsed.type && IDENTITY_READ_TYPES.has(parsed.type)) {
+        hasIdentityRead = true;
+        break;
+      }
+    }
+  } catch {
+    // best-effort scan; on parse error, assume missing and let event fire.
+  }
+  if (hasIdentityRead) return;
+  try {
+    appendIssueEvent({
+      issueDir: input.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "identity.read.missing",
+        issueId: input.issueId,
+        timestamp: input.timestamp,
+        sessionId: input.sessionId,
+        payload: {
+          phase: input.phase,
+          artifactType: input.artifactType,
+          cwd: process.cwd(),
+        },
+      },
+    });
+  } catch {
+    // never let telemetry break the write
+  }
 }
