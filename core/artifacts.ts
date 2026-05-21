@@ -32,6 +32,9 @@ export const ARTIFACT_TYPES = [
   "qa-findings",
   "land-findings",
   "feedback-description",
+  // GXPM-188: structured phase-handoff dump emitted by
+  // `gxpm issue handoff <id> --to-next-phase` for the next-phase agent.
+  "phase-handoff",
 ] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];

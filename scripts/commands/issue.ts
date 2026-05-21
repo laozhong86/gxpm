@@ -17,6 +17,7 @@ import { readSyncState } from "../../core/issue-sync";
 import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
+import { runIssueHandoffCommand } from "./identity";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
 import { PHASE_GATE_RULES, type PhaseGateRule } from "../../core/phase-gates";
 import {
@@ -242,6 +243,12 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     }
     if (!issueId) throw new Error("Usage: gxpm issue context <issue-id> [--json]");
     runIssueContext(issueId, asJson);
+    return;
+  }
+
+  // GXPM-188: dump a phase-handoff artifact for the next-phase agent.
+  if (subcommand === "handoff") {
+    runIssueHandoffCommand(argv, issueId);
     return;
   }
 

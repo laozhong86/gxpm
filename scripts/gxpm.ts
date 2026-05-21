@@ -1,5 +1,6 @@
 import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
+import { runDoctorIdentityCommand, runIssueHandoffCommand } from "./commands/identity";
 import { runGlobalDiscover } from "./global-discover";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
@@ -173,6 +174,13 @@ async function main(argv: string[]) {
   }
 
   if (command === "doctor") {
+    // GXPM-188: `gxpm doctor identity` subcommand prints the worktree
+    // identity card. Other doctor invocations fall through to the default
+    // health-check report.
+    if (subcommand === "identity") {
+      runDoctorIdentityCommand();
+      return;
+    }
     const json = argv.includes("--json");
     const fix = argv.includes("--fix");
     const report = runDoctor({ fix });

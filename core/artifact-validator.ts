@@ -100,6 +100,12 @@ const ARTIFACT_SCHEMAS: Record<ArtifactType, ArtifactSchema> = {
   "feedback-description": {
     requiredFields: [],
   },
+  // GXPM-188: phase-handoff dump for the next-phase agent. Required fields
+  // mirror the spec contract — completedAcceptance / nextPhaseMustRead /
+  // openBlockers are always present (possibly empty arrays).
+  "phase-handoff": {
+    requiredFields: ["completedAcceptance", "nextPhaseMustRead", "openBlockers"],
+  },
 };
 
 // GXPM-149: guard that ARTIFACT_SCHEMAS stays in sync with ARTIFACT_TYPES.
