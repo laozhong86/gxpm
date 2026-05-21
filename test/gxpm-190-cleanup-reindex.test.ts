@@ -19,7 +19,7 @@
 //   Then  events.jsonl 不出现 gitnexus.reindex.triggered 也不出现 gitnexus.reindex.failed
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
@@ -45,6 +45,19 @@ function readEvents(eventsPath: string): Array<{ type: string; payload: Record<s
     .split("\n")
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line));
+}
+
+/** Read events from the archive copy after cleanup land deleted the source dir (GXPM-192). */
+function readArchiveEvents(
+  repo: string,
+  issueId: string,
+): Array<{ type: string; payload: Record<string, unknown> }> {
+  const archiveRoot = join(repo, ".gxpm", "archive");
+  const entries = readdirSync(archiveRoot).filter((n) => n.endsWith(`-${issueId}`));
+  if (entries.length !== 1) {
+    throw new Error(`expected 1 archive entry for ${issueId}, found ${entries.length}`);
+  }
+  return readEvents(join(archiveRoot, entries[0], "events.jsonl"));
 }
 
 function setupLandedIssue(issueId: string): { repo: string; worktreePath: string; branch: string } {
@@ -76,14 +89,15 @@ function setupLandedIssue(issueId: string): { repo: string; worktreePath: string
 
 describe("GXPM-190 cleanup land triggers GitNexus reindex", () => {
   test("scn-01 cleanup land --execute emits gitnexus.reindex.triggered event", () => {
-    const { repo } = setupLandedIssue("GXPM-901");
+    const { repo } = setupLandedIssue("GXPM-190-901");
 
-    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-901", "--execute"], {
+    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-190-901", "--execute"], {
       GXPM_GITNEXUS_REINDEX_MODE: "mock",
     });
     expect(result.exitCode).toBe(0);
 
-    const events = readEvents(getIssuePaths(repo, "GXPM-901").eventsPath);
+    // GXPM-192: source dir is deleted; reindex events live in the archive copy now.
+    const events = readArchiveEvents(repo, "GXPM-190-901");
     expect(events.some((e) => e.type === "cleanup.executed")).toBe(true);
     const reindexEvents = events.filter((e) => e.type === "gitnexus.reindex.triggered");
     expect(reindexEvents.length).toBe(1);
@@ -91,14 +105,15 @@ describe("GXPM-190 cleanup land triggers GitNexus reindex", () => {
   });
 
   test("scn-02 cleanup land --execute with failing reindex still exits 0 and emits gitnexus.reindex.failed", () => {
-    const { repo } = setupLandedIssue("GXPM-902");
+    const { repo } = setupLandedIssue("GXPM-190-902");
 
-    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-902", "--execute"], {
+    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-190-902", "--execute"], {
       GXPM_GITNEXUS_REINDEX_MODE: "mock-fail",
     });
     expect(result.exitCode).toBe(0);
 
-    const events = readEvents(getIssuePaths(repo, "GXPM-902").eventsPath);
+    // GXPM-192: source dir is deleted; reindex events live in the archive copy now.
+    const events = readArchiveEvents(repo, "GXPM-190-902");
     const failed = events.filter((e) => e.type === "gitnexus.reindex.failed");
     expect(failed.length).toBe(1);
     expect((failed[0].payload as { errorMessage?: string }).errorMessage).toBeDefined();
