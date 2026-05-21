@@ -121,7 +121,16 @@ async function main(argv: string[]) {
     return;
   }
 
-  if (!command || command === "check") {
+  if (!command) {
+    // GXPM-185: bare `gxpm` invocations route to the help banner. Scaffold
+    // check is a maintainer concern (skill structure / lock hygiene) and
+    // dumping its output by default makes first-contact UX look like a wall
+    // of errors. Users who want it can still run `gxpm check` explicitly.
+    console.log(getTopLevelUsage());
+    return;
+  }
+
+  if (command === "check") {
     console.log(runScaffoldCheck());
     return;
   }
