@@ -178,7 +178,11 @@ export interface StateEvent {
     | "worktree.identity.read"
     | "issue.context.read"
     | "identity.read.missing"
-    | "phase.handoff.dumped";
+    | "phase.handoff.dumped"
+    // GXPM-190: GitNexus reindex telemetry. cleanup land fire-and-forgets a
+    // reindex; triggered is written on dispatch, failed on synchronous error.
+    | "gitnexus.reindex.triggered"
+    | "gitnexus.reindex.failed";
   issueId: string;
   timestamp: string;
   sessionId?: string;
