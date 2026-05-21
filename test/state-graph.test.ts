@@ -79,9 +79,13 @@ describe("gxpm state graph", () => {
     // GXPM-170: issue creation emits skill.load.required (triage skill), and
     // phase transitions emit skill.load.required again when the destination
     // phase has a requiredSkill (plan -> gxpm-planning).
+    // GXPM-189 PR-1: writeArtifact emits identity.read.missing before the
+    // artifact.written event when the session has not yet recorded an
+    // issue.context.read / worktree.identity.read.
     expect(events.map((event) => event.type)).toEqual([
       "issue.created",
       "skill.load.required",
+      "identity.read.missing",
       "artifact.written",
       "gate.passed",
       "phase.transitioned",

@@ -46,6 +46,7 @@ async function main(argv: string[]) {
   // land in `issueId`) or `gxpm issue claim --next --actor worker-cli`.
   const VALUE_FLAGS = new Set([
     "--actor",
+    "--age-days",
     "--branch",
     "--canonical-main",
     "--description",
