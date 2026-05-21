@@ -1,30 +1,30 @@
-// Feature: Phase-aligned gxpm-* skills announce themselves at start
+// Feature: Announce at start ritual covers every gxpm-* skill (no blind spots)
 //
-// As an agent invoking a phase-aligned gxpm-* skill
-// I want each such skill's SKILL.md to require a public "Announce at start"
-//   commitment naming the skill and its phase-level purpose
-// So that I cannot silently skip the skill — the ritual forces me to declare
-//   my intent before any code or artifact write, complementing the CLI-level
-//   requiredSkill contract from GXPM-156
+// As an agent invoking any gxpm-* skill
+// I want every skill in the gxpm-* family (phase-aligned and non-aligned) to
+//   require a public "Announce at start" commitment naming itself and its purpose
+// So that the announce ritual covers the entire family and no skill silently
+//   slips through. GXPM-161 covered the 8 phase-aligned skills; GXPM-175
+//   extended coverage to the remaining 19 non-phase-aligned skills.
 
 import { describe, test, expect } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PHASE_GATE_RULES } from "../core/phase-gates";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-// White-list is DERIVED from PHASE_GATE_RULES at runtime, never hardcoded.
-// Adding a new phase-aligned skill in core/phase-gates.ts automatically
-// extends the contract enforced by this test (scn-02).
-const phaseAlignedSkills = Array.from(
-  new Set(
-    PHASE_GATE_RULES.map((rule) => rule.requiredSkill).filter(
-      (s): s is string => s !== null,
-    ),
-  ),
-);
+// White-list is DERIVED from the filesystem: every skills/gxpm-* folder
+// except the meta `gxpm` entry itself. Adding a new gxpm-X skill folder
+// automatically enrolls it into the announce contract — no test edit needed.
+// GXPM-175 widened the contract from the 8 phase-aligned skills (GXPM-161)
+// to every gxpm-* member.
+const allGxpmSkills = readdirSync(resolve(REPO_ROOT, "skills"), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory() && entry.name.startsWith("gxpm-"))
+  .map((entry) => entry.name)
+  .sort();
 
 const ANNOUNCE_PHRASE = "Announce at start";
 
@@ -33,10 +33,10 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
   // name verbatim) AND scn-02 (white-list derived from PHASE_GATE_RULES at
   // runtime, not hardcoded — satisfied by the comprehension at file top).
   test("scn-01+02: every phase-aligned skill SKILL.md contains Announce phrase with its own name (white-list derived from PHASE_GATE_RULES)", () => {
-    expect(phaseAlignedSkills.length).toBeGreaterThan(0);
+    expect(allGxpmSkills.length).toBeGreaterThan(0);
 
     const missing: string[] = [];
-    for (const skill of phaseAlignedSkills) {
+    for (const skill of allGxpmSkills) {
       const skillMdPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md");
       if (!existsSync(skillMdPath)) {
         missing.push(`${skill}: SKILL.md does not exist at ${skillMdPath}`);
@@ -64,7 +64,7 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
 
     if (missing.length > 0) {
       throw new Error(
-        `[${missing.length}/${phaseAlignedSkills.length}] phase-aligned skills failed Announce header check:\n` +
+        `[${missing.length}/${allGxpmSkills.length}] phase-aligned skills failed Announce header check:\n` +
           missing.map((m) => `  - ${m}`).join("\n"),
       );
     }
@@ -72,7 +72,7 @@ describe("phase-aligned gxpm-* skills — Announce at start", () => {
 
   test("scn-03: Announce line in .tmpl is identical in the generated SKILL.md (no drift)", () => {
     const drift: string[] = [];
-    for (const skill of phaseAlignedSkills) {
+    for (const skill of allGxpmSkills) {
       const tmplPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md.tmpl");
       const mdPath = resolve(REPO_ROOT, "skills", skill, "SKILL.md");
       if (!existsSync(tmplPath) || !existsSync(mdPath)) continue; // covered by scn-01

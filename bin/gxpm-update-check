@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gxpm-update-check — periodic remote VERSION check.
+# gxpm-update-check — periodic remote version check.
 #
 # Output (one line, or nothing):
 #   JUST_UPGRADED <old> <new>
@@ -8,8 +8,13 @@
 #
 # Env overrides:
 #   GXPM_DIR         — override gxpm install root
-#   GXPM_REMOTE_URL  — override remote VERSION URL
+#   GXPM_REMOTE_URL  — override remote package.json URL
 #   GXPM_STATE_DIR   — override ~/.gxpm state directory
+#
+# GXPM-173: both local and remote versions are read from package.json
+# (single source of truth). The legacy $GXPM_DIR/VERSION file was removed
+# in 0.2.0; we still fall back to it for the duration of one release cycle
+# so older installs keep getting update notifications.
 set -euo pipefail
 
 if [ -z "${GXPM_DIR:-}" ]; then
@@ -28,8 +33,35 @@ STATE_DIR="${GXPM_STATE_DIR:-$HOME/.gxpm}"
 CACHE_FILE="$STATE_DIR/last-update-check"
 MARKER_FILE="$STATE_DIR/just-upgraded-from"
 SNOOZE_FILE="$STATE_DIR/update-snoozed"
-VERSION_FILE="$GXPM_DIR/VERSION"
-REMOTE_URL="${GXPM_REMOTE_URL:-https://raw.githubusercontent.com/laozhong86/gxpm/main/VERSION}"
+PACKAGE_JSON="$GXPM_DIR/package.json"
+LEGACY_VERSION_FILE="$GXPM_DIR/VERSION"
+REMOTE_URL="${GXPM_REMOTE_URL:-https://raw.githubusercontent.com/laozhong86/gxpm/main/package.json}"
+
+read_local_version() {
+  if [ -f "$PACKAGE_JSON" ]; then
+    sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p' "$PACKAGE_JSON" \
+      | head -n 1 \
+      | tr -d '[:space:]'
+    return
+  fi
+  if [ -f "$LEGACY_VERSION_FILE" ]; then
+    cat "$LEGACY_VERSION_FILE" 2>/dev/null | tr -d '[:space:]'
+  fi
+}
+
+extract_version_from_payload() {
+  # Accepts either a raw version string (legacy VERSION file content) or a
+  # JSON blob (package.json) and emits the version. Tolerates both for
+  # backward compatibility with custom GXPM_REMOTE_URL overrides.
+  local payload="$1"
+  local from_json
+  from_json="$(printf '%s' "$payload" | sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p' | head -n 1 | tr -d '[:space:]')"
+  if [ -n "$from_json" ]; then
+    printf '%s' "$from_json"
+    return
+  fi
+  printf '%s' "$payload" | tr -d '[:space:]'
+}
 
 FORCE=0
 if [ "${1:-}" = "--force" ]; then
@@ -95,10 +127,7 @@ fetch_remote_version() {
   esac
 }
 
-LOCAL=""
-if [ -f "$VERSION_FILE" ]; then
-  LOCAL="$(cat "$VERSION_FILE" 2>/dev/null | tr -d '[:space:]')"
-fi
+LOCAL="$(read_local_version)"
 if [ -z "$LOCAL" ]; then
   exit 0
 fi
@@ -145,9 +174,13 @@ if [ "$FORCE" -eq 0 ] && [ -f "$CACHE_FILE" ]; then
 fi
 
 mkdir -p "$STATE_DIR"
-REMOTE="$(fetch_remote_version | tr -d '[:space:]')"
+REMOTE_RAW="$(fetch_remote_version)"
+REMOTE="$(extract_version_from_payload "$REMOTE_RAW")"
 
-if ! echo "$REMOTE" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
+# GXPM-173: semver-shape gate. Mirrors the strict pattern in scripts/version.ts
+# so a malformed remote payload (e.g. `1.4`, `01.2.3`) can't emit a bogus
+# UPGRADE_AVAILABLE notification.
+if ! echo "$REMOTE" | grep -qE '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
   echo "UP_TO_DATE $LOCAL" > "$CACHE_FILE"
   exit 0
 fi

@@ -447,6 +447,20 @@ function readSchemaVersion(cwd: string): number {
 }
 
 function readVersion(cwd: string): string {
+  // GXPM-173: package.json is the single source of truth for version.
+  // The legacy VERSION file is preserved as a fallback for one release cycle
+  // so older checkouts don't lose telemetry; remove this branch in 0.3.0.
+  const pkg = join(cwd, "package.json");
+  if (existsSync(pkg)) {
+    try {
+      const { version } = JSON.parse(readFileSync(pkg, "utf8")) as { version?: string };
+      if (typeof version === "string" && version.length > 0) {
+        return version.slice(0, 40);
+      }
+    } catch {
+      // fall through to legacy
+    }
+  }
   const vf = join(cwd, "VERSION");
   if (!existsSync(vf)) return "dev";
   try {

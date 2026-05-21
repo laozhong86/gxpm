@@ -4,6 +4,8 @@ type: reference
 description: Compact the current session into a handoff document so another agent can continue the work. Use when switching agents, ending a session, or passing work between implementer subagents.
 ---
 
+**Announce at start:** "I am using the gxpm-handoff skill to compact this session into a handoff document so another agent can continue the work without context loss."
+
 # Handoff
 
 Write a handoff document summarising the current session so a fresh agent can continue the work without losing context.

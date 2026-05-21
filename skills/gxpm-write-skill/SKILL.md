@@ -4,6 +4,8 @@ type: reference
 description: Create new gxpm skills with proper structure, progressive disclosure, and bundled resources. Use when user wants to create, write, or build a new skill.
 ---
 
+**Announce at start:** "I am using the gxpm-write-skill skill to create a new gxpm skill with proper structure, progressive disclosure, and bundled resources."
+
 # Write a Skill
 
 Create new agent skills that follow gxpm conventions.

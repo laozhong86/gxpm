@@ -5,6 +5,8 @@ description: 开启 gxpm 自动驾驶模式。使用 Autopilot Grant 持久化�
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-autopilot skill to persist a user-issued autopilot grant for an issue so the agent can self-drive through allowed actions until a hard stop."
+
 ## Host Preamble
 
 Target host: OpenAI Codex CLI.
