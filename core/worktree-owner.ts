@@ -6,7 +6,7 @@
  * from the filesystem without needing to remember the issue id.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface WorktreeOwner {
@@ -80,6 +80,10 @@ export interface IssueContextMdData {
   workspacePath: string;
   updatedAt: string;
   resumeHint?: string;
+  /** GXPM-187: skill the agent must invoke before doing phase work */
+  requiredSkill?: string;
+  /** GXPM-187: most recent commits on the worktree branch, newest first */
+  recentCommits?: Array<{ sha: string; subject: string }>;
 }
 
 export function writeIssueContextMd(workspacePath: string, data: IssueContextMdData): void {
@@ -121,6 +125,20 @@ export function writeIssueContextMd(workspacePath: string, data: IssueContextMdD
     lines.push(`\`\`\``);
     lines.push(``);
   }
+  if (data.requiredSkill) {
+    lines.push(`## 必须先加载的 skill`);
+    lines.push(``);
+    lines.push(`当前阶段进入前 agent 必须加载：\`${data.requiredSkill}\`，再做任何代码或 artifact 写入。`);
+    lines.push(``);
+  }
+  if (data.recentCommits && data.recentCommits.length > 0) {
+    lines.push(`## 最近 commit`);
+    lines.push(``);
+    for (const c of data.recentCommits) {
+      lines.push(`- \`${c.sha.slice(0, 7)}\` ${c.subject}`);
+    }
+    lines.push(``);
+  }
   if (data.nextPhase) {
     lines.push(`## 下一步`);
     lines.push(``);
@@ -137,6 +155,97 @@ export function writeIssueContextMd(workspacePath: string, data: IssueContextMdD
   lines.push(`*此文件由 gxpm 自动生成，请勿手动编辑。*`);
 
   writeFileSync(join(workspacePath, "ISSUE_CONTEXT.md"), lines.join("\n") + "\n");
+}
+
+/**
+ * GXPM-187: single entry point for writing worktree identity files.
+ *
+ * Replaces ad-hoc call pairs of writeWorktreeOwnerMarker + writeIssueContextMd
+ * scattered across worktree-init-steps and scripts/commands/issue. Adds:
+ *
+ *   1. ownerIssueId conflict guard — refuses to overwrite a marker that
+ *      already belongs to a different issue.
+ *   2. createdAt preservation across re-runs (only updatedAt is refreshed).
+ *   3. worktree.identity.written event appended to
+ *      `<repoRoot>/.gxpm/issues/<issueId>/events.jsonl` so the bootstrap
+ *      audit script (slice 1) can prove the file was actually written.
+ */
+export interface EnsureWorktreeIdentityInput {
+  repoRoot: string;
+  workspacePath: string;
+  issueId: string;
+  currentPhase: string;
+  branchName?: string;
+  title?: string;
+  nextPhase?: string;
+  requiredSkill?: string | null;
+  recentCommits?: Array<{ sha: string; subject: string }>;
+  resumeHint?: string;
+}
+
+export interface EnsureWorktreeIdentityResult {
+  created: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function ensureWorktreeIdentity(
+  input: EnsureWorktreeIdentityInput,
+): EnsureWorktreeIdentityResult {
+  const existing = readWorktreeOwner(input.workspacePath);
+  if (existing && existing.ownerIssueId && existing.ownerIssueId !== input.issueId) {
+    throw new Error(
+      `owner issue id mismatch at ${input.workspacePath}: existing=${existing.ownerIssueId} requested=${input.issueId}`,
+    );
+  }
+
+  const now = new Date().toISOString();
+  const createdAt = existing?.createdAt ?? now;
+  const created = existing === null;
+
+  writeWorktreeOwnerMarker(input.workspacePath, {
+    ownerIssueId: input.issueId,
+    linkedIssues: existing?.linkedIssues ?? [],
+    createdAt,
+    updatedAt: now,
+    currentPhase: input.currentPhase,
+    title: input.title ?? existing?.title,
+    branchName: input.branchName ?? existing?.branchName,
+    workspacePath: input.workspacePath,
+  });
+
+  writeIssueContextMd(input.workspacePath, {
+    issueId: input.issueId,
+    title: input.title,
+    currentPhase: input.currentPhase,
+    nextPhase: input.nextPhase,
+    branchName: input.branchName,
+    workspacePath: input.workspacePath,
+    updatedAt: now,
+    resumeHint: input.resumeHint,
+    requiredSkill: input.requiredSkill ?? undefined,
+    recentCommits: input.recentCommits,
+  });
+
+  const issueDir = join(input.repoRoot, ".gxpm", "issues", input.issueId);
+  if (!existsSync(issueDir)) mkdirSync(issueDir, { recursive: true });
+  const event = {
+    schemaVersion: 1,
+    type: "worktree.identity.written",
+    issueId: input.issueId,
+    timestamp: now,
+    payload: {
+      worktreePath: input.workspacePath,
+      branchName: input.branchName,
+      currentPhase: input.currentPhase,
+      created,
+      requiredSkill: input.requiredSkill ?? null,
+      recentCommitCount: input.recentCommits?.length ?? 0,
+    },
+  };
+  appendFileSync(join(issueDir, "events.jsonl"), `${JSON.stringify(event)}\n`);
+
+  return { created, createdAt, updatedAt: now };
 }
 
 export function removeIssueContextMd(workspacePath: string): void {
