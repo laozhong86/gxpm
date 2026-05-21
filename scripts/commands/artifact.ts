@@ -46,9 +46,19 @@ export function runArtifactCommand(argv: string[], subcommand: string | undefine
   }
 
   if (subcommand === "edit") {
-    if (!issueId || !type) throw new Error("Usage: gxpm artifact edit <issue-id> <type>");
+    if (!issueId || !type) {
+      throw new Error("Usage: gxpm artifact edit <issue-id> <type> [--set key=value]...");
+    }
     if (!ANCHOR_EXEMPT_TYPES.has(type)) {
       assertIssueNextSeen({ issueId });
+    }
+    // GXPM-180: --set key=value (repeatable) applies non-interactive mutations
+    // and skips the editor entirely. Values are parsed as JSON when possible
+    // (so --set count=5 stores number 5, --set name=hello stores "hello").
+    const setArgs = collectSetArgs(argv);
+    if (setArgs.length > 0) {
+      runArtifactEditSet(issueId, type, setArgs);
+      return;
     }
     runArtifactEdit(issueId, type);
     return;
@@ -102,6 +112,76 @@ function runArtifactEdit(issueId: string, type: string) {
     unlinkSync(tmpFile);
   } catch {}
   console.log(`updated ${type} for ${issueId}`);
+}
+
+/**
+ * GXPM-180: collect every `--set key=value` argument from argv. Each occurrence
+ * may carry the value in the same token (`--set k=v`) or in the next token
+ * (`--set k=v` is required; we do NOT split on a separate space). Returns
+ * parsed [key, rawValue] tuples preserving argv order.
+ */
+function collectSetArgs(argv: string[]): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--set") {
+      const next = argv[i + 1];
+      if (!next || !next.includes("=")) {
+        throw new Error("gxpm artifact edit --set: expected key=value");
+      }
+      const eqIdx = next.indexOf("=");
+      out.push([next.slice(0, eqIdx), next.slice(eqIdx + 1)]);
+      i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * GXPM-180: non-interactive edit path. Reads current payload (or starts empty),
+ * applies all --set key=value mutations, writes back. Values are JSON-parsed
+ * when possible so numbers/booleans/null are stored with proper types; falls
+ * back to string. Keys support dot-paths (`a.b.c=v`) for nested objects.
+ */
+function runArtifactEditSet(
+  issueId: string,
+  type: string,
+  setArgs: Array<[string, string]>,
+): void {
+  let payload: Record<string, unknown> = {};
+  if (hasArtifact({ issueId, type })) {
+    const stored = readArtifact({ issueId, type });
+    if (stored.payload && typeof stored.payload === "object" && !Array.isArray(stored.payload)) {
+      payload = { ...(stored.payload as Record<string, unknown>) };
+    }
+  }
+  for (const [key, rawValue] of setArgs) {
+    let value: unknown;
+    try {
+      value = JSON.parse(rawValue);
+    } catch {
+      value = rawValue;
+    }
+    setDeepPath(payload, key.split("."), value);
+  }
+  writeArtifact({ issueId, type, payload });
+  console.log(`updated ${type} for ${issueId} (${setArgs.length} field${setArgs.length === 1 ? "" : "s"})`);
+}
+
+function setDeepPath(target: Record<string, unknown>, path: string[], value: unknown): void {
+  const last = path[path.length - 1];
+  let cursor: Record<string, unknown> = target;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segment = path[i];
+    const existing = cursor[segment];
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      cursor = existing as Record<string, unknown>;
+    } else {
+      const next: Record<string, unknown> = {};
+      cursor[segment] = next;
+      cursor = next;
+    }
+  }
+  cursor[last] = value;
 }
 
 function runArtifactWrite(argv: string[], issueId: string, type: string) {
