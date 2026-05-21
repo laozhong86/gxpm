@@ -1133,16 +1133,40 @@ function assertContaminationGate(input: {
   const artifactDir = join(input.issueDir, "artifacts");
   if (!existsSync(artifactDir)) return;
   const contaminated: string[] = [];
-  // dirent traversal: any file whose name contains ".contaminated" is treated
-  // as a contamination archive marker. This covers historical patterns like
-  // `local-verify.contaminated-2026-05-19T14-00.json` and explicit `.contaminated-*`.
+  const supersededArchives = new Set<string>();
+
   for (const entry of readdirSync(artifactDir)) {
-    if (entry.includes(".contaminated")) contaminated.push(entry);
+    if (entry.includes(".contaminated")) {
+      contaminated.push(entry);
+      continue;
+    }
+    // GXPM-176: scan current (non-contaminated) artifacts for supersedes
+    // declarations. Each declaration covers one contaminated archive by name.
+    if (entry.endsWith(".json") && entry !== "index.json") {
+      try {
+        const raw = JSON.parse(readFileSync(join(artifactDir, entry), "utf-8")) as {
+          supersedes?: Array<{ contaminatedArchive?: string; reason?: string }>;
+        };
+        if (Array.isArray(raw.supersedes)) {
+          for (const rec of raw.supersedes) {
+            if (rec && typeof rec.contaminatedArchive === "string" && typeof rec.reason === "string" && rec.reason.length > 0) {
+              supersededArchives.add(rec.contaminatedArchive);
+            }
+          }
+        }
+      } catch {
+        // ignore malformed artifact — fail-closed: it cannot cover anything
+      }
+    }
   }
+
   if (contaminated.length === 0) return;
+  const uncovered = contaminated.filter((c) => !supersededArchives.has(c));
+  if (uncovered.length === 0) return;
   throw new Error(
-    `Phase transition blocked: contamination archive(s) present in artifacts/ — ${contaminated.join(", ")}. ` +
-      `Run 'gxpm phase rewind ${input.issueId} --to <safe-phase> --reason "contamination"' and re-verify before continuing.`,
+    `Phase transition blocked: contamination archive(s) present in artifacts/ — ${uncovered.join(", ")}. ` +
+      `Run 'gxpm phase rewind ${input.issueId} --to <safe-phase> --reason "contamination"' and re-verify before continuing, ` +
+      `or attach a supersedes[] record to a new artifact declaring each archive's replacement reason.`,
   );
 }
 

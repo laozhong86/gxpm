@@ -55,6 +55,18 @@ export interface ArtifactProvenance {
   baselineSha?: string;
 }
 
+/**
+ * GXPM-176: a new artifact can declare which contaminated archive(s) it
+ * supersedes. The contamination gate (in core/state.ts) reads the union of
+ * these records across artifacts/ and releases when every contaminated
+ * archive is covered. Reason is required to prevent silent bypass.
+ */
+export interface SupersedeRecord {
+  contaminatedArchive: string;
+  reason: string;
+  supersededAt: string;
+}
+
 export interface StoredArtifact {
   schemaVersion: 1;
   issueId: string;
@@ -63,6 +75,8 @@ export interface StoredArtifact {
   payload: unknown;
   /** GXPM-172: optional; older artifacts may lack this field. */
   provenance?: ArtifactProvenance;
+  /** GXPM-176: optional; older artifacts lack this field and never cover anything. */
+  supersedes?: SupersedeRecord[];
 }
 
 interface ArtifactInput {
@@ -73,6 +87,8 @@ interface ArtifactInput {
 interface WriteArtifactInput extends ArtifactInput {
   type: ArtifactType | string;
   payload: unknown;
+  /** GXPM-176: optional supersedes declarations attached to this artifact. */
+  supersedes?: SupersedeRecord[];
 }
 
 interface RewriteArtifactInput extends WriteArtifactInput {
@@ -249,6 +265,7 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
     writtenAt: now,
     payload,
     provenance: buildArtifactProvenance(root, input.issueId, sessionId),
+    ...(input.supersedes && input.supersedes.length > 0 ? { supersedes: input.supersedes } : {}),
   };
   writeFileSync(join(paths.issueDir, relativePath), `${JSON.stringify(artifact, null, 2)}\n`);
 
