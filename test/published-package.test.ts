@@ -117,4 +117,32 @@ describe("published @geminix/gxpm — runtime boot without typescript", () => {
       `wiki-native.ts still has a top-level "import ... from \"typescript\"" — global installs without typescript will crash on module load.`,
     ).toBeNull();
   });
+
+  // Scenario (scn-03): the tarball ships skills-lock.json at root so the
+  // CLI's skills-lock-check never warns end users about a missing lock
+  // file. See GXPM-184.
+  test("scn-03: packed tarball includes skills-lock.json at root", () => {
+    const pack = spawnSync("npm", ["pack", "--silent", "--pack-destination", REPO_ROOT], {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+      env: { ...process.env, npm_config_loglevel: "error" },
+    });
+    if (pack.status !== 0) {
+      throw new Error(
+        `npm pack failed (${pack.status}):\nSTDOUT:\n${pack.stdout}\nSTDERR:\n${pack.stderr}`,
+      );
+    }
+    const tarballName = (pack.stdout || "").trim().split("\n").pop()!;
+    const tarballPath = join(REPO_ROOT, tarballName);
+    try {
+      const listing = spawnSync("tar", ["-tzf", tarballPath], { encoding: "utf-8" });
+      expect(listing.status).toBe(0);
+      expect(
+        listing.stdout,
+        "skills-lock.json must be whitelisted in package.json files[] so consumers don't see the missing-lock warning on first CLI invocation.",
+      ).toContain("package/skills-lock.json");
+    } finally {
+      rmSync(tarballPath, { force: true });
+    }
+  });
 });

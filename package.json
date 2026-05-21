@@ -26,7 +26,8 @@
     "CONTEXT.md",
     "CLAUDE.md",
     "DEBUG.md",
-    "README.md"
+    "README.md",
+    "skills-lock.json"
   ],
   "scripts": {
     "check": "bun run scripts/gxpm-check.ts",
