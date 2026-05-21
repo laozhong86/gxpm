@@ -4,6 +4,8 @@ type: reference
 description: Scaffold per-repo configuration for gxpm skills. Use when first using gxpm in a repo, or when issue tracker, triage labels, or domain doc layout is unclear.
 ---
 
+**Announce at start:** "I am using the gxpm-setup skill to scaffold per-repo gxpm configuration when this is the first time the runtime is being used in a repo."
+
 # Setup
 
 Scaffold the per-repo configuration that gxpm skills consume:

@@ -4,6 +4,8 @@ type: reference
 description: Compile and type-check verification. Use after implementing code changes, before committing, or when the build fails and root cause is unclear.
 ---
 
+**Announce at start:** "I am using the gxpm-build skill to run the compile and type-check verification pipeline and surface the first failing root cause cleanly."
+
 # gxpm-build
 
 ## When to trigger（入口条件）

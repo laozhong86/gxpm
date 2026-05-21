@@ -4,6 +4,8 @@ type: technique
 description: Tell the agent to zoom out and give broader context or a higher-level perspective. Use when you're unfamiliar with a section of code, stuck in implementation details, or need to understand how code fits into the bigger picture.
 ---
 
+**Announce at start:** "I am using the gxpm-zoom-out skill to zoom out from local implementation details and give a higher-level perspective on how the current code fits in the bigger picture."
+
 # Zoom Out
 
 Go up a layer of abstraction. Stop drowning in details and see the map.

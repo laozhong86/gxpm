@@ -5,6 +5,8 @@ description: Disciplined diagnosis loop for hard bugs and performance regression
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-diagnose skill to follow the observe-hypothesize-experiment loop for hard bugs and performance regressions, refusing to ship a fix without a confirmed root cause."
+
 # Diagnose
 
 A discipline for hard bugs where the root cause is **not yet known**.

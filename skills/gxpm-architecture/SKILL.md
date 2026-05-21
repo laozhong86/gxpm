@@ -4,6 +4,8 @@ type: technique
 description: Find deepening opportunities in a codebase using domain language and ADRs. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
+**Announce at start:** "I am using the gxpm-architecture skill to find deepening opportunities in this codebase using CONTEXT.md and ADRs, then suggest refactorings that consolidate coupling and improve AI-navigability."
+
 # Improve Codebase Architecture
 
 Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
