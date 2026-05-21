@@ -5,6 +5,8 @@ description: Subagent implementer behavior template enforcing four-dimension sel
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-implementer skill to act as a dispatched implementer subagent with four-dimension self-review and a structured progress report contract."
+
 # Implementer Subagent Prompt Template
 
 Use this template when dispatching an implementer subagent through gxpm's dispatch phase.

@@ -4,6 +4,8 @@ type: technique
 description: Navigate and understand codebase structure using the knowledge graph. Use when user asks how code works, wants to understand architecture, trace execution flows, or explore unfamiliar parts of the codebase.
 ---
 
+**Announce at start:** "I am using the gxpm-explore-codebase skill to navigate this codebase via the knowledge graph to answer architectural questions before any edit."
+
 ## gxpm-explore-codebase
 
 ## When to trigger（入口条件）

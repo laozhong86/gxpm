@@ -4,6 +4,8 @@ type: discipline
 description: Skill quality evaluation harness for static analysis. Use when adding a new skill, modifying skill structure, auditing skill quality, or checking for governance compliance.
 ---
 
+**Announce at start:** "I am using the gxpm-eval skill to audit a skill for governance compliance and structural quality using the static analysis harness."
+
 # gxpm-eval
 
 Lightweight static analysis for gxpm skills. Checks frontmatter completeness,

@@ -4,6 +4,8 @@ type: technique
 description: Plan and execute safe refactoring using dependency analysis. Use when user asks to rename, extract, split, move, or simplify code, or when a code review suggests refactoring.
 ---
 
+**Announce at start:** "I am using the gxpm-refactor-safely skill to plan a rename, extract, split, or move using the dependency graph so the refactor preserves call-site semantics."
+
 ## gxpm-refactor-safely
 
 ## When to trigger（入口条件）

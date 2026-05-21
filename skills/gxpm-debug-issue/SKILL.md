@@ -3,6 +3,9 @@ name: gxpm-debug-issue
 type: technique
 description: Systematic issue debugging using graph-powered code navigation. Use when user asks to trace a bug, investigate a specific error, or find the root cause of a failing test or exception.
 ---
+
+
+**Announce at start:** "I am using the gxpm-debug-issue skill to trace a failing test or exception to its origin through the knowledge graph, never guessing past the first hypothesis."
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
 ## gxpm-debug-issue

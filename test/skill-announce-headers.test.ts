@@ -1,30 +1,30 @@
-// Feature: Phase-aligned gxpm-* skills announce themselves at start
+// Feature: Announce at start ritual covers every gxpm-* skill (no blind spots)
 //
-// As an agent invoking a phase-aligned gxpm-* skill
-// I want each such skill's SKILL.md to require a public "Announce at start"
-//   commitment naming the skill and its phase-level purpose
-// So that I cannot silently skip the skill — the ritual forces me to declare
-//   my intent before any code or artifact write, complementing the CLI-level
-//   requiredSkill contract from GXPM-156
+// As an agent invoking any gxpm-* skill
+// I want every skill in the gxpm-* family (phase-aligned and non-aligned) to
+//   require a public "Announce at start" commitment naming itself and its purpose
+// So that the announce ritual covers the entire family and no skill silently
+//   slips through. GXPM-161 covered the 8 phase-aligned skills; GXPM-175
+//   extended coverage to the remaining 19 non-phase-aligned skills.
 
 import { describe, test, expect } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PHASE_GATE_RULES } from "../core/phase-gates";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-// White-list is DERIVED from PHASE_GATE_RULES at runtime, never hardcoded.
-// Adding a new phase-aligned skill in core/phase-gates.ts automatically
-// extends the contract enforced by this test (scn-02).
-const phaseAlignedSkills = Array.from(
-  new Set(
-    PHASE_GATE_RULES.map((rule) => rule.requiredSkill).filter(
-      (s): s is string => s !== null,
-    ),
-  ),
-);
+// White-list is DERIVED from the filesystem: every skills/gxpm-* folder
+// except the meta `gxpm` entry itself. Adding a new gxpm-X skill folder
+// automatically enrolls it into the announce contract — no test edit needed.
+// GXPM-175 widened the contract from the 8 phase-aligned skills (GXPM-161)
+// to every gxpm-* member.
+const phaseAlignedSkills = readdirSync(resolve(REPO_ROOT, "skills"), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory() && entry.name.startsWith("gxpm-"))
+  .map((entry) => entry.name)
+  .sort();
 
 const ANNOUNCE_PHRASE = "Announce at start";
 
