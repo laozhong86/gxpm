@@ -40,4 +40,24 @@ describe("scaffold check", () => {
     expect(result.exitCode).toBe(0);
     expect(output(result)).toContain("gxpm scaffold check passed (3 hosts)");
   });
+
+  // GXPM-185: bare `gxpm` invocation must route to help, not scaffold-check.
+  // Background: 0.2.0 / 0.2.1 dumped scaffold-check output (and worse, skill
+  // structure warnings for external consumers) whenever a user typed `gxpm`
+  // alone. First-contact UX disaster — looks like errors when none exist.
+  test("bare gxpm invocation prints help banner, not scaffold-check output", () => {
+    const externalCwd = mkdtempSync(join(tmpdir(), "gxpm-bare-extern-"));
+    const result = runScript([cliPath], externalCwd);
+    expect(result.exitCode).toBe(0);
+    const combined = output(result);
+    // Must show the discovery banner — Commands: / Usage: are stable headings
+    // in getTopLevelUsage().
+    expect(combined).toContain("Usage:");
+    expect(combined).toContain("Commands:");
+    // Must NOT route through runScaffoldCheck() — its signature line and the
+    // skill-structure warnings it can emit are both forbidden here.
+    expect(combined).not.toContain("gxpm scaffold check passed");
+    expect(combined).not.toContain("[skill-naming]");
+    expect(combined).not.toContain("SKILL.md structure warnings:");
+  });
 });
