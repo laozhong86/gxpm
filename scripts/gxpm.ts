@@ -39,7 +39,71 @@ async function main(argv: string[]) {
   // don't get treated as commands. Subcommand routers receive the full argv so
   // they can still detect query flags if needed.
   const wantsHelp = isHelpRequest(argv);
-  const positional = argv.filter((arg) => !arg.startsWith("--"));
+
+  // Value-bearing flags consume the next argv token. Without this, the value
+  // spills into positional slots (issueId, value) and breaks commands like
+  // `gxpm autopilot start --auto-id --profile unsafe` (where `unsafe` would
+  // land in `issueId`) or `gxpm issue claim --next --actor worker-cli`.
+  const VALUE_FLAGS = new Set([
+    "--actor",
+    "--branch",
+    "--canonical-main",
+    "--description",
+    "--field",
+    "--history-contains",
+    "--issue-id",
+    "--issue-type",
+    "--label",
+    "--message",
+    "--parent",
+    "--phase",
+    "--profile",
+    "--prompt",
+    "--proof",
+    "--reason",
+    "--related",
+    "--root",
+    "--run",
+    "--sha",
+    "--status",
+    "--title",
+    "--ttl-minutes",
+    "--type",
+    "--workspace",
+    "--worktree-root",
+  ]);
+
+  // Single argv walk that produces both the version short-circuit signal and
+  // the positional slots, while respecting value-flag consumption. Done in one
+  // pass so `--message --version` is correctly read as a `--message` value
+  // (not a version request), and `-h` / other single-dash flags don't land in
+  // positional slots and become bogus commands.
+  let wantsVersion = false;
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith("--")) {
+      if (arg === "--version") {
+        wantsVersion = true;
+      }
+      if (VALUE_FLAGS.has(arg)) i++; // consume the flag value
+      continue;
+    }
+    if (arg.startsWith("-") && arg.length > 1) {
+      // Single-dash flag (`-v`, `-h`, etc.). `-v` is a version alias; others
+      // are query signals already handled by their subcommands. Either way,
+      // they must not land in positional and shadow real commands.
+      if (arg === "-v") wantsVersion = true;
+      continue;
+    }
+    positional.push(arg);
+  }
+
+  if (wantsVersion) {
+    console.log(readGxpmVersion());
+    return;
+  }
+
   const [command, subcommand, issueId, value] = positional;
 
   if (wantsHelp && (!command || command === "help")) {
