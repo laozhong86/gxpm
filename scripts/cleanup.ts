@@ -148,8 +148,85 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     console.warn(`archive failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // 11. GXPM-190: fire-and-forget GitNexus reindex so the next issue's
+  // implement / self-review phase doesn't run impact analysis against a
+  // stale graph. Events are written to the archived issueDir copy as well,
+  // but the source-of-truth path is what cleanup.executed already used.
+  triggerGitNexusReindex({ root, issueDir: paths.issueDir, issueId });
+
   console.log(`removed worktree: ${worktree}`);
   console.log(`deleted branch: ${branch}`);
+}
+
+/**
+ * GXPM-190: fire-and-forget GitNexus reindex after cleanup land completes.
+ *
+ * - `GXPM_GITNEXUS_REINDEX_MODE=mock`      → emit triggered event, skip spawn
+ *                                           (used in tests to avoid spawning real CLI)
+ * - `GXPM_GITNEXUS_REINDEX_MODE=mock-fail` → emit failed event, skip spawn
+ * - unset / "auto"                         → detached `npx gitnexus analyze`,
+ *                                           emit triggered event regardless of
+ *                                           child outcome (it runs after parent exit)
+ *
+ * Errors are caught + logged; this function never throws, so `gxpm cleanup land`
+ * always exits with the cleanup result, not the reindex outcome.
+ */
+function triggerGitNexusReindex(input: { root: string; issueDir: string; issueId: string }): void {
+  const mode = process.env.GXPM_GITNEXUS_REINDEX_MODE ?? "auto";
+  const now = new Date().toISOString();
+  try {
+    if (mode === "mock-fail") {
+      appendIssueEvent({
+        issueDir: input.issueDir,
+        event: {
+          schemaVersion: 1,
+          type: "gitnexus.reindex.failed",
+          issueId: input.issueId,
+          timestamp: now,
+          payload: { mode, errorMessage: "mock-fail: simulated reindex failure" },
+        },
+      });
+      return;
+    }
+    if (mode !== "mock") {
+      // Real reindex: detached so parent exits immediately. Output goes to /dev/null
+      // because cleanup land has already printed its own summary.
+      Bun.spawn({
+        cmd: ["npx", "gitnexus", "analyze"],
+        cwd: input.root,
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
+      }).unref();
+    }
+    appendIssueEvent({
+      issueDir: input.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "gitnexus.reindex.triggered",
+        issueId: input.issueId,
+        timestamp: now,
+        payload: { mode, command: "npx gitnexus analyze" },
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      appendIssueEvent({
+        issueDir: input.issueDir,
+        event: {
+          schemaVersion: 1,
+          type: "gitnexus.reindex.failed",
+          issueId: input.issueId,
+          timestamp: now,
+          payload: { mode, errorMessage: message },
+        },
+      });
+    } catch {
+      // best-effort
+    }
+    console.warn(`gitnexus reindex dispatch failed (non-blocking): ${message}`);
+  }
 }
 
 function copyDirRecursive(src: string, dest: string): void {
