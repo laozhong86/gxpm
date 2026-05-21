@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createIssueState } from "../core/state";
+import { writeArtifact } from "../core/artifacts";
 import { dryRunOrchestratorTick } from "../core/orchestrator";
 import { claimIssue } from "../core/issue-readiness";
 import { appendRunEvent, startRun } from "../core/runs";
@@ -27,7 +29,7 @@ describe("orchestrator dry-run tick", () => {
   test("reports earlier phases as blocked and hides landed issues by default", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-orch-blocked-"));
     createIssueState({ root, issueId: "GXPM-2" });
-    enterPhase(root, "GXPM-3", "land");
+    enterCompletedLand(root, "GXPM-3");
 
     const report = dryRunOrchestratorTick({ root });
 
@@ -112,3 +114,41 @@ describe("orchestrator dry-run tick", () => {
     expect(readFileSync(join(root, ".gxpm", "issues", "GXPM-5", "state.json"), "utf8")).toBe(before);
   });
 });
+
+function enterCompletedLand(root: string, issueId: string) {
+  const sha = initGitCommit(root);
+  enterPhase(root, issueId, "land");
+  writeArtifact({
+    root,
+    issueId,
+    type: "pr-check",
+    payload: {
+      status: "approved",
+      pullRequest: { url: `https://github.com/example/repo/pull/${issueId}` },
+      reviewFindings: [],
+    },
+  });
+  writeArtifact({
+    root,
+    issueId,
+    type: "land-findings",
+    payload: {
+      landReady: true,
+      mergePlan: "merged",
+      status: "landed",
+      mergedAt: new Date().toISOString(),
+      mergedSha: sha,
+    },
+  });
+}
+
+function initGitCommit(root: string) {
+  execSync("git init -q", { cwd: root });
+  writeFileSync(join(root, "tracked.txt"), "initial\n");
+  execSync("git add tracked.txt", { cwd: root });
+  execSync(
+    "git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial",
+    { cwd: root },
+  );
+  return execSync("git rev-parse HEAD", { cwd: root }).toString().trim();
+}

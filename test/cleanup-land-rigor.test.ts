@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,6 +12,7 @@ function freshRoot() {
 }
 
 function setupIssueAtLand(root: string, opts: { rigor: "lite" | "standard" | "full" }) {
+  const sha = initGitCommit(root);
   const issueId = "GXPM-TEST-1";
   const issueType = opts.rigor === "lite" ? "meta" : "feature";
   createIssueState({ root, issueId, issueType });
@@ -19,7 +21,40 @@ function setupIssueAtLand(root: string, opts: { rigor: "lite" | "standard" | "fu
   state.currentPhase = "land";
   state.rigorLevel = opts.rigor;
   writeFileSync(statePath, JSON.stringify(state, null, 2));
+  writeArtifact({
+    root,
+    issueId,
+    type: "pr-check",
+    payload: {
+      status: "approved",
+      pullRequest: { url: "https://github.com/example/repo/pull/1" },
+      reviewFindings: [],
+    },
+  });
+  writeArtifact({
+    root,
+    issueId,
+    type: "land-findings",
+    payload: {
+      landReady: true,
+      mergePlan: "merged",
+      status: "landed",
+      mergedAt: new Date().toISOString(),
+      mergedSha: sha,
+    },
+  });
   return issueId;
+}
+
+function initGitCommit(root: string) {
+  execSync("git init -q", { cwd: root });
+  writeFileSync(join(root, "tracked.txt"), "initial\n");
+  execSync("git add tracked.txt", { cwd: root });
+  execSync(
+    "git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial",
+    { cwd: root },
+  );
+  return execSync("git rev-parse HEAD", { cwd: root }).toString().trim();
 }
 
 function captureStdout<T>(fn: () => T): { result: T; output: string } {

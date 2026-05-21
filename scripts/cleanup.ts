@@ -1,6 +1,7 @@
 import { mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { readArtifact } from "../core/artifacts";
+import { assertLandCompletion } from "../core/land-completion";
 import { appendIssueEvent, getIssuePaths, readIssueState } from "../core/state";
 
 export function runCleanupLandCommand(argv: string[], issueId: string): void {
@@ -13,6 +14,7 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
   if (state.currentPhase !== "land") {
     throw new Error("cleanup only applies to landed issues");
   }
+  assertLandCompletion({ root, issueId, action: "cleanup" });
 
   // 2. Resolve cleanup target. Standard/full rigor issues carry this in the
   // dispatch-handoff artifact; lite-rigor issues skip dispatch entirely

@@ -4,12 +4,24 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
+import { writeArtifact } from "../core/artifacts";
 import { enterPhaseCli, output, runCli, runCliWithInput } from "./helpers/workflow";
 
 const cliPath = resolve(import.meta.dir, "..", "scripts", "gxpm.ts");
 
 function initGitRepo(root: string) {
   execSync("git init", { cwd: root, stdio: "ignore" });
+}
+
+function initGitCommitWithTrackedFile(root: string) {
+  execSync("git init -q", { cwd: root });
+  writeFileSync(join(root, "tracked.txt"), "initial\n");
+  execSync("git add tracked.txt", { cwd: root });
+  execSync(
+    "git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial",
+    { cwd: root },
+  );
+  return execSync("git rev-parse HEAD", { cwd: root }).toString().trim();
 }
 
 describe("gxpm CLI", () => {
@@ -242,7 +254,7 @@ describe("gxpm issue next CLI", () => {
     expect(out).toContain("gxpm issue transition GXPM-31 plan");
   });
 
-  test("indicates terminal state when at land", () => {
+  test("indicates incomplete terminal state when land evidence is missing", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-next-land-"));
     // Use the workflow helper to walk all the way to land. The helper handles
     // the specify-phase fill+confirm step internally and uses in-process phase
@@ -250,7 +262,42 @@ describe("gxpm issue next CLI", () => {
     enterPhaseCli(root, "GXPM-32", "land");
     const r = runCli(root, ["issue", "next", "GXPM-32"]);
     expect(r.exitCode).toBe(0);
-    expect(output(r)).toMatch(/land|terminal|complete/i);
+    expect(output(r)).toContain("is in land phase but is not complete");
+    expect(output(r)).toContain("pull request evidence");
+    expect(output(r)).not.toContain("Mark as Done");
+  }, 30000);
+
+  test("indicates completed terminal state when PR, merge, and mainline evidence exist", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-next-land-complete-"));
+    const sha = initGitCommitWithTrackedFile(root);
+    enterPhaseCli(root, "GXPM-320", "land");
+    writeArtifact({
+      root,
+      issueId: "GXPM-320",
+      type: "pr-check",
+      payload: {
+        status: "approved",
+        pullRequest: { url: "https://github.com/example/repo/pull/320" },
+        reviewFindings: [],
+      },
+    });
+    writeArtifact({
+      root,
+      issueId: "GXPM-320",
+      type: "land-findings",
+      payload: {
+        landReady: true,
+        mergePlan: "merged",
+        status: "landed",
+        mergedAt: new Date().toISOString(),
+        mergedSha: sha,
+      },
+    });
+
+    const r = runCli(root, ["issue", "next", "GXPM-320"]);
+    expect(r.exitCode).toBe(0);
+    expect(output(r)).toContain("PR, merge, and mainline evidence");
+    expect(output(r)).toContain("Mark as Done");
   }, 30000);
 
   test("returns non-zero for missing issue", () => {
