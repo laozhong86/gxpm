@@ -340,16 +340,28 @@ export function rewriteArtifact(input: RewriteArtifactInput): ArtifactRecord {
   if (!existsSync(artifactPath)) {
     throw new Error(`Artifact not found: ${type}`);
   }
+  const previous = JSON.parse(readFileSync(artifactPath, "utf8")) as StoredArtifact;
 
   const now = input.timestamp ?? new Date().toISOString();
   const relativePath = `artifacts/${type}.json`;
+
+  let payload = input.payload;
+  if (type === "local-verify") {
+    const worktreeRoot = resolve(root, ".gxpm", "worktrees", `gxpm-${input.issueId}`);
+    payload = validateLocalVerifyPayload(payload, worktreeRoot, now);
+  }
+
+  const supersedes =
+    input.supersedes && input.supersedes.length > 0 ? input.supersedes : previous.supersedes;
+
   const artifact: StoredArtifact = {
     schemaVersion: 1,
     issueId: input.issueId,
     type,
     writtenAt: now,
-    payload: input.payload,
+    payload,
     provenance: buildArtifactProvenance(root, input.issueId, sessionId),
+    ...(supersedes && supersedes.length > 0 ? { supersedes } : {}),
   };
   writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
 
