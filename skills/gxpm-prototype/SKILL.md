@@ -4,6 +4,8 @@ type: technique
 description: Build a throwaway prototype to validate a design before committing to it. Use when you need to sanity-check a data model, state machine, or UI design before writing behavior-spec.
 ---
 
+**Announce at start:** "I am using the gxpm-prototype skill to build a throwaway prototype to sanity-check a data model, state machine, or UI design before committing to a behavior-spec."
+
 # Prototype
 
 A prototype is **throwaway code that answers a question**. The question decides the shape.

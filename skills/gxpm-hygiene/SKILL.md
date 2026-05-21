@@ -4,6 +4,8 @@ type: discipline
 description: Pre-commit hygiene and atomic commit discipline. Use before every commit, or when preparing changes for self-review or ship.
 ---
 
+**Announce at start:** "I am using the gxpm-hygiene skill to run pre-commit hygiene checks and enforce atomic commit discipline before any self-review or ship."
+
 # gxpm-hygiene
 
 ## When to trigger（入口条件）

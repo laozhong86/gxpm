@@ -44,6 +44,18 @@ export interface ArtifactRecord {
 }
 
 /**
+ * GXPM-172: provenance metadata auto-stamped on every artifact write.
+ * Reviewers and the contamination gate use this to trace which session/
+ * host/worktree produced a given artifact.
+ */
+export interface ArtifactProvenance {
+  sessionId: string;
+  host: string;
+  worktreePath?: string;
+  baselineSha?: string;
+}
+
+/**
  * GXPM-176: a new artifact can declare which contaminated archive(s) it
  * supersedes. The contamination gate (in core/state.ts) reads the union of
  * these records across artifacts/ and releases when every contaminated
@@ -61,6 +73,8 @@ export interface StoredArtifact {
   type: ArtifactType;
   writtenAt: string;
   payload: unknown;
+  /** GXPM-172: optional; older artifacts may lack this field. */
+  provenance?: ArtifactProvenance;
   /** GXPM-176: optional; older artifacts lack this field and never cover anything. */
   supersedes?: SupersedeRecord[];
 }
@@ -84,6 +98,51 @@ interface RewriteArtifactInput extends WriteArtifactInput {
 
 interface ReadArtifactInput extends ArtifactInput {
   type: ArtifactType | string;
+}
+
+/**
+ * GXPM-172: build provenance metadata for an artifact write. Sources that fail
+ * to resolve degrade silently — provenance is observational, never gating.
+ */
+function buildArtifactProvenance(
+  root: string,
+  issueId: string,
+  sessionId: string,
+): ArtifactProvenance {
+  const host = sessionId.split(":")[0] ?? "unknown";
+  const provenance: ArtifactProvenance = { sessionId, host };
+
+  try {
+    const ownerPath = join(root, ".gxpm-worktree-owner.json");
+    if (existsSync(ownerPath)) {
+      const raw = JSON.parse(readFileSync(ownerPath, "utf-8")) as {
+        workspacePath?: string;
+        ownerIssueId?: string;
+      };
+      if (raw.workspacePath && (!raw.ownerIssueId || raw.ownerIssueId === issueId)) {
+        provenance.worktreePath = raw.workspacePath;
+      }
+    }
+  } catch {
+    // ignore — observational
+  }
+
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "rev-parse", "HEAD"],
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode === 0) {
+      const sha = result.stdout.toString().trim();
+      if (sha) provenance.baselineSha = sha;
+    }
+  } catch {
+    // ignore — non-git root
+  }
+
+  return provenance;
 }
 
 function getGitDiffFiles(worktreeRoot: string): string[] {
@@ -149,6 +208,7 @@ export function writeArtifact(input: WriteArtifactInput): ArtifactRecord {
     type,
     writtenAt: now,
     payload,
+    provenance: buildArtifactProvenance(root, input.issueId, sessionId),
     ...(input.supersedes && input.supersedes.length > 0 ? { supersedes: input.supersedes } : {}),
   };
   writeFileSync(join(paths.issueDir, relativePath), `${JSON.stringify(artifact, null, 2)}\n`);

@@ -5,6 +5,8 @@ description: Agent Army 并行审查模式的使用指南。在 self-review 和 
 status: stable
 ---
 
+**Announce at start:** "I am using the gxpm-review-army skill to fan out parallel agent reviewers in self-review and ship to raise review coverage beyond what one pass can catch."
+
 # gxpm-review-army
 
 在 gxpm 的 `self-review` 和 `ship` 阶段使用 Agent Army 并行审查模式，替代单一 reviewer 视角，显著提升审查覆盖面和问题发现率。

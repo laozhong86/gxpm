@@ -5,6 +5,8 @@ description: Grilling session that challenges plans against the domain model and
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-grill skill to stress-test a plan against the existing domain model, sharpen terminology, and update CONTEXT.md or ADRs inline as decisions crystallise."
+
 # Grill
 
 Interview the user relentlessly about every aspect of a plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.

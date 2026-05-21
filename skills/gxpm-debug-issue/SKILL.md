@@ -5,6 +5,8 @@ description: Systematic issue debugging using graph-powered code navigation. Use
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-debug-issue skill to trace a failing test or exception to its origin through the knowledge graph, never guessing past the first hypothesis."
+
 ## gxpm-debug-issue
 
 ## When to trigger（入口条件）

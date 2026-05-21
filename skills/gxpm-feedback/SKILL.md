@@ -4,6 +4,8 @@ type: reference
 description: Create feedback issues in the gxpm source repository when the agent discovers problems or improvement opportunities during gxpm workflow execution. Use when the agent notices a gxpm bug, process flaw, skill deficiency, or has a suggestion for the gxpm tool itself.
 ---
 
+**Announce at start:** "I am using the gxpm-feedback skill to file a feedback issue back to the gxpm source repository when I find a bug or improvement in the gxpm tool itself."
+
 # gxpm Feedback
 
 Create structured feedback issues in the gxpm source repository so that problems and improvements are tracked, triaged, and eventually resolved.

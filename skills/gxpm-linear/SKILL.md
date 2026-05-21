@@ -6,6 +6,8 @@ status: stable
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
+**Announce at start:** "I am using the gxpm-linear skill to drive Linear issue lifecycle from the gxpm CLI — create, transition, sync — without leaving the local state machine."
+
 # gxpm-linear
 
 Linear 协作前门，通过 CLI 与 issue tracker 交互。**不使用 MCP** — 所有操作走 `linear` 命令。
