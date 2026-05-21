@@ -8,6 +8,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveSessionId } from "./session";
 
 export interface WorktreeOwner {
   ownerIssueId: string;
@@ -234,6 +235,7 @@ export function ensureWorktreeIdentity(
     type: "worktree.identity.written",
     issueId: input.issueId,
     timestamp: now,
+    sessionId: resolveSessionId(),
     payload: {
       worktreePath: input.workspacePath,
       branchName: input.branchName,

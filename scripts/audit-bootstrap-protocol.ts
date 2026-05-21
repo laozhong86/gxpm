@@ -28,11 +28,29 @@ function parseArgs(argv: string[]): { root: string; sample: number; out: string 
   let root = process.cwd();
   let sample = 10;
   let out = join("docs", "audits", "GXPM-187-bootstrap-baseline.md");
+  const requireValue = (flag: string, i: number): string => {
+    if (i + 1 >= argv.length) {
+      throw new Error(`flag ${flag} requires a value`);
+    }
+    return argv[i + 1];
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--root") root = argv[++i];
-    else if (a === "--sample") sample = Number(argv[++i]);
-    else if (a === "--out") out = argv[++i];
+    if (a === "--root") {
+      root = requireValue("--root", i);
+      i++;
+    } else if (a === "--sample") {
+      const raw = requireValue("--sample", i);
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new Error(`--sample must be a positive number, got ${JSON.stringify(raw)}`);
+      }
+      sample = n;
+      i++;
+    } else if (a === "--out") {
+      out = requireValue("--out", i);
+      i++;
+    }
   }
   return { root, sample, out };
 }
