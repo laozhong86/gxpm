@@ -37,8 +37,16 @@ describe("gxpm state graph", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(events).toHaveLength(1);
+    // GXPM-170: issue creation also emits a skill.load.required event for the
+    // initial triage phase (gxpm-triage), so creation produces two events total.
+    expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ schemaVersion: 1, type: "issue.created", issueId: "GXPM-1" });
+    expect(events[1]).toMatchObject({
+      schemaVersion: 1,
+      type: "skill.load.required",
+      issueId: "GXPM-1",
+      payload: { phase: "triage", skill: "gxpm-triage" },
+    });
   });
 
   test("creates explicit issue types without changing the phase graph", () => {
@@ -68,13 +76,18 @@ describe("gxpm state graph", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
+    // GXPM-170: issue creation emits skill.load.required (triage skill), and
+    // phase transitions emit skill.load.required again when the destination
+    // phase has a requiredSkill (plan -> gxpm-planning).
     expect(events.map((event) => event.type)).toEqual([
       "issue.created",
+      "skill.load.required",
       "artifact.written",
       "gate.passed",
       "phase.transitioned",
+      "skill.load.required",
     ]);
-    expect(events.at(-1)).toMatchObject({
+    expect(events.findLast((e) => e.type === "phase.transitioned")).toMatchObject({
       type: "phase.transitioned",
       payload: { fromPhase: "triage", toPhase: "plan" },
     });
@@ -140,7 +153,7 @@ describe("gxpm state graph", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(events.at(-1)).toMatchObject({
+    expect(events.findLast((e) => e.type === "phase.transitioned")).toMatchObject({
       type: "phase.transitioned",
       sessionId: "codex:transition-session",
     });

@@ -331,20 +331,37 @@ export function rewriteArtifact(input: RewriteArtifactInput): ArtifactRecord {
   const type = assertValidArtifactType(input.type);
   const paths = getIssuePaths(root, input.issueId);
   readIssueState({ root, issueId: input.issueId });
+  // GXPM-172: every artifact write — including rewrites — must carry
+  // provenance so the contamination gate and audit trail keep their
+  // session/host/worktree/baselineSha record after reconcile/edit flows.
+  const sessionId = resolveSessionId();
 
   const artifactPath = join(paths.issueDir, "artifacts", `${type}.json`);
   if (!existsSync(artifactPath)) {
     throw new Error(`Artifact not found: ${type}`);
   }
+  const previous = JSON.parse(readFileSync(artifactPath, "utf8")) as StoredArtifact;
 
   const now = input.timestamp ?? new Date().toISOString();
   const relativePath = `artifacts/${type}.json`;
+
+  let payload = input.payload;
+  if (type === "local-verify") {
+    const worktreeRoot = resolve(root, ".gxpm", "worktrees", `gxpm-${input.issueId}`);
+    payload = validateLocalVerifyPayload(payload, worktreeRoot, now);
+  }
+
+  const supersedes =
+    input.supersedes && input.supersedes.length > 0 ? input.supersedes : previous.supersedes;
+
   const artifact: StoredArtifact = {
     schemaVersion: 1,
     issueId: input.issueId,
     type,
     writtenAt: now,
-    payload: input.payload,
+    payload,
+    provenance: buildArtifactProvenance(root, input.issueId, sessionId),
+    ...(supersedes && supersedes.length > 0 ? { supersedes } : {}),
   };
   writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
 

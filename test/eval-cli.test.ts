@@ -31,7 +31,9 @@ describe("gxpm-eval CLI", () => {
     expect(gxpm.score).toBeGreaterThanOrEqual(0);
     expect(gxpm.maxScore).toBe(60);
     expect(gxpm.checks.length).toBe(6);
-    expect(gxpm.type).toBe("unknown");
+    // gxpm is now classified as a "reference" skill (main entrypoint) rather
+    // than "unknown" — the eval harness recognises the bootstrap skill type.
+    expect(gxpm.type).toBe("reference");
 
     const tdd = out.results.find((r: { skill: string }) => r.skill === "gxpm-tdd");
     if (tdd) {

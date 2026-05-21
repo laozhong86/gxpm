@@ -60,7 +60,10 @@ describe("land gate", () => {
     });
   });
 
-  test("CLI supports land findings init and artifact-backed land transition", () => {
+  // Heavy test: spawns multiple CLI subprocesses and walks the full
+  // triage→qa flow via enterPhaseCli. The default 5s timeout is too tight
+  // under full-suite parallel load; raise to 30s.
+  test("CLI supports land findings init and artifact-backed land transition", { timeout: 30000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-land-cli-"));
     enterPhaseCli(root, "GXPM-133", "qa");
 
@@ -87,7 +90,9 @@ describe("land gate", () => {
     expect(output(transition)).toContain("transitioned GXPM-133: qa -> land");
   });
 
-  test("CLI land transition runs post-land skill sync with install-skill all", () => {
+  // Heavy test: walks the full triage→qa flow then spawns the land
+  // transition CLI; default 5s timeout is too tight under full-suite load.
+  test("CLI land transition runs post-land skill sync with install-skill all", { timeout: 30000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-land-sync-"));
     const calls = join(root, "install-calls.txt");
     const fakeInit = join(root, "gxpm-init");
@@ -130,7 +135,9 @@ describe("land gate", () => {
     expect(existsSync(calls)).toBe(false);
   });
 
-  test("post-land skill sync failure logs but does not block transition", () => {
+  // Heavy test: walks the full triage→qa flow then spawns the land
+  // transition CLI; default 5s timeout is too tight under full-suite load.
+  test("post-land skill sync failure logs but does not block transition", { timeout: 30000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-land-sync-fail-"));
     const fakeInit = join(root, "gxpm-init");
     writeFileSync(fakeInit, "#!/bin/bash\necho install failed >&2\nexit 42\n");

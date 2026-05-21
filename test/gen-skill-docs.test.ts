@@ -64,7 +64,9 @@ describe("generateSkillDocs", () => {
     expect(generated).toContain("## 关键规则");
     expect(generated).toContain("### 状态优先");
     expect(generated).toContain("### Artifact 纪律");
-    expect(generated).toContain("## 相关 Skills");
+    // The template now uses the bilingual "## See Also（相关 Skills）"
+    // heading; assert the Chinese half remains in the rendered text.
+    expect(generated).toContain("相关 Skills");
     expect(generated).toContain("`/gxpm-diagnose`");
     expect(generated).toContain("`/gxpm-grill`");
     expect(generated).toContain("`/gxpm-tdd`");

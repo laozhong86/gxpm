@@ -94,11 +94,14 @@ describe("scaffold-check (Army Agents)", () => {
     it("gxpm-review-army skill has complete structure", () => {
       const content = readFileSync("skills/gxpm-review-army/SKILL.md", "utf8");
       expect(content).toMatch(/^---\s*$/m);
-      expect(content).toMatch(/##\s*入口条件/);
-      expect(content).toMatch(/##\s*可操作流程/);
-      expect(content).toMatch(/##\s*红旗清单/);
-      expect(content).toMatch(/##\s*验证清单/);
-      expect(content).toMatch(/##\s*常见说辞表/);
+      // The skill now uses bilingual headings such as
+      // "## When to trigger（入口条件）" — assert the Chinese half still
+      // appears inside an H2 line.
+      expect(content).toMatch(/^##\s*.*入口条件/m);
+      expect(content).toMatch(/^##\s*.*可操作流程/m);
+      expect(content).toMatch(/^##\s*.*红旗清单/m);
+      expect(content).toMatch(/^##\s*.*验证清单/m);
+      expect(content).toMatch(/^##\s*.*常见说辞表/m);
     });
   });
 });
