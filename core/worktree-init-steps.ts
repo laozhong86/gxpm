@@ -9,7 +9,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import { dirname, join, relative, resolve, basename } from "node:path";
 import { createHash } from "node:crypto";
 import { getResolvedConfigValue } from "./config";
-import { writeWorktreeOwnerMarker, writeIssueContextMd } from "./worktree-owner";
+import { writeWorktreeOwnerMarker, writeIssueContextMd, ensureWorktreeIdentity } from "./worktree-owner";
 import {
   type WorktreeInitStep,
   type WorktreeInitContext,
@@ -739,11 +739,16 @@ registerBuiltinStep("owner-marker", {
   name: "owner-marker",
   run(ctx): WorktreeInitStepResult {
     try {
-      writeWorktreeOwnerMarker(ctx.worktreePath, {
-        ownerIssueId: ctx.issueId,
-        linkedIssues: [],
-        branchName: ctx.branchName,
+      // GXPM-187: writes BOTH .gxpm-worktree-owner.json and ISSUE_CONTEXT.md,
+      // preserves createdAt across re-runs, guards against ownerIssueId
+      // conflicts, and emits a worktree.identity.written audit event so
+      // bootstrap-protocol audits can prove identity was actually persisted.
+      ensureWorktreeIdentity({
+        repoRoot: ctx.canonicalRepoPath,
         workspacePath: ctx.worktreePath,
+        issueId: ctx.issueId,
+        currentPhase: "dispatch",
+        branchName: ctx.branchName,
       });
       return { ok: true };
     } catch (err) {
@@ -754,25 +759,16 @@ registerBuiltinStep("owner-marker", {
 });
 
 // ---------------------------------------------------------------------------
-// Step: issue-context
+// Step: issue-context (no-op; owner-marker now writes ISSUE_CONTEXT.md too)
 // ---------------------------------------------------------------------------
 
 registerBuiltinStep("issue-context", {
   name: "issue-context",
-  run(ctx): WorktreeInitStepResult {
-    try {
-      writeIssueContextMd(ctx.worktreePath, {
-        issueId: ctx.issueId,
-        currentPhase: "dispatch",
-        branchName: ctx.branchName,
-        workspacePath: ctx.worktreePath,
-        updatedAt: new Date().toISOString(),
-      });
-      return { ok: true };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, error: message };
-    }
+  run(_ctx): WorktreeInitStepResult {
+    // GXPM-187: ISSUE_CONTEXT.md is now written by ensureWorktreeIdentity
+    // inside the owner-marker step. This step is kept as a no-op for pipeline
+    // configs that still list it by name.
+    return { ok: true };
   },
 });
 

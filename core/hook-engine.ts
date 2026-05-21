@@ -16,6 +16,7 @@ import {
 import { readWorktreeOwner } from "./worktree-owner";
 import { queryToolPermission } from "./role-capability-gate";
 import { readIssueState } from "./state";
+import { PHASE_GATE_RULES } from "./phase-gates";
 
 export type HookHostName = "claude" | "codex" | "cursor" | "kimi";
 
@@ -206,6 +207,12 @@ async function processSessionStart(
   const worktreeCtx = getWorktreeContext(cwd);
   if (worktreeCtx) parts.push(worktreeCtx);
 
+  // GXPM-187: when cwd is inside a gxpm worktree, prepend an identity
+  // block (issue / phase / requiredSkill / recent commits) so the agent
+  // can re-anchor after context compaction without manual recall.
+  const identitySummary = buildSessionStartIdentitySummary(cwd);
+  if (identitySummary) parts.push(identitySummary);
+
   const schema = readSchemaVersion(cwd);
   const version = readVersion(cwd);
   parts.push(
@@ -384,6 +391,95 @@ async function processPostToolUse(
 // =======================================================================
 // Helpers
 // =======================================================================
+
+function buildSessionStartIdentitySummary(cwd: string): string | null {
+  const owner = readWorktreeOwner(cwd);
+  if (!owner) return null;
+  let requiredSkill: string | null = null;
+  try {
+    const state = readIssueState({ root: process.cwd(), issueId: owner.ownerIssueId });
+    const rule = PHASE_GATE_RULES.find((r) => r.phase === state.currentPhase);
+    requiredSkill = rule?.requiredSkill ?? null;
+  } catch {
+    // owner present but state lookup failed (e.g. cwd != main repo). Best-effort.
+  }
+  let recentCommits: Array<{ sha: string; subject: string }> = [];
+  try {
+    const raw = execSync('git log -3 --pretty=format:"%h\t%s"', {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    recentCommits = raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, ...rest] = line.split("\t");
+        return { sha: sha.replace(/^"|"$/g, ""), subject: rest.join("\t").replace(/^"|"$/g, "") };
+      });
+  } catch {
+    // git not available or worktree not a git repo
+  }
+  return formatWorktreeIdentitySummary({
+    cwd,
+    requiredSkill,
+    recentCommits,
+  });
+}
+
+/**
+ * GXPM-187: format a worktree identity summary for SessionStart hook injection.
+ *
+ * When the agent's cwd is inside a gxpm worktree (i.e. `.gxpm-worktree-owner.json`
+ * exists), emit a compact block containing issue id, phase, branch, the skill
+ * the agent must invoke for the current phase, and the most recent commits.
+ *
+ * The combined output is hard-capped at `maxBytes` (default 2048) — when the
+ * raw body exceeds the budget, commit lines are dropped from the tail and a
+ * `… (truncated)` sentinel is appended. ownerIssueId / phase / requiredSkill
+ * are always preserved.
+ */
+export function formatWorktreeIdentitySummary(opts: {
+  cwd: string;
+  requiredSkill?: string | null;
+  recentCommits?: Array<{ sha: string; subject: string }>;
+  maxBytes?: number;
+}): string | null {
+  const owner = readWorktreeOwner(opts.cwd);
+  if (!owner) return null;
+  const maxBytes = opts.maxBytes ?? 2048;
+  const headerLines: string[] = [
+    `gxpm worktree identity:`,
+    `- issue: ${owner.ownerIssueId}`,
+    `- phase: ${owner.currentPhase ?? "(unknown)"}`,
+  ];
+  if (owner.branchName) headerLines.push(`- branch: ${owner.branchName}`);
+  headerLines.push(`- requiredSkill: ${opts.requiredSkill ?? "(none)"}`);
+  const header = headerLines.join("\n");
+
+  const commitLines: string[] = [];
+  if (opts.recentCommits && opts.recentCommits.length > 0) {
+    commitLines.push(`- recent commits:`);
+    for (const c of opts.recentCommits) {
+      commitLines.push(`  - ${c.sha.slice(0, 7)} ${c.subject}`);
+    }
+  }
+
+  const fullBody = commitLines.length > 0 ? `${header}\n${commitLines.join("\n")}` : header;
+  if (Buffer.byteLength(fullBody, "utf8") <= maxBytes) {
+    return fullBody;
+  }
+
+  const suffix = "\n… (truncated)";
+  const budget = Math.max(0, maxBytes - Buffer.byteLength(suffix, "utf8"));
+  let candidate = header;
+  for (const line of commitLines) {
+    const next = `${candidate}\n${line}`;
+    if (Buffer.byteLength(next, "utf8") > budget) break;
+    candidate = next;
+  }
+  return candidate + suffix;
+}
 
 function getWorktreeContext(cwd: string): string | null {
   try {

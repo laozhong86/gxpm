@@ -31,7 +31,7 @@ import { ensureIssueWorkspaceWithResolver } from "../../core/workspace-runtime";
 import { readArtifact, writeArtifact } from "../../core/artifacts";
 import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 import { getResolvedConfigValue } from "../../core/config";
-import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd } from "../../core/worktree-owner";
+import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd, ensureWorktreeIdentity } from "../../core/worktree-owner";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -267,22 +267,15 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
               worktreeDecision: result.method?.type === "created" ? "created" : "reused",
             },
           });
-          // Write enhanced worktree ownership marker + passive context recovery file
-          const allLinked = [issueId, ...linkedIssues];
+          // GXPM-187: single entry point — preserves createdAt, guards
+          // ownerIssueId conflicts, emits worktree.identity.written event.
           try {
-            writeWorktreeOwnerMarker(result.workspacePath, {
-              ownerIssueId: issueId,
-              linkedIssues: allLinked,
-              currentPhase: after.currentPhase,
-              branchName: result.resolution.env.branchName,
-              workspacePath: result.resolution.env.workspacePath,
-            });
-            writeIssueContextMd(result.workspacePath, {
+            ensureWorktreeIdentity({
+              repoRoot: process.cwd(),
+              workspacePath: result.workspacePath,
               issueId,
               currentPhase: after.currentPhase,
-              branchName: result.resolution.env.branchName,
-              workspacePath: result.resolution.env.workspacePath,
-              updatedAt: new Date().toISOString(),
+              branchName: result.resolution.env.branchName ?? undefined,
             });
           } catch {
             // best-effort; marker is advisory
@@ -711,24 +704,16 @@ function refreshWorktreeContextFiles(issueId: string, currentPhase: string, titl
   const nextPhase = idx >= 0 && idx < phaseOrder.length - 1 ? phaseOrder[idx + 1] : undefined;
 
   try {
-    writeWorktreeOwnerMarker(workspacePath, {
-      ownerIssueId: existingOwner?.ownerIssueId ?? issueId,
-      linkedIssues,
-      createdAt,
-      currentPhase,
-      title: title ?? existingOwner?.title,
-      updatedAt: new Date().toISOString(),
-      branchName: existingOwner?.branchName ?? currentGitBranch(),
+    // GXPM-187: ensureWorktreeIdentity handles preserve-createdAt internally
+    // and emits worktree.identity.written for bootstrap-protocol audits.
+    ensureWorktreeIdentity({
+      repoRoot: process.cwd(),
       workspacePath,
-    });
-    writeIssueContextMd(workspacePath, {
       issueId: existingOwner?.ownerIssueId ?? issueId,
       currentPhase,
       title: title ?? existingOwner?.title,
       nextPhase,
-      branchName: existingOwner?.branchName ?? currentGitBranch(),
-      workspacePath,
-      updatedAt: new Date().toISOString(),
+      branchName: existingOwner?.branchName ?? (currentGitBranch() ?? undefined),
     });
   } catch {
     // best-effort
