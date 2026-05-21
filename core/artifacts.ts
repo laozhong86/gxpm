@@ -331,6 +331,10 @@ export function rewriteArtifact(input: RewriteArtifactInput): ArtifactRecord {
   const type = assertValidArtifactType(input.type);
   const paths = getIssuePaths(root, input.issueId);
   readIssueState({ root, issueId: input.issueId });
+  // GXPM-172: every artifact write — including rewrites — must carry
+  // provenance so the contamination gate and audit trail keep their
+  // session/host/worktree/baselineSha record after reconcile/edit flows.
+  const sessionId = resolveSessionId();
 
   const artifactPath = join(paths.issueDir, "artifacts", `${type}.json`);
   if (!existsSync(artifactPath)) {
@@ -345,6 +349,7 @@ export function rewriteArtifact(input: RewriteArtifactInput): ArtifactRecord {
     type,
     writtenAt: now,
     payload: input.payload,
+    provenance: buildArtifactProvenance(root, input.issueId, sessionId),
   };
   writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
 
