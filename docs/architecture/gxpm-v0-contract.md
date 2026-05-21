@@ -90,6 +90,7 @@ V0 已支持 JSON artifact store。当前 artifact type：
 - `qa-findings`
 - `land-findings`
 - `feedback-description`
+- `phase-handoff`
 
 V0 只写 JSON artifact，不渲染 markdown report。
 
