@@ -14,6 +14,7 @@ Commands:
   verify <ac-check|...>       Verification commands
   wiki <init|update|query>    Local wiki commands
   workspace ensure <id>       Prepare workspace/worktree for an issue
+  gitnexus <status|index>     Check or build exact worktree GitNexus index
   autopilot <start|status|stop|list>               Autopilot grants
   feedback <create|list>      Cross-repo feedback issues
   phase <rewind|...>          Phase utilities
@@ -67,6 +68,9 @@ const COMMAND_USAGE: Record<string, string> = {
   gxpm wiki query <text>`,
   workspace: `Usage:
   gxpm workspace ensure <issue-id>`,
+  gitnexus: `Usage:
+  gxpm gitnexus status [--json]
+  gxpm gitnexus index [--force] [--no-stats]`,
   autopilot: `Usage:
   gxpm autopilot start <issue-id>|--auto-id --profile <name> [--prompt "..."]
   gxpm autopilot status <issue-id>

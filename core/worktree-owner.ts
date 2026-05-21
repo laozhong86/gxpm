@@ -109,6 +109,18 @@ export function writeIssueContextMd(workspacePath: string, data: IssueContextMdD
   lines.push(`gxpm issue context --auto`);
   lines.push(`\`\`\``);
   lines.push(``);
+  if (existsSync(join(workspacePath, ".gxpm-worktree", "env.sh"))) {
+    lines.push(`## Worktree 工具链`);
+    lines.push(``);
+    lines.push(`运行 package-manager 或 GitNexus 命令前，先加载 worktree 本地工具链：`);
+    lines.push(``);
+    lines.push(`\`\`\`bash`);
+    lines.push(`source .gxpm-worktree/env.sh`);
+    lines.push(`gxpm gitnexus status`);
+    lines.push(`# 如果缺少精确 worktree 索引：gxpm gitnexus index`);
+    lines.push(`\`\`\``);
+    lines.push(``);
+  }
   if (data.nextPhase) {
     lines.push(`## 下一步`);
     lines.push(``);

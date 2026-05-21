@@ -24,6 +24,7 @@ import { runPhaseCommand } from "./commands/phase";
 import { runSpecifyCommand } from "./commands/specify";
 import { runFeedbackCommand } from "./commands/feedback";
 import { runGuardCommand } from "./commands/guard";
+import { runGitNexusCommand } from "./commands/gitnexus";
 import { getCommandUsage, getTopLevelUsage, isHelpRequest } from "./commands/help";
 
 async function main(argv: string[]) {
@@ -173,6 +174,11 @@ async function main(argv: string[]) {
 
   if (command === "guard") {
     runGuardCommand(argv, subcommand);
+    return;
+  }
+
+  if (command === "gitnexus") {
+    runGitNexusCommand(argv, subcommand);
     return;
   }
 
