@@ -1,4 +1,11 @@
-import { mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { appendIssueEvent, getIssuePaths, readIssueState } from "../core/state";
@@ -7,6 +14,7 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
   const root = process.cwd();
   const execute = argv.includes("--execute");
   const force = argv.includes("--force");
+  const keepSource = argv.includes("--keep-source");
 
   // 1. Read issue state and verify phase
   const state = readIssueState({ root, issueId });
@@ -148,11 +156,69 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     console.warn(`archive failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // 11. GXPM-190: fire-and-forget GitNexus reindex so the next issue's
-  // implement / self-review phase doesn't run impact analysis against a
-  // stale graph. Events are written to the archived issueDir copy as well,
-  // but the source-of-truth path is what cleanup.executed already used.
-  triggerGitNexusReindex({ root, issueDir: paths.issueDir, issueId });
+  // 11. GXPM-190 + GXPM-192: fire-and-forget GitNexus reindex.
+  // Post-archive telemetry events are written to the archive copy
+  // because the source dir is about to be deleted (step 12).
+  triggerGitNexusReindex({ root, issueDir: archiveDir, issueId });
+
+  // 12. GXPM-192: delete source issue directory after archive copy succeeded.
+  //     --keep-source preserves the source dir and emits source.kept to both
+  //     archive and source so the audit trail stays linked in either path.
+  if (keepSource) {
+    const keptAt = new Date().toISOString();
+    const keptEvent = {
+      schemaVersion: 1 as const,
+      type: "source.kept" as const,
+      issueId,
+      timestamp: keptAt,
+      payload: {
+        sourcePath: paths.issueDir,
+        archivePath: archiveDir,
+        keptAt,
+        reason: "--keep-source flag",
+      },
+    };
+    appendIssueEvent({ issueDir: archiveDir, event: keptEvent });
+    appendIssueEvent({ issueDir: paths.issueDir, event: keptEvent });
+  } else {
+    const deletedAt = new Date().toISOString();
+    try {
+      rmSync(paths.issueDir, { recursive: true, force: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      appendIssueEvent({
+        issueDir: archiveDir,
+        event: {
+          schemaVersion: 1,
+          type: "source.delete.failed",
+          issueId,
+          timestamp: new Date().toISOString(),
+          payload: {
+            sourcePath: paths.issueDir,
+            archivePath: archiveDir,
+            error: message,
+          },
+        },
+      });
+      throw new Error(
+        `source dir delete failed (archive preserved at ${archiveDir}): ${message}`,
+      );
+    }
+    appendIssueEvent({
+      issueDir: archiveDir,
+      event: {
+        schemaVersion: 1,
+        type: "source.deleted",
+        issueId,
+        timestamp: deletedAt,
+        payload: {
+          sourcePath: paths.issueDir,
+          archivePath: archiveDir,
+          deletedAt,
+        },
+      },
+    });
+  }
 
   console.log(`removed worktree: ${worktree}`);
   console.log(`deleted branch: ${branch}`);
