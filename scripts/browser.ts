@@ -197,9 +197,13 @@ async function run() {
       flags.issueid as string | undefined,
     );
     if (savePath) {
-      const state = await context.storageState();
-      mkdirSync(join(savePath, ".."), { recursive: true });
-      writeFileSync(savePath, JSON.stringify(state, null, 2));
+      try {
+        const state = await context.storageState();
+        mkdirSync(join(savePath, ".."), { recursive: true });
+        writeFileSync(savePath, JSON.stringify(state, null, 2));
+      } catch (err) {
+        console.error(`gxpm-browser: failed to write storage-state to ${savePath}:`, err);
+      }
     }
     await context.close();
     await browser.close();

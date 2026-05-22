@@ -14,11 +14,12 @@ import { join } from "node:path";
 const BROWSER_CLI = join(import.meta.dir, "..", "..", "scripts", "browser.ts");
 const DATA_URI = "data:text/html,<title>scn</title>";
 
-function spawnBrowser(args: string[]) {
+function spawnBrowser(args: string[], cwd?: string) {
   return Bun.spawnSync({
     cmd: ["bun", "run", BROWSER_CLI, ...args],
     stdout: "pipe",
     stderr: "pipe",
+    ...(cwd ? { cwd } : {}),
   });
 }
 
@@ -31,7 +32,7 @@ function spawnBrowser(args: string[]) {
 test("gxpm-browser leaves stateless behaviour unchanged when no persistence flag is provided", () => {
   const work = mkdtempSync(join(tmpdir(), "gxpm-198-scn01-"));
   const sentinel = join(work, "storage-state.json");
-  const result = spawnBrowser(["navigate", DATA_URI, "--json"]);
+  const result = spawnBrowser(["navigate", DATA_URI, "--json"], work);
   expect(result.exitCode).toBe(0);
   expect(existsSync(sentinel)).toBe(false);
 });
