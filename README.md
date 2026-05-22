@@ -93,6 +93,13 @@ gxpm doctor --json             # 健康检查
 gxpm verify                    # 端到端验证
 ```
 
+`gxpm init` 会在目标仓库 `package.json` 的 `scripts` 区块幂等注入两条 GitNexus 索引入口：
+
+- `nexus` → `gitnexus analyze --skip-agents-md`（日常索引，不修改 `AGENTS.md` / `CLAUDE.md` 的 gitnexus 区块）
+- `nexus:full` → `gitnexus analyze`（包含文档统计回写的完整索引）
+
+若目标仓库已存在自定义 `scripts.nexus`，安装流程会跳过不覆盖。仓库无 `package.json` 时静默通过。可用 `gxpm init --skip-nexus-script` 关闭这一行为。
+
 Agent 自举协议见 `docs/INSTALL_FOR_AGENTS.md`。
 
 ---

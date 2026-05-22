@@ -1,6 +1,9 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
+const NEXUS_SCRIPT = "gitnexus analyze --skip-agents-md";
+const NEXUS_FULL_SCRIPT = "gitnexus analyze";
 
 interface HookSpec {
   gxpmFile: string;
@@ -30,12 +33,14 @@ fi
 
 interface InstallOptions {
   target: string;
+  skipNexusScript: boolean;
 }
 
 function parseArgs(argv: string[]): InstallOptions {
   const dashTarget = argv.indexOf("--target");
   const target = dashTarget >= 0 ? argv[dashTarget + 1] : process.cwd();
-  return { target: resolve(target) };
+  const skipNexusScript = argv.includes("--skip-nexus-script");
+  return { target: resolve(target), skipNexusScript };
 }
 
 function isGitRepo(dir: string): boolean {
@@ -49,7 +54,7 @@ function isGitRepo(dir: string): boolean {
 }
 
 function main(argv: string[]) {
-  const { target } = parseArgs(argv);
+  const { target, skipNexusScript } = parseArgs(argv);
 
   if (!isGitRepo(target)) {
     console.error(`Not a git repository: ${target}`);
@@ -105,6 +110,33 @@ function main(argv: string[]) {
 
   const gxpmRoot = resolve(import.meta.dir, "..");
   installAgentsFragment(target, gxpmRoot);
+  installNexusScript(target, { skip: skipNexusScript });
+}
+
+function installNexusScript(target: string, options: { skip: boolean }): void {
+  if (options.skip) return;
+  const pkgPath = join(target, "package.json");
+  if (!existsSync(pkgPath)) return;
+
+  const raw = readFileSync(pkgPath, "utf8");
+  const pkg = JSON.parse(raw);
+  pkg.scripts = pkg.scripts ?? {};
+
+  if ("nexus" in pkg.scripts) {
+    console.log("[install-hooks] skipped nexus script: already exists");
+    return;
+  }
+
+  pkg.scripts.nexus = NEXUS_SCRIPT;
+  pkg.scripts["nexus:full"] = NEXUS_FULL_SCRIPT;
+
+  const trailingNewline = raw.endsWith("\n") ? "\n" : "";
+  const next = JSON.stringify(pkg, null, 2) + trailingNewline;
+
+  const tmpPath = `${pkgPath}.tmp`;
+  writeFileSync(tmpPath, next);
+  renameSync(tmpPath, pkgPath);
+  console.log(`installed nexus scripts in: ${pkgPath}`);
 }
 
 function installAgentsFragment(target: string, _gxpmRoot: string): void {
