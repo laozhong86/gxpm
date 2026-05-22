@@ -28,7 +28,7 @@ case "${1:-}" in
   --install)
     shift
     # Combo: install skill globally to all hosts AND install hooks to a target repo.
-    # Usage: gxpm-init --install [--target <repo>]
+    # Usage: gxpm-init --install [--target <repo>] [--skip-nexus-script]
     bun run "$ROOT/scripts/install-skill.ts" --host all
     exec bun run "$ROOT/scripts/install-hooks.ts" "$@"
     ;;
