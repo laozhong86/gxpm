@@ -26,13 +26,17 @@ Usage:
   gxpm-browser type <url> --selector <css> --text <value> [--json]
 
 Options:
-  --out <path>       Screenshot output path (default: /tmp/gxpm-browser-<ts>.png)
-  --full-page        Capture full page instead of viewport
-  --selector <css>   CSS selector for element interaction
-  --text <value>     Text to assert or type
-  --json             Output JSON
-  --headless         Run headless (default: true)
-  --no-headless      Run headed for debugging
+  --out <path>             Screenshot output path (default: /tmp/gxpm-browser-<ts>.png)
+  --full-page              Capture full page instead of viewport
+  --selector <css>         CSS selector for element interaction
+  --text <value>           Text to assert or type
+  --storage-state <path>   Load a previously saved Playwright storage-state file
+  --save-storage-state [<path>]  Persist the session to <path>; with --issueid and
+                                 no <path>, defaults to the issue evidence dir
+  --issueid <id>           Active gxpm issue id (enables evidence-path defaults)
+  --json                   Output JSON
+  --headless               Run headless (default: true)
+  --no-headless            Run headed for debugging
 `);
 }
 
@@ -83,6 +87,18 @@ function resolveEvidencePath(issueId: string | undefined, label: string): string
   return join(evidenceDir, filename);
 }
 
+function resolveStorageStatePath(
+  saveFlag: string | boolean | undefined,
+  issueId: string | undefined,
+): string | undefined {
+  if (typeof saveFlag === "string" && saveFlag.length > 0) return saveFlag;
+  if (saveFlag === true && issueId) {
+    const repoRoot = process.cwd();
+    return join(repoRoot, ".gxpm", "issues", issueId, "evidence", "browser", "storage-state.json");
+  }
+  return undefined;
+}
+
 async function run() {
   if (!command || command === "--help" || command === "-h") {
     usage();
@@ -104,8 +120,10 @@ async function run() {
     executablePath: process.env.GXPM_BROWSER_EXECUTABLE || undefined,
   });
 
+  const storageStatePath = typeof flags.storagestate === "string" ? flags.storagestate : undefined;
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 },
+    ...(storageStatePath ? { storageState: storageStatePath } : {}),
   });
   const page = await context.newPage();
 
@@ -174,6 +192,15 @@ async function run() {
       }
     }
   } finally {
+    const savePath = resolveStorageStatePath(
+      flags.savestoragestate as string | boolean | undefined,
+      flags.issueid as string | undefined,
+    );
+    if (savePath) {
+      const state = await context.storageState();
+      mkdirSync(join(savePath, ".."), { recursive: true });
+      writeFileSync(savePath, JSON.stringify(state, null, 2));
+    }
     await context.close();
     await browser.close();
   }
