@@ -66,6 +66,20 @@ gxpm-browser screenshot <url> --no-headless
 
 Opens a visible Chrome window. Use sparingly; default is headless.
 
+### Session persistence (storage-state)
+
+All subcommands accept two opt-in flags for reusing an authenticated Playwright
+session across runs:
+
+```bash
+gxpm-browser <cmd> <url> --storage-state <path>        # load session before navigate
+gxpm-browser <cmd> <url> --save-storage-state <path>   # write session after command
+gxpm-browser <cmd> <url> --issueid <id> --save-storage-state   # default to issue evidence dir
+```
+
+Default behaviour without flags stays stateless. See the persistence section in
+`references/evidence-path.md` for chained-command examples.
+
 
 ## Evidence path
 
@@ -81,10 +95,34 @@ Link them in `qa-findings` or `verify-findings` artifacts:
 gxpm artifact write <issue-id> qa-findings --json '{"evidence":["browser/screenshot-12345.png"]}'
 ```
 
+## Persistence (storage-state reuse)
+
+Each command launches a fresh browser context by default (stateless). To carry an
+authenticated session across commands without re-running `browse:auth`, opt in
+with the storage-state flags:
+
+```bash
+# First command — capture session
+gxpm-browser navigate https://app.example.com/login --save-storage-state /tmp/session.json
+
+# Follow-up command — reuse session
+gxpm-browser screenshot https://app.example.com/chat --storage-state /tmp/session.json
+```
+
+When `--issueid <id>` is set and `--save-storage-state` is passed without an
+explicit path, the file defaults to:
+
+```
+.gxpm/issues/<id>/evidence/browser/storage-state.json
+```
+
+This path is covered by the repo's `.gxpm/` gitignore rule. Storage-state files
+contain auth tokens — treat them as secrets and never commit them.
+
 ## Limitations
 
 - Uses Chromium/Chrome via Playwright. Requires Chrome or `playwright install chromium`.
-- No persistent session state between commands (each command launches a fresh browser).
+- Storage-state reuse is opt-in via `--storage-state` / `--save-storage-state`; default behaviour stays stateless.
 - No network interception or request mocking; use `agent-browser` for advanced automation.
 - cmux browser session investigation is a separate path (see main gxpm skill).
 
