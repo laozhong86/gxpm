@@ -37,6 +37,8 @@
     "dev:skill": "bun run scripts/dev-skill.ts",
     "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
     "sync:markdown": "bun run scripts/sync-markdown-artifacts.ts",
+    "nexus": "gitnexus analyze --skip-agents-md",
+    "nexus:full": "gitnexus analyze",
     "test": "bun test",
     "prepublishOnly": "bun run scripts/gxpm-check.ts && bun test --timeout 30000"
   },
