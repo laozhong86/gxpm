@@ -98,24 +98,31 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
 export function getNextAvailableIssueId(input: { root?: string; prefix?: string } = {}): string {
   const root = input.root ?? process.cwd();
   const prefix = input.prefix ?? "GXPM";
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const issuesDir = join(root, ".gxpm", "issues");
+  const archiveDir = join(root, ".gxpm", "archive");
 
-  if (!existsSync(issuesDir)) {
-    return `${prefix}-1`;
-  }
+  const activePattern = new RegExp(`^${escapedPrefix}-(\\d+)$`);
+  // Archive directories are named like "2026-05-21-GXPM-190" or "2026-05-21-GXPM-190-<suffix>".
+  // GXPM-194: include archived ids so the allocator does not re-issue an id that already
+  // appears in commit history and PRs (single-session collision class).
+  const archivePattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${escapedPrefix}-(\\d+)(?:-.*)?$`);
 
+  const max = Math.max(0, maxIdInDir(issuesDir, activePattern), maxIdInDir(archiveDir, archivePattern));
+  return `${prefix}-${max + 1}`;
+}
+
+function maxIdInDir(dir: string, pattern: RegExp): number {
+  if (!existsSync(dir)) return 0;
   let max = 0;
-  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`);
-
-  for (const name of readdirSync(issuesDir)) {
+  for (const name of readdirSync(dir)) {
     const m = name.match(pattern);
     if (m) {
       const n = parseInt(m[1], 10);
       if (Number.isFinite(n) && n > max) max = n;
     }
   }
-
-  return `${prefix}-${max + 1}`;
+  return max;
 }
 
 /**
