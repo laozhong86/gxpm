@@ -24,6 +24,23 @@ export interface WorkspacePlanInput {
   root?: string;
   issueId: string;
   workspaceRoot?: string;
+  /**
+   * Scratch / non-issue topic mode. When provided, planIssueWorkspace and
+   * ensureIssueWorkspaceWithResolver skip readIssueState and treat issueId
+   * as a synthetic workspace key (caller should set issueId to
+   * `scratch-<topic>`). Used by `gxpm workspace ensure --topic <name>` for
+   * exploratory / hotfix worktrees that have no GXPM/Linear issue yet.
+   */
+  topic?: string;
+}
+
+/**
+ * Build a synthetic issue id for a scratch topic. The `scratch-` prefix keeps
+ * the value out of the GXPM-/GXG- namespace so it cannot collide with real
+ * issue ids in `.gxpm/issues/<id>/state.json`.
+ */
+export function scratchIssueId(topic: string): string {
+  return `scratch-${topic}`;
 }
 
 export interface WorkspacePlan {
@@ -52,14 +69,19 @@ export interface WorkspaceCleanupResult extends WorkspacePlan {
 
 export function planIssueWorkspace(input: WorkspacePlanInput): WorkspacePlan {
   const root = input.root ?? process.cwd();
-  const state = readIssueState({ root, issueId: input.issueId });
+  // Scratch / topic mode bypasses readIssueState: there is no
+  // `.gxpm/issues/<id>/state.json` for exploratory worktrees, so the synthetic
+  // `scratch-<topic>` issueId in `input.issueId` is the authoritative key.
+  const resolvedIssueId = input.topic
+    ? input.issueId
+    : readIssueState({ root, issueId: input.issueId }).issueId;
   const workspaceRoot = resolveWorkspaceRoot({ root, workspaceRoot: input.workspaceRoot });
-  const workspaceKey = sanitizeWorkspaceKey(state.issueId);
+  const workspaceKey = sanitizeWorkspaceKey(resolvedIssueId);
   const workspacePath = join(workspaceRoot, workspaceKey);
   assertPathInsideRoot(workspaceRoot, workspacePath);
 
   const plan = {
-    issueId: state.issueId,
+    issueId: resolvedIssueId,
     workspaceKey,
     workspaceRoot,
     workspacePath,
