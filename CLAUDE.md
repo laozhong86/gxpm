@@ -15,6 +15,15 @@
 - 不要把 `/qa`、`/review`、`/ship` 的 gstack 实现直接 vendoring 到 gxpm；先抽象为 gxpm capability。
 - 如果本地 `.claude/` 未来被脚手架生成或 symlink 到工作区，先确认 live install 风险，再改模板或生成器。
 
+## GitNexus 索引刷新 ⚠️
+
+如果下方 GitNexus 块或任何 `gitnexus_*` 工具提示 "index is stale"，**请运行 `bun run nexus`**（而非 `npx gitnexus analyze`）。
+
+- `bun run nexus` → `gitnexus analyze --skip-agents-md`：日常索引刷新，不会改写 `AGENTS.md` / `CLAUDE.md`。
+- `bun run nexus:full` → `gitnexus analyze`：包含文档统计回写的完整索引，会把 `AGENTS.md` 扩张到 ~182 行，**触发 `prepublishOnly` 的 ≤150 行 governance gate**，发版前必须 `git checkout -- AGENTS.md CLAUDE.md` 复原。
+
+直接跑 `npx gitnexus analyze` 等价于 `bun run nexus:full`，会触发同一陷阱。下方 gitnexus block 内的旧提示（`npx gitnexus analyze`）由 GitNexus 自动生成、此处不可修改，请以本节为准。
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
