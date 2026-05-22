@@ -1,5 +1,6 @@
 import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
+import { formatDoctorIssuesReport, runDoctorIssues } from "./doctor-issues";
 import { runDoctorIdentityCommand, runIssueHandoffCommand } from "./commands/identity";
 import { runGlobalDiscover } from "./global-discover";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
@@ -179,6 +180,21 @@ async function main(argv: string[]) {
     // health-check report.
     if (subcommand === "identity") {
       runDoctorIdentityCommand();
+      return;
+    }
+    if (subcommand === "issues") {
+      // GXPM-197: business-state health check across all tracked issues.
+      const json = argv.includes("--json");
+      const fix = argv.includes("--fix");
+      const fixAggressive = argv.includes("--fix-aggressive");
+      const sinceIdx = argv.indexOf("--since");
+      const since = sinceIdx >= 0 && sinceIdx + 1 < argv.length ? argv[sinceIdx + 1] : undefined;
+      const report = runDoctorIssues({ fix, fixAggressive, since });
+      if (json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatDoctorIssuesReport(report));
+      }
       return;
     }
     const json = argv.includes("--json");

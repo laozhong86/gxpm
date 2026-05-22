@@ -12,6 +12,36 @@ Expected: `status` is `healthy` or `warnings`. `health_score` >= 80.
 
 If `status` is `error`, run `gxpm doctor --fix` and retry.
 
+### Business-state health (GXPM-197)
+
+`gxpm doctor` covers the install/config surface only. For the in-flight issue
+surface — dangling worktrees, stalled phases, missing phase-exit artifacts, and
+unacknowledged phase handoffs — run:
+
+```bash
+gxpm doctor issues --json
+gxpm doctor issues --since 7d        # only look at issues touched in the last week
+gxpm doctor issues --fix             # conservative: removes dangling worktrees + writes audit log
+gxpm doctor issues --fix-aggressive  # reserved for future destructive fixes; currently a no-op warn
+```
+
+Checks emitted (independent `schema_version: 1`):
+
+| Check | Meaning |
+|-------|---------|
+| `dangling_worktree` | Worktree directory survives after the owning issue archived/landed |
+| `phase_stale` | Issue has been in a phase longer than the configured threshold |
+| `missing_artifact` | Current phase lacks the artifact required to transition out |
+| `handoff_broken` | Next phase was entered but the `phase-handoff` artifact was never acknowledged |
+
+Override the phase-stale thresholds (days) per phase via:
+
+```bash
+gxpm config set doctor.issues.phase_threshold.specify 14
+```
+
+`--fix` writes one JSON line per action to `~/.gxpm/audit/doctor-issues-fixes.jsonl`.
+
 ## Check #2: CLI Commands
 
 ```bash
