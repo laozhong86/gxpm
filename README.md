@@ -89,7 +89,8 @@ bun install && bun link
 
 cd /path/to/your/project
 gxpm init                      # 初始化项目（hooks + skills + config）
-gxpm doctor --json             # 健康检查
+gxpm doctor --json             # 安装/配置健康检查
+gxpm doctor issues             # 业务态健康巡检（dangling worktree / 停留 phase / 缺产物 / handoff 断裂）
 gxpm verify                    # 端到端验证
 ```
 
