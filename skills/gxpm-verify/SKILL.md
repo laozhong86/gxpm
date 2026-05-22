@@ -26,14 +26,16 @@ description: Local verification pipeline execution and evidence collection. Use 
 
 ```
 Step 1: git diff --check          (free — whitespace violations)
-Step 2: bun run check             (fast — static analysis + typecheck)
+Step 2: bun run check             (fast — static analysis + typecheck + scaffold/cli/skill promises)
 Step 3: bun test                  (medium — unit + integration tests)
-Step 4: bun run build             (medium — compilation verification)
+Step 4: <project build>           (optional — only if the project defines a separate build step)
 ```
+
+> Step 4 视项目而定：本仓库（gxpm 自身）没有独立的 `build` script，`bun run check` 已经包含编译 + 类型检查；其他下游项目若 `package.json scripts` 里确有 build 入口，再在此处追加该命令。
 
 只运行与变更相关的步骤：
 - Pure test changes: Steps 1–3 are sufficient.
-- Build config or type changes: All 4 steps required.
+- Build config or type changes: 全部相关步骤都要跑。
 - Documentation only: Step 1 only.
 
 ### 证据收集
@@ -63,17 +65,12 @@ Step 4: bun run build             (medium — compilation verification)
       "exitCode": 0,
       "durationMs": 4500,
       "summary": "156 passed, 0 failed"
-    },
-    {
-      "step": "build",
-      "command": "bun run build",
-      "exitCode": 0,
-      "durationMs": 2800,
-      "summary": "build succeeded"
     }
   ]
 }
 ```
+
+> 如果项目有独立的 build step，在 `verificationSteps` 末尾追加一条 `{ "step": "build", "command": "<project build cmd>", ... }`。本仓库 (gxpm) 因为 `bun run check` 已含编译验证，没有这一步。
 
 ### 失败时的 Skill 路由
 
@@ -82,9 +79,9 @@ Step 4: bun run build             (medium — compilation verification)
 | Failed step | Root cause likely | Load this skill |
 |-------------|-------------------|-----------------|
 | `git diff --check` | Whitespace / trailing space | Fix directly, re-run from Step 1 |
-| `bun run check` | Type error, syntax error, lint violation | `/gxpm-build` |
+| `bun run check` | Type error, syntax error, scaffold/skill-promise drift | `/gxpm-build` |
 | `bun test` | Test failure, regression, missing coverage | `/gxpm-tdd` |
-| `bun run build` | Build script error, dependency issue | `/gxpm-build` |
+| project build (if any) | Build script error, dependency issue | `/gxpm-build` |
 
 **Do not fix blindly.** Load the relevant skill, follow its discipline, then re-run the full pipeline from Step 1.
 

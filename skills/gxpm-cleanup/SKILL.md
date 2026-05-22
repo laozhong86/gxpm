@@ -19,11 +19,13 @@ status: stable
 
 ## 可操作流程
 
-### 在 cleanup 阶段初始化报告
+### 从 self-review 进入 cleanup 并初始化报告
 
 ```bash
 gxpm self-review cleanup <issue-id>
 ```
+
+> **命令语义**：这是从 `self-review` 阶段**完成后**触发的 transition 命令——它把 issue 从 `self-review` 推进到 `cleanup`，并同时创建 `cleanup-report` artifact 草稿（命名约定来自 `core/phase-gates.ts`：`gxpm <当前阶段> <下一阶段> <id>`）。本 skill 之后的所有操作都发生在 `cleanup` 阶段内，写入这同一个 artifact。
 
 这会创建 `cleanup-report.json` artifact，包含：
 - `duplicatesExtracted` — 重复代码提取记录

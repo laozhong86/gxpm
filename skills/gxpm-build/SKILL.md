@@ -18,21 +18,17 @@ description: Compile and type-check verification. Use after implementing code ch
 
 **Skill 边界**：本 skill 仅处理编译和类型检查层面的验证。测试失败请加载 `/gxpm-tdd`，代码风格或提交规范请加载 `/gxpm-hygiene`。
 
-在 gxpm 工作流中，`implement` 阶段每次完成一个垂直切片后都应运行构建验证。离开 `implement` 前，`local-verify` artifact 必须包含 `buildEvidence`。
+在 gxpm 工作流中，`implement` 阶段每次完成一个垂直切片后都应运行构建验证。离开 `implement` 前，`local-verify` artifact 的 `commands` 数组必须包含一次构建/类型检查命令及其退出码。
 
 ## 可操作流程
 
-按以下顺序执行构建验证：
+执行编译/类型检查验证：
 
 ```bash
-# 1. Type check (fastest, catch type errors first)
 bun run check
-
-# 2. Build (confirm compilation produces valid output)
-bun run build
 ```
 
-如果项目使用不同的构建系统，替换为等效命令。
+> 本仓库 `package.json` 没有独立的 `build` script——`bun run check` 即是编译 + 类型检查的入口（实际调用 `scripts/gxpm-check.ts`）。如果在其他项目使用本 skill，把 `bun run check` 替换为该项目等效的"类型检查 / 编译验证"命令；如果项目另有独立 `build` 步骤，再追加一次执行。
 
 ### 退出码约定
 
@@ -64,19 +60,22 @@ bun run build
 
 构建通过的标准：
 
-- [ ] `bun run check` 返回 exit code 0
-- [ ] `bun run build` 返回 exit code 0
+- [ ] `bun run check` 返回 exit code 0（在其他项目里换成等效的类型检查 / 编译命令）
 - [ ] 如失败，已定位根因并完成单次修复（禁止猜测-重跑循环）
 
-`local-verify` artifact 中的 `buildEvidence` 必须包含：
+`local-verify` artifact 的真实 schema（来自 `core/implement.ts` + `core/artifact-validator.ts:60`）要求顶层字段：`status / changedFiles / commands / evidence / results / risks / verificationLog`。本 skill 负责往 `commands` 和 `results` 数组追加一条构建记录（与测试、其他验证步骤的记录共存），不要写不存在的 `buildEvidence` 顶层字段。
+
+最小示例（用 `gxpm artifact write/edit` 提交）：
 
 ```json
 {
-  "buildEvidence": {
-    "commands": ["bun run check", "bun run build"],
-    "exitCodes": [0, 0],
-    "timestamp": "2026-05-08T08:30:00Z"
-  }
+  "status": "draft",
+  "commands": [
+    { "label": "build", "cmd": "bun run check", "exitCode": 0, "ranAt": "2026-05-22T08:30:00Z" }
+  ],
+  "results": [
+    { "label": "build", "ok": true, "summary": "type-check passed" }
+  ]
 }
 ```
 

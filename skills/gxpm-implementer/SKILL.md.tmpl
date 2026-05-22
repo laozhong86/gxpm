@@ -49,8 +49,8 @@ Once you're clear on requirements:
 1. Implement exactly what the task specifies
 2. Write tests (following TDD if task says to)
 3. Verify implementation works:
-   - Load `/gxpm-build` to verify compilation and type checking
-   - Load `/gxpm-verify` to run the full verification pipeline and collect evidence
+   - Load `/gxpm-build` after each vertical slice to confirm compilation + type checking pass (本仓库实际入口是 `bun run check`；该 skill 是 implement 阶段内部的自助工具，不在 phase-gate 强制 `requiredSkill` 之内)
+   - Load `/gxpm-verify` when leaving `implement` 阶段，运行完整验证流水线并产出 `local-verify` artifact（这是阶段门控强制要求的 skill）
 4. Commit your work (load `/gxpm-hygiene` for pre-commit checklist)
 5. Self-review (see 验证清单 / 出口条件)
 6. Report back

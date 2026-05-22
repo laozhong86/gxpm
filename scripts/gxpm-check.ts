@@ -1,5 +1,6 @@
 import { runScaffoldCheck } from "./scaffold-check";
 import { checkCliPromises, formatCheckResult } from "./check-cli-promises";
+import { checkSkillPromises, formatSkillPromisesResult } from "./check-skill-promises";
 import { runGovernanceDocPreflight } from "./governance-doc-preflight";
 
 function main() {
@@ -14,6 +15,11 @@ function main() {
   console.log(formatCheckResult(cliResult));
   if (!cliResult.ok) {
     throw new Error("check-cli-promises failed; see output above.");
+  }
+  const skillResult = checkSkillPromises();
+  console.log(formatSkillPromisesResult(skillResult));
+  if (!skillResult.ok) {
+    throw new Error("check-skill-promises failed; see output above.");
   }
 }
 
