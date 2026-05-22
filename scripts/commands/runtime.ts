@@ -1,5 +1,19 @@
 import { appendRunEvent, deleteRun, listRuns, readRun, RUN_STATUSES, startRun } from "../../core/runs";
-import { cleanupIssueWorkspace, ensureIssueWorkspace, ensureIssueWorkspaceWithResolver, planIssueWorkspace } from "../../core/workspace-runtime";
+import { cleanupIssueWorkspace, ensureIssueWorkspace, ensureIssueWorkspaceWithResolver, planIssueWorkspace, scratchIssueId } from "../../core/workspace-runtime";
+
+/**
+ * Lowercase + collapse non [a-z0-9-] to `-`, trim leading/trailing dashes,
+ * cap length at 48. Mirrors the constraints `manage-worktree.sh` enforces for
+ * topic names (lowercase letters / digits / hyphens). Empty input is rejected
+ * by the caller, so an empty return triggers the usage error.
+ */
+function sanitizeTopicSlug(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
 import { dryRunOrchestratorTick } from "../../core/orchestrator";
 import { claimIssue } from "../../core/issue-readiness";
 import { optionValue, parsePositiveIntegerOption } from "./helpers";
@@ -145,21 +159,35 @@ function claimRunOrRollback(input: { issueId: string; runId: string; actor?: str
 }
 
 export async function runWorkspaceCommand(argv: string[], subcommand: string | undefined, issueId: string | undefined) {
-  if (!issueId) {
-    throw new Error("Usage: gxpm workspace plan|ensure|cleanup <issue-id> [--root <path>] [--json]");
+  const topic = optionValue(argv, "--topic") ?? undefined;
+  // Scratch / topic mode: `gxpm workspace ensure --topic fix-login` creates an
+  // exploratory worktree at `.gxpm/worktrees/gxpm-scratch-fix-login` without
+  // requiring a Linear/GXPM issue. Path & branch share the `.gxpm/worktrees/`
+  // namespace, so the same warp.md / port-allocation / .env.local init
+  // pipeline applies to both issue and scratch worktrees.
+  const resolvedIssueId = topic ? scratchIssueId(sanitizeTopicSlug(topic)) : issueId;
+
+  if (!resolvedIssueId) {
+    throw new Error(
+      "Usage: gxpm workspace plan|ensure|cleanup <issue-id> [--root <path>] [--json]\n" +
+      "   or: gxpm workspace plan|ensure|cleanup --topic <name> [--root <path>] [--json]",
+    );
   }
   const workspaceRoot = optionValue(argv, "--root") ?? undefined;
   const result =
     subcommand === "plan"
-      ? planIssueWorkspace({ issueId, workspaceRoot })
+      ? planIssueWorkspace({ issueId: resolvedIssueId, workspaceRoot, topic })
       : subcommand === "ensure"
-        ? await ensureIssueWorkspaceWithResolver({ issueId, workspaceRoot })
+        ? await ensureIssueWorkspaceWithResolver({ issueId: resolvedIssueId, workspaceRoot, topic })
         : subcommand === "cleanup"
-          ? cleanupIssueWorkspace({ issueId, workspaceRoot })
+          ? cleanupIssueWorkspace({ issueId: resolvedIssueId, workspaceRoot, topic })
           : null;
 
   if (!result) {
-    throw new Error("Usage: gxpm workspace plan|ensure|cleanup <issue-id> [--root <path>] [--json]");
+    throw new Error(
+      "Usage: gxpm workspace plan|ensure|cleanup <issue-id> [--root <path>] [--json]\n" +
+      "   or: gxpm workspace plan|ensure|cleanup --topic <name> [--root <path>] [--json]",
+    );
   }
   if (argv.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));

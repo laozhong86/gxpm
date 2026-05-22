@@ -71,6 +71,7 @@ async function main(argv: string[]) {
     "--sha",
     "--status",
     "--title",
+    "--topic",
     "--ttl-minutes",
     "--type",
     "--workspace",
