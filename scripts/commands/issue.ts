@@ -93,6 +93,20 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
         console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
       }
     }
+    // GXPM-206: surface the phase-handoff payload's next-phase / next-skill so
+    // agents do not have to cat the artifact to know the next contractual gate.
+    if (hasArtifact({ issueId, type: "phase-handoff" })) {
+      try {
+        const handoff = readArtifact({ issueId, type: "phase-handoff" });
+        const payload = (handoff?.payload ?? {}) as Record<string, unknown>;
+        const nextPhase = payload.nextPhase as string | null | undefined;
+        const nextSkill = payload.nextRequiredSkill as string | null | undefined;
+        if (typeof nextPhase === "string") console.log(`nextPhase: ${nextPhase}`);
+        if (typeof nextSkill === "string") console.log(`nextRequiredSkill: ${nextSkill}`);
+      } catch {
+        // unreadable handoff payload — stay silent rather than break status
+      }
+    }
     return;
   }
 
