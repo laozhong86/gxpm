@@ -8,7 +8,8 @@
 
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   formatProjectInitializationContext,
   getProjectInitializationStatus,
@@ -219,6 +220,9 @@ async function processSessionStart(
     `This repo uses gxpm (schema v${schema}, version ${version}). Run \`gxpm issue list\` to see active work, \`gxpm issue status <id>\` to load context.`,
   );
 
+  const bootstrap = loadGxpmRuntimeBootstrap();
+  if (bootstrap) parts.push(bootstrap);
+
   const updateCtx = checkUpdate(cwd);
   if (updateCtx) parts.push(updateCtx);
 
@@ -399,6 +403,29 @@ async function processPostToolUse(
 // =======================================================================
 // Helpers
 // =======================================================================
+
+let cachedRuntimeBootstrap: string | null | undefined;
+
+function loadGxpmRuntimeBootstrap(): string | null {
+  if (cachedRuntimeBootstrap !== undefined) return cachedRuntimeBootstrap;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "skills", "using-gxpm-runtime", "SKILL.md"),
+    join(here, "..", "..", "skills", "using-gxpm-runtime", "SKILL.md"),
+  ];
+  for (const path of candidates) {
+    try {
+      if (existsSync(path)) {
+        cachedRuntimeBootstrap = readFileSync(path, "utf8").trim();
+        return cachedRuntimeBootstrap;
+      }
+    } catch {
+      // ignore and try next
+    }
+  }
+  cachedRuntimeBootstrap = null;
+  return null;
+}
 
 function buildSessionStartIdentitySummary(cwd: string): string | null {
   const owner = readWorktreeOwner(cwd);
