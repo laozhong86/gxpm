@@ -1,7 +1,7 @@
 ---
 name: gxpm-triage
 type: discipline
-description: Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
+description: MUST use during the triage phase before writing the acceptance-contract artifact. Triage issues through a state machine of triage roles. Use when user wants to create an issue, review incoming bugs or feature requests, prepare issues for an AFK agent, or manage issue workflow.
 ---
 
 **Announce at start:** "I am using the gxpm-triage skill to classify this issue into one category role and one state role, and to write a triage-grade acceptance contract before any phase transition."
@@ -177,3 +177,13 @@ Concise description.
 - `/gxpm-planning` — break triaged issue into vertical slices
 - `/gxpm-grill` — stress-test triage assumptions
 - `/gxpm` — main project management runtime
+
+## Terminal State
+
+完成 `acceptance-contract` artifact 后：
+
+1. `gxpm artifact write <issue-id> acceptance-contract --from <file>` 把内容落盘。
+2. `gxpm issue transition <issue-id> plan` 推进到 plan 阶段。
+3. 立即 invoke `gxpm-planning` skill 写 `implementation-plan`。
+
+如果 issue 是 `wontfix` 或 `needs-info`，不再推进，按 skill 流程关闭或留 triage notes。

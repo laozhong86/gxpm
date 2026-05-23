@@ -1,7 +1,7 @@
 ---
 name: gxpm-verify
 type: technique
-description: Local verification pipeline execution and evidence collection. Use when transitioning from implement to local-verify, or when running the full verification suite for an issue.
+description: MUST use during the local-verify, ac-check, or verify phases before transitioning. Local verification pipeline execution and evidence collection. Use when transitioning from implement to local-verify, or when running the full verification suite for an issue.
 ---
 
 **Announce at start:** "I am using the gxpm-verify skill to run the local verification pipeline in cost order, stop at the first failure, and record per-step evidence in the local-verify artifact before any phase advance."
@@ -111,3 +111,13 @@ Step 4: <project build>           (optional — only if the project defines a se
 - `/gxpm-build` — compile verification
 - `/gxpm-tdd` — test-first feedback loop
 - `/gxpm-review-army` — multi-role review after verify
+
+## Terminal State
+
+完成本阶段验证 + 写完对应 artifact 后，按 currentPhase 选下一跳：
+
+- `local-verify` → `gxpm issue transition <id> ac-check`，再次 invoke `gxpm-verify` 写 `acceptance-check` artifact。
+- `ac-check` → `gxpm issue transition <id> self-review`，invoke `gxpm-review-changes` 写 `self-review`。
+- `verify` → `gxpm issue transition <id> qa`，invoke `gxpm-browser` 写 `qa-findings`（runtime-only / 无 UI 改动时可记 N/A）。
+
+跑 `gxpm issue next <id> --json` 看 `requiredArtifact` 和 `command` 确认下一步落点。

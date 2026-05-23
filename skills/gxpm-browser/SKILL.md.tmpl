@@ -1,7 +1,7 @@
 ---
 name: gxpm-browser
 type: reference
-description: Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
+description: MUST use during the qa phase before transitioning to land. Headless browser automation for QA evidence capture. Use when user asks to test a web page, take a screenshot, verify an element, fill a form, or capture browser evidence for an issue.
 status: stable
 ---
 
@@ -42,3 +42,12 @@ capture and QA automation, not general web scraping.
 
 - `docs/governance/development-contract.md`
 - Main `/gxpm` skill for QA phase gate details
+
+## Terminal State
+
+完成 `qa-findings` artifact 后：
+
+1. `gxpm artifact write <issue-id> qa-findings --from <file>` 落盘 browser evidence（runtime-only / 无 UI 改动时记 `status: n/a` + 理由）。
+2. `gxpm issue transition <issue-id> qa` 已是 qa 阶段；继续 `gxpm qa land <issue-id>` 初始化 `land-findings`。
+3. 写完 `land-findings` 后 `gxpm issue transition <issue-id> land`（terminal phase）。
+4. 从 main repo 根执行 `gxpm cleanup land <issue-id> --execute` 归档 issue 并清理 worktree。

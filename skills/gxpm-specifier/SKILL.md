@@ -1,7 +1,7 @@
 ---
 name: gxpm-specifier
 type: discipline
-description: BDD behavior specification design skill. Use during gxpm specify phase, when user mentions BDD, Gherkin, Given-When-Then, behavior spec, or behavior-first development.
+description: MUST use during the specify phase before writing behavior-spec and confirming it. BDD behavior specification design skill. Use during gxpm specify phase, when user mentions BDD, Gherkin, Given-When-Then, behavior spec, or behavior-first development.
 ---
 
 **Announce at start:** "I am using the gxpm-specifier skill to capture domain-level behavior in Gherkin-style scenarios — no test logic, no implementation hints — and to gate transition on user confirmation."
@@ -156,3 +156,13 @@ NO GUESSING — USE [NEEDS CLARIFICATION] INSTEAD
 - `/gxpm-tdd` — red-green-refactor on the spec
 - `/gxpm-planning` — incoming plan source
 - `/gxpm-prototype` — sanity-check design before specifying
+
+## Terminal State
+
+完成 `behavior-spec` artifact 并 confirm 后：
+
+1. `gxpm specify confirm <issue-id>` 锁定 spec。
+2. `gxpm issue transition <issue-id> implement` 进入 implement 阶段。
+3. 立即 invoke `gxpm-tdd` 开始 red-green-refactor 循环。
+
+若 spec 含 `<placeholder>` 残留，confirm 会拒绝；先回写真实领域数据再 confirm。
