@@ -27,13 +27,18 @@ describe("GXPM-208 · gxpm-review-army declares two-stage fan-out", () => {
   });
 
   // Scenario (scn-02): SKILL.md 显式说 Stage 2 仅在 Stage 1 pass 时启动
+  // Codex P2 review: 单 ||  会让 doc 退化为 "Stage 1 pass" 或 "Stage 2 only" 任一即通过，
+  // 弱化保护。要求 Stage 1 pass 语义 AND Stage 2 only-if 语义同时存在。
   test("test_skill_md_gates_stage_2_on_stage_1_pass", () => {
     const content = readFileSync(SKILL_PATH, "utf8");
-    // 必须含 "blocking" 与 Stage 1 通过 / 否则不进入 Stage 2 的语义
-    const hasGateLanguage =
-      /Stage\s*1[\s\S]*?(?:通过|pass|无\s*blocking|没有\s*blocking)/i.test(content) ||
-      /Stage\s*2[\s\S]{0,200}(?:仅|only)/i.test(content);
-    expect(hasGateLanguage).toBe(true);
+    // 要求 Stage 1 含"门控 / 通过 / blocking" 语义
+    const stage1HasGate =
+      /Stage\s*1[\s\S]{0,400}?(?:门控|gate|通过|pass|无\s*blocking|没有\s*blocking)/i.test(content);
+    // 同时要求 Stage 2 显式说仅在 Stage 1 通过时启动（"仅" / "only" / "if"）
+    const stage2OnlyIfStage1 =
+      /Stage\s*2[\s\S]{0,400}?(?:仅当\s*Stage\s*1|only\s*(?:if|when)\s*Stage\s*1|Stage\s*1[\s\S]{0,80}(?:通过|pass)[\s\S]{0,200}Stage\s*2)/i.test(content);
+    expect(stage1HasGate).toBe(true);
+    expect(stage2OnlyIfStage1).toBe(true);
   });
 
   // Scenario (scn-03): SKILL.md 每个 reviewer 含明确边界（输入 / 输出 schema）

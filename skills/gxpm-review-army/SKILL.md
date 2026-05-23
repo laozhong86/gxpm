@@ -35,14 +35,14 @@ gxpm self-review cleanup <issue-id> --army
 
 ### Stage 1 · Spec Compliance Reviewer（必经门控）
 
-**唯一角色**：Spec Compliance Reviewer。
+**唯一角色**：Spec Compliance Reviewer（`role: "spec-compliance"`）。
 
 - **输入边界**：`.gxpm/issues/<id>/artifacts/acceptance-contract.json`、`behavior-spec.json`、`implementation-plan.json` + 本 issue 在 worktree 内的 git diff。
 - **不可读路径**：`.git/objects`、其他 issue 的 artifacts、`node_modules`。
 - **职责**：逐条 AC、逐个 scenario 比对实现；不评价代码风格 / 性能 / 安全（那是 Stage 2 的事）。
-- **输出**：写入 `review-report.payload.stage1.findings`；每个 finding 含 `reviewer: "spec-compliance"`、`severity`、`location`、`rationale`、`recommendation`、`blocking: boolean`。
+- **输出**：写入 `review-report.payload.findings`（**单一 flat 数组**，运行时 `core/agent-runtime.ts` 的 `AgentFinding[]` 契约）；每个 finding 含 `role`、`severity`、`location?`、`rationale`、`recommendation`。
 
-**Gate**：如果 Stage 1 含任意 `blocking: true` finding → **不启动 Stage 2**，agent 必须先修复并重跑 Stage 1。
+**Gate**：如果本 Stage 中存在任意 `severity === "blocking"` finding → **不启动 Stage 2**，agent 必须先修复并重跑 Stage 1。Gate 实现：`core/state.ts` 的 cleanup→ship 转换 counts `payload.findings.filter(f => f.severity === "blocking")`，因此 stage 划分仅是 agent 的工作组织，所有 finding 必须落到同一 flat 数组。
 
 ### Stage 2 · Quality Fan-out（仅当 Stage 1 通过）
 
@@ -59,7 +59,7 @@ gxpm self-review cleanup <issue-id> --army
 - 可读：本 issue worktree 的 git diff、关联源文件、`docs/governance/*.md`、`CONTEXT.md`、`CANON.md`。
 - 不可读：其他 issue 的 artifacts、`.git/objects`、secrets、`node_modules`。
 
-**汇合**：每个 reviewer 把 findings 追加到 `review-report.payload.stage2.findings`；schema 与 Stage 1 一致。
+**汇合**：每个 reviewer 把 finding **追加到同一个 `review-report.payload.findings` flat 数组**（与 Stage 1 共用），`role` 字段标识来源（如 `code-quality` / `security` / `test` / `accessibility`）。这是 cleanup→ship gate 唯一识别的形状。
 
 ### 并发上限（critical）
 
@@ -85,39 +85,34 @@ Ship 阶段 Stage 1 仍是 Spec Compliance Reviewer，但输入扩展为 `accept
 
 ### Review Report 格式
 
+**契约真值**：`core/agent-runtime.ts` 的 `ArmyReport` + `AgentFinding[]`。**flat findings**，由 `role` 区分 reviewer；`severity === "blocking"` 是 gate 信号；**没有** `blocking: boolean` 字段。
+
 ```json
 {
   "army": "review-army",
   "phase": "self-review",
-  "status": "passed | partial | blocked | draft",
-  "stage1": {
-    "status": "passed | blocked",
-    "findings": [
-      {
-        "reviewer": "spec-compliance",
-        "severity": "blocking | important | suggestion",
-        "location": "core/auth.ts:42",
-        "rationale": "AC-03 要求 ...",
-        "recommendation": "...",
-        "blocking": true
-      }
-    ]
-  },
-  "stage2": {
-    "status": "passed | partial | skipped",
-    "findings": [
-      {
-        "reviewer": "security",
-        "severity": "blocking",
-        "location": "core/auth.ts:42",
-        "rationale": "外部输入直接进入文件路径拼接，存在路径遍历风险",
-        "recommendation": "使用 path.resolve 并限制在允许目录内，或改用 UUID 映射",
-        "blocking": true
-      }
-    ]
-  }
+  "status": "completed | partial | failed",
+  "summary": "Stage 1 spec compliance: passed (0 blocking). Stage 2 fan-out: 1 blocking.",
+  "findings": [
+    {
+      "role": "spec-compliance",
+      "severity": "important",
+      "location": "core/auth.ts:42",
+      "rationale": "AC-03 要求只读外部 token，实现接受了写权限",
+      "recommendation": "把 fs.promises.appendFile 改为 readFile，并加注释"
+    },
+    {
+      "role": "security",
+      "severity": "blocking",
+      "location": "core/auth.ts:42",
+      "rationale": "外部输入直接进入文件路径拼接，存在路径遍历风险",
+      "recommendation": "使用 path.resolve 并限制在允许目录内，或改用 UUID 映射"
+    }
+  ]
 }
 ```
+
+`summary` 字符串里描述 Stage 1 / Stage 2 走向，方便人审；机器读 `findings[*].severity === "blocking"` 即可。
 
 ### Severity 分级
 
@@ -142,11 +137,11 @@ Ship 阶段 Stage 1 仍是 Spec Compliance Reviewer，但输入扩展为 `accept
 
 ## Verification（验证清单 / 出口条件）
 
-- [ ] Stage 1 status 已写入 review-report，且无 blocking 时才推进 Stage 2
+- [ ] Stage 1 status 在 `summary` 中明示，且 Stage 1 无 `severity==="blocking"` 时才推进 Stage 2
 - [ ] Stage 2 fan-out 实际并发 ≤6（超过则分批）
-- [ ] 每个 Army 角色的 findings 已填入对应 stage（`reviewer` 字段标识来源）
+- [ ] 每个 Army 角色的 finding 已追加到同一 `payload.findings` flat 数组（`role` 字段标识来源）
 - [ ] blocking finding 数为 0 或已在 ship notes 中说明豁免理由
-- [ ] 所有 finding 含完整 `location` / `rationale` / `recommendation` / `blocking`
+- [ ] 所有 finding 含完整 `role` / `severity` / `rationale` / `recommendation`（`location` 可选）
 - [ ] 单一 reviewer 的 `self-review.json` 仍正常产出（向后兼容）
 
 ## 常见说辞表
@@ -168,6 +163,6 @@ Ship 阶段 Stage 1 仍是 Spec Compliance Reviewer，但输入扩展为 `accept
 
 完成 review-army 双阶段后：
 
-1. 把 `review-report.payload.status` 设为 `passed` / `partial` / `blocked`。
-2. `gxpm artifact write <id> review-report --from <file>` 落盘。
-3. 处理完所有 blocking finding 后，回到对应阶段的 main skill（`gxpm-review-changes` for self-review；`gxpm-verify` for pr-check / verify）继续推进。
+1. 把 `review-report.payload.status` 设为 `completed` / `partial` / `failed`（`core/agent-runtime.ts` `ArmyReport.status` 枚举）。
+2. `gxpm artifact write <id> review-report --from <file>` 落盘；确认 `payload.findings` 是 flat 数组（不要嵌套 `stage1/stage2`）。
+3. 处理完所有 `severity==="blocking"` finding 后，回到对应阶段的 main skill（`gxpm-review-changes` for self-review；`gxpm-verify` for pr-check / verify）继续推进。
