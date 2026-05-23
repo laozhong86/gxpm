@@ -1,6 +1,6 @@
 ---
 name: using-gxpm-runtime
-description: gxpm 运行时启动合约——任何 artifact 或代码改动之前，agent 必须先 `gxpm issue next --json` 拿到 requiredSkill 并 invoke。本合约由 SessionStart hook 自动注入，无需手动加载。
+description: gxpm 运行时启动合约——任何 artifact 或代码改动之前，agent 必须先 `gxpm issue next <id> --json` 拿到 requiredSkill 并 invoke。本合约由 SessionStart hook 自动注入，无需手动加载。
 type: bootstrap
 ---
 
@@ -10,7 +10,7 @@ type: bootstrap
 
 ## Phase-anchored 硬约束
 
-1. 每次开始任何 gxpm issue 相关工作前，先运行 `gxpm issue next <id> --json`（或 `gxpm issue next --json` 若已通过 worktree owner marker 锁定 issue）。
+1. 每次开始任何 gxpm issue 相关工作前，先运行 `gxpm issue next <id> --json`（`<id>` 必传；如果不确定当前 issue id，先 `gxpm issue list` 或读取 worktree 内 `.gxpm-worktree-owner.json` 的 `ownerIssueId`）。
 2. 该命令返回的 `requiredSkill` 字段告诉你当前 phase 必须先调用哪个 skill。**MUST invoke requiredSkill** 后再写任何 artifact / 代码 / 测试。
 3. 若 `requiredSkill === null`（如 `dispatch` / `ship` 阶段），可继续；其余情况强制执行。
 4. Phase 转换通过 `gxpm issue transition <id> <next>` 或 `gxpm issue handoff <id> --to-next-phase`，禁止跳过 artifact 直接写文件。
@@ -52,7 +52,7 @@ type: bootstrap
 
 下列行为视为违约，应立即停下来回到流程：
 
-- 没读 `gxpm issue next --json`，凭记忆推断当前 phase。
+- 没读 `gxpm issue next <id> --json`，凭记忆推断当前 phase。
 - 当前 phase 有 `requiredSkill` 但未 invoke 就开始 Edit / Write 任何源码或 artifact。
 - 直接手改 `.gxpm/issues/<id>/*.json`（应通过 `gxpm artifact write` / `gxpm artifact edit`）。
 - 跨 phase 写跨阶段 artifact（如在 plan 阶段写 behavior-spec）。
