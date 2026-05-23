@@ -395,9 +395,75 @@ async function processStop(
 
 async function processPostToolUse(
   _host: HookHostName,
-  _input: HookInput,
+  input: HookInput,
 ): Promise<HookResult> {
+  const reminder = buildPhaseTransitionReminder(input);
+  if (reminder) {
+    return { action: "allow", additionalContext: reminder, exitCode: 0 };
+  }
   return { action: "allow", exitCode: 0 };
+}
+
+/**
+ * GXPM-204: when an agent just ran `gxpm issue transition <id> <phase>` or
+ * `gxpm issue handoff <id> --to-next-phase` successfully, surface the next
+ * phase's requiredSkill so the agent can re-anchor before writing code or
+ * artifacts. Returns null when the conditions for injection are not met.
+ */
+function buildPhaseTransitionReminder(input: HookInput): string | null {
+  if (!input.cwd) return null;
+  if (!SHELL_TOOL_NAMES.has(input.tool_name ?? "")) return null;
+  if (!isPostToolUseSuccess(input.tool_response)) return null;
+
+  const command = extractBashCommand(input);
+  if (!command) return null;
+  const issueId = extractPhaseTransitionIssueId(command);
+  if (!issueId) return null;
+
+  let currentPhase: string;
+  try {
+    const state = readIssueState({ root: input.cwd, issueId });
+    currentPhase = state.currentPhase;
+  } catch {
+    return null;
+  }
+
+  const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === currentPhase);
+  const requiredSkill = rule?.requiredSkill ?? null;
+
+  if (requiredSkill) {
+    return (
+      `[gxpm post-transition] ${issueId} 已进入 \`${currentPhase}\` 阶段。` +
+      `下一步必须先 \`Skill(${requiredSkill})\`，再写任何 artifact / 代码。` +
+      `查 \`gxpm issue next ${issueId} --json\` 看 requiredArtifact 详情。`
+    );
+  }
+  return (
+    `[gxpm post-transition] ${issueId} 已进入 \`${currentPhase}\` 阶段（本阶段无强制 skill）。` +
+    `继续按 \`gxpm issue next ${issueId} --json\` 提示的 command / requiredArtifact 推进。`
+  );
+}
+
+const PHASE_TRANSITION_PATTERNS: RegExp[] = [
+  /\bgxpm\s+issue\s+transition\s+(GXG-\d+|GXPM-\d+)\b/i,
+  /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
+];
+
+function extractPhaseTransitionIssueId(command: string): string | null {
+  for (const pattern of PHASE_TRANSITION_PATTERNS) {
+    const match = command.match(pattern);
+    if (match?.[1]) return match[1].toUpperCase();
+  }
+  return null;
+}
+
+function isPostToolUseSuccess(toolResponse: Record<string, unknown> | undefined): boolean {
+  if (!toolResponse) return false;
+  if (typeof toolResponse.exit_code === "number") return toolResponse.exit_code === 0;
+  if (typeof toolResponse.exitCode === "number") return toolResponse.exitCode === 0;
+  if (typeof toolResponse.success === "boolean") return toolResponse.success;
+  if (typeof toolResponse.is_error === "boolean") return !toolResponse.is_error;
+  return false;
 }
 
 // =======================================================================
