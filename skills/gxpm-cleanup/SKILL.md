@@ -1,7 +1,7 @@
 ---
 name: gxpm-cleanup
 type: technique
-description: 多 issue worktree 合并前的代码清理与简化。在 cleanup 阶段识别跨 issue 重复、命名不一致、接口错位和死代码。
+description: MUST use during the cleanup phase before transitioning to ship. 多 issue worktree 合并前的代码清理与简化。在 cleanup 阶段识别跨 issue 重复、命名不一致、接口错位和死代码。
 status: stable
 ---
 
@@ -79,3 +79,13 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 
 - `/gxpm-cleanup-auditor` — 审计角色详细定义
 - `/gxpm-refactor-safely` — 安全重构指南
+
+## Terminal State
+
+完成 cleanup-report artifact 后：
+
+1. `gxpm artifact write <issue-id> cleanup-report --from <file>` 落盘。
+2. `gxpm issue transition <issue-id> ship` 进入 ship 阶段。
+3. Ship 阶段 `requiredSkill=null`：写 `ship-readiness`、`git push`、`gh pr create`，等 CodeRabbit/Codex review 通过后 squash-merge。
+4. PR merged 后 `gxpm issue transition <issue-id> pr-check`，invoke `gxpm-review-changes` 处理任何遗留 review thread。
+5. 最终 `gxpm cleanup land <issue-id> --execute` 从 main repo 根执行，清理 worktree。
