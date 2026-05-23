@@ -177,6 +177,32 @@ describe("GXPM-207 · Autopilot Stop policing skill↔phase consistency", () => 
     expect(result.action).toBe("allow");
   });
 
+  // Scenario (scn-05): events.jsonl 不存在时 → fail-open（gate 不 block）
+  // Codex P1 + CodeRabbit Major: 缺失/不可读 events 应视为"无 required = 已 satisfy"，
+  // 否则新 worktree / 瞬时 FS 错误下会误 block。
+  test("test_missing_events_log_fails_open", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-207-scn05-"));
+    initGxpmProject(cwd);
+    seedIssue(cwd, "GXPM-995", "triage");
+    writeWorktreeOwner(cwd, "GXPM-995");
+    // 不写任何 events.jsonl（注意 emitSkillRequired 故意不调用）
+    startAutopilotGrant({
+      root: cwd,
+      issueId: "GXPM-995",
+      profile: "full-delivery",
+      sessionId: "test-session",
+    });
+
+    const result = await processHook(
+      "codex",
+      "Stop",
+      baseInput({ cwd, session_id: "test-session" }),
+    );
+
+    // 本 gate 不应 fire；GXPM-191 continuation 可能仍 block，但 reason 不含 skill-ack 文本
+    expect(result.reason ?? "").not.toContain("gxpm skill ack");
+  });
+
   // Scenario (scn-04): phase requiredSkill=null（如 dispatch / ship）→ 本 gate 不 block
   test("test_null_required_skill_skips_policing", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-207-scn04-"));

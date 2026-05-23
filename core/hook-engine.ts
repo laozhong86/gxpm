@@ -424,12 +424,18 @@ function buildSkillAckStopBlock(cwd: string, scopedGrants: ReadonlyArray<{ issue
 
 function skillAckSatisfied(cwd: string, issueId: string, phase: string, skill: string): boolean {
   const eventsPath = join(cwd, ".gxpm", "issues", issueId, "events.jsonl");
-  if (!existsSync(eventsPath)) return false;
+  // Fail-open when the log is missing or unreadable: without observed
+  // skill.load.required events there is nothing to satisfy, so policing
+  // would otherwise reject every Stop on a skill-required phase before the
+  // first required event is ever emitted (e.g. brand-new worktree, transient
+  // FS error). Treat absence as "satisfied" — when a real required event
+  // exists we will see it on the next Stop tick.
+  if (!existsSync(eventsPath)) return true;
   let raw: string;
   try {
     raw = readFileSync(eventsPath, "utf8");
   } catch {
-    return false;
+    return true;
   }
   let lastRequiredAt: string | null = null;
   let lastSatisfiedAt: string | null = null;
