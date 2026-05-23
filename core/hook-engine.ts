@@ -417,42 +417,62 @@ function buildPhaseTransitionReminder(input: HookInput): string | null {
 
   const command = extractBashCommand(input);
   if (!command) return null;
-  const issueId = extractPhaseTransitionIssueId(command);
-  if (!issueId) return null;
+  const match = matchPhaseTransitionCommand(command);
+  if (!match) return null;
 
-  let currentPhase: string;
+  let stateCurrentPhase: string;
   try {
-    const state = readIssueState({ root: input.cwd, issueId });
-    currentPhase = state.currentPhase;
+    const state = readIssueState({ root: input.cwd, issueId: match.issueId });
+    stateCurrentPhase = state.currentPhase;
   } catch {
     return null;
   }
 
-  const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === currentPhase);
-  const requiredSkill = rule?.requiredSkill ?? null;
+  // `transition` writes the new phase to state before exit, so state.currentPhase
+  // already IS the next phase. `handoff --to-next-phase` only emits a handoff
+  // artifact and leaves state.currentPhase pointing at the old phase, so we have
+  // to walk the gate registry one hop forward to name the *next* phase + skill.
+  let phaseForReminder = stateCurrentPhase;
+  let requiredSkill: string | null;
+  if (match.kind === "transition") {
+    const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    requiredSkill = rule?.requiredSkill ?? null;
+  } else {
+    const currentRule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    const nextPhase = currentRule?.nextPhase;
+    if (!nextPhase) return null;
+    const nextRule = PHASE_GATE_RULES.find((r) => r.fromPhase === nextPhase);
+    requiredSkill = nextRule?.requiredSkill ?? null;
+    phaseForReminder = nextPhase;
+  }
 
   if (requiredSkill) {
     return (
-      `[gxpm post-transition] ${issueId} 已进入 \`${currentPhase}\` 阶段。` +
+      `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段。` +
       `下一步必须先 \`Skill(${requiredSkill})\`，再写任何 artifact / 代码。` +
-      `查 \`gxpm issue next ${issueId} --json\` 看 requiredArtifact 详情。`
+      `查 \`gxpm issue next ${match.issueId} --json\` 看 requiredArtifact 详情。`
     );
   }
   return (
-    `[gxpm post-transition] ${issueId} 已进入 \`${currentPhase}\` 阶段（本阶段无强制 skill）。` +
-    `继续按 \`gxpm issue next ${issueId} --json\` 提示的 command / requiredArtifact 推进。`
+    `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段（本阶段无强制 skill）。` +
+    `继续按 \`gxpm issue next ${match.issueId} --json\` 提示的 command / requiredArtifact 推进。`
   );
 }
 
-const PHASE_TRANSITION_PATTERNS: RegExp[] = [
-  /\bgxpm\s+issue\s+transition\s+(GXG-\d+|GXPM-\d+)\b/i,
-  /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
+const PHASE_TRANSITION_PATTERNS: Array<{ kind: "transition" | "handoff"; pattern: RegExp }> = [
+  { kind: "transition", pattern: /\bgxpm\s+issue\s+transition\s+(GXG-\d+|GXPM-\d+)\b/i },
+  {
+    kind: "handoff",
+    pattern: /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
+  },
 ];
 
-function extractPhaseTransitionIssueId(command: string): string | null {
-  for (const pattern of PHASE_TRANSITION_PATTERNS) {
-    const match = command.match(pattern);
-    if (match?.[1]) return match[1].toUpperCase();
+function matchPhaseTransitionCommand(
+  command: string,
+): { issueId: string; kind: "transition" | "handoff" } | null {
+  for (const { kind, pattern } of PHASE_TRANSITION_PATTERNS) {
+    const m = command.match(pattern);
+    if (m?.[1]) return { issueId: m[1].toUpperCase(), kind };
   }
   return null;
 }

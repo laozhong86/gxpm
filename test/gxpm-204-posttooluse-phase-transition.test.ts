@@ -34,6 +34,7 @@ function createInitializedGxpmProject(cwd: string) {
 function seedIssueState(cwd: string, issueId: string, phase: string) {
   const issueDir = join(cwd, ".gxpm", "issues", issueId);
   mkdirSync(issueDir, { recursive: true });
+  const now = new Date().toISOString();
   writeFileSync(
     join(issueDir, "state.json"),
     JSON.stringify({
@@ -42,10 +43,12 @@ function seedIssueState(cwd: string, issueId: string, phase: string) {
       issueType: "feature",
       title: "test",
       description: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       currentPhase: phase,
-      events: [],
+      stateRoot: join(".gxpm", "issues", issueId),
+      artifactRoot: join(".gxpm", "issues", issueId, "artifacts"),
+      phaseHistory: [{ phase, enteredAt: now, fromPhase: null }],
     }),
   );
 }
@@ -116,11 +119,12 @@ describe("GXPM-204 · PostToolUse phase-transition reminder", () => {
     expect(result.additionalContext).toBeUndefined();
   });
 
-  // Scenario (scn-04): handoff --to-next-phase 成功 → 同样注入 reminder
-  test("test_handoff_to_next_phase_injects_reminder", async () => {
+  // Scenario (scn-04): handoff --to-next-phase 不改 state.currentPhase，但 reminder 必须指向下一个 phase
+  // 当 state 仍是 implement（handoff 不写 state），reminder 应说"已进入 local-verify"+gxpm-verify。
+  test("test_handoff_to_next_phase_uses_next_phase_skill", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "gxpm-204-scn04-"));
     createInitializedGxpmProject(cwd);
-    seedIssueState(cwd, "GXPM-999", "implement"); // implement 阶段 requiredSkill=gxpm-tdd
+    seedIssueState(cwd, "GXPM-999", "implement"); // implement → local-verify per phase-gates
 
     const result = await processHook(
       "codex",
@@ -135,7 +139,9 @@ describe("GXPM-204 · PostToolUse phase-transition reminder", () => {
 
     expect(result.action).toBe("allow");
     expect(result.additionalContext).toBeDefined();
-    expect(result.additionalContext).toContain("implement");
-    expect(result.additionalContext).toContain("gxpm-tdd");
+    expect(result.additionalContext).toContain("local-verify");
+    expect(result.additionalContext).toContain("gxpm-verify");
+    // implementer phase's own skill should NOT be mentioned (we moved on)
+    expect(result.additionalContext).not.toContain("gxpm-tdd");
   });
 });
