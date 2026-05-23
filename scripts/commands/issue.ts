@@ -93,6 +93,28 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
         console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
       }
     }
+    // GXPM-206: surface the phase-handoff payload's next-phase / next-skill so
+    // agents do not have to cat the artifact to know the next contractual gate.
+    // Gate on `payload.fromPhase === state.currentPhase` — `phase-handoff` is
+    // dumped at handoff time and persists across the subsequent transition, so
+    // after the issue moves forward the stored `nextPhase` becomes stale and
+    // would mislead operators into thinking the next gate is the phase they
+    // already entered. Once currentPhase moves past fromPhase, stay silent.
+    if (hasArtifact({ issueId, type: "phase-handoff" })) {
+      try {
+        const handoff = readArtifact({ issueId, type: "phase-handoff" });
+        const payload = (handoff?.payload ?? {}) as Record<string, unknown>;
+        const fromPhase = payload.fromPhase as string | undefined;
+        if (fromPhase === state.currentPhase) {
+          const nextPhase = payload.nextPhase as string | null | undefined;
+          const nextSkill = payload.nextRequiredSkill as string | null | undefined;
+          if (typeof nextPhase === "string") console.log(`nextPhase: ${nextPhase}`);
+          if (typeof nextSkill === "string") console.log(`nextRequiredSkill: ${nextSkill}`);
+        }
+      } catch {
+        // unreadable handoff payload — stay silent rather than break status
+      }
+    }
     return;
   }
 
