@@ -9,6 +9,7 @@ import {
 import { join, resolve } from "node:path";
 import { readArtifact } from "../core/artifacts";
 import { appendIssueEvent, getIssuePaths, readIssueState } from "../core/state";
+import { unregisterRegistryPath } from "../core/gitnexus-registry";
 
 export function runCleanupLandCommand(argv: string[], issueId: string): void {
   const root = process.cwd();
@@ -156,9 +157,12 @@ export function runCleanupLandCommand(argv: string[], issueId: string): void {
     console.warn(`archive failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // 11. GXPM-190 + GXPM-192: fire-and-forget GitNexus reindex.
-  // Post-archive telemetry events are written to the archive copy
-  // because the source dir is about to be deleted (step 12).
+  // 11a. GXPM-201: unregister the deleted worktree from the GitNexus registry
+  // BEFORE the reindex below, so a stale entry never lingers across crash boundaries.
+  // Telemetry events land in the archive copy because the source dir is gone after step 12.
+  triggerGitNexusUnregister({ issueDir: archiveDir, issueId, worktreePath: worktree });
+
+  // 11b. GXPM-190 + GXPM-192: fire-and-forget GitNexus reindex.
   triggerGitNexusReindex({ root, issueDir: archiveDir, issueId });
 
   // 12. GXPM-192: delete source issue directory after archive copy succeeded.
@@ -292,6 +296,76 @@ function triggerGitNexusReindex(input: { root: string; issueDir: string; issueId
       // best-effort
     }
     console.warn(`gitnexus reindex dispatch failed (non-blocking): ${message}`);
+  }
+}
+
+/**
+ * GXPM-201: fire-and-forget GitNexus registry unregister after cleanup land
+ * deletes the worktree. Reuses GXPM_GITNEXUS_REINDEX_MODE for the test stub
+ * switch so the unregister telemetry shares the same mock surface as reindex:
+ *
+ * - mock      → emit triggered event with removed=true, skip disk write
+ * - mock-fail → emit failed event, skip disk write
+ * - else      → call unregisterRegistryPath; emit triggered (with the real
+ *               removed flag) or failed if the registry call throws.
+ *
+ * Errors are caught and logged; cleanup land's exit code is never affected.
+ */
+function triggerGitNexusUnregister(input: {
+  issueDir: string;
+  issueId: string;
+  worktreePath: string;
+}): void {
+  const mode = process.env.GXPM_GITNEXUS_REINDEX_MODE ?? "auto";
+  const now = new Date().toISOString();
+  try {
+    if (mode === "mock-fail") {
+      appendIssueEvent({
+        issueDir: input.issueDir,
+        event: {
+          schemaVersion: 1,
+          type: "gitnexus.unregister.failed",
+          issueId: input.issueId,
+          timestamp: now,
+          payload: { mode, path: input.worktreePath, errorMessage: "mock-fail: simulated unregister failure" },
+        },
+      });
+      return;
+    }
+    let removed = true;
+    let registryPath: string | undefined;
+    if (mode !== "mock") {
+      const outcome = unregisterRegistryPath({ worktreePath: input.worktreePath });
+      removed = outcome.removed;
+      registryPath = outcome.registryPath;
+    }
+    appendIssueEvent({
+      issueDir: input.issueDir,
+      event: {
+        schemaVersion: 1,
+        type: "gitnexus.unregister.triggered",
+        issueId: input.issueId,
+        timestamp: now,
+        payload: { mode, path: input.worktreePath, removed, registryPath },
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      appendIssueEvent({
+        issueDir: input.issueDir,
+        event: {
+          schemaVersion: 1,
+          type: "gitnexus.unregister.failed",
+          issueId: input.issueId,
+          timestamp: now,
+          payload: { mode, path: input.worktreePath, errorMessage: message },
+        },
+      });
+    } catch {
+      // best-effort
+    }
+    console.warn(`gitnexus unregister dispatch failed (non-blocking): ${message}`);
   }
 }
 

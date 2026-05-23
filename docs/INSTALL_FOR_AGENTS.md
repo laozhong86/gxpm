@@ -42,6 +42,14 @@ This will:
 
    Already-customized `scripts.nexus` is never overwritten. Pass `--skip-nexus-script` to opt out entirely.
 
+   **Registry lifecycle:** `gxpm cleanup land --execute` automatically unregisters the deleted worktree from `~/.gitnexus/registry.json` and emits a `gitnexus.unregister.triggered` event into the issue archive (or `gitnexus.unregister.failed` if the registry write fails — cleanup still exits 0). To audit and remove dangling registry entries left over from earlier worktrees, run:
+
+   ```bash
+   gxpm gitnexus prune              # dry-run, lists dangling entries
+   gxpm gitnexus prune --execute    # atomically rewrite registry without them
+   gxpm gitnexus prune --json       # machine-readable output
+   ```
+
 For non-interactive / CI mode:
 ```bash
 gxpm init --non-interactive --target /path/to/project

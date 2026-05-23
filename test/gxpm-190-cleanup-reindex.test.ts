@@ -17,6 +17,21 @@
 //   Given GXPM_GITNEXUS_REINDEX_MODE=mock
 //   When  执行 gxpm cleanup land GXPM-190（无 --execute）
 //   Then  events.jsonl 不出现 gitnexus.reindex.triggered 也不出现 gitnexus.reindex.failed
+//
+// Scenario (scn-04): cleanup land --execute 后已删 worktree 从 GitNexus registry 移除（GXPM-201）
+//   Given GXPM_GITNEXUS_REINDEX_MODE=mock
+//   And   一个临时 HOME 下的 GitNexus registry 包含该 worktree 条目
+//   When  执行 gxpm cleanup land <id> --execute
+//   Then  cleanup 成功完成
+//   And   archive 中 events.jsonl 出现 gitnexus.unregister.triggered 事件（payload.removed=true）
+//   And   registry 中不再存在该 worktree 路径条目
+//
+// Scenario (scn-05): unregister 桩失败时 cleanup land 仍以零退出码完成并写 unregister.failed（GXPM-201）
+//   Given GXPM_GITNEXUS_REINDEX_MODE=mock-fail
+//   When  执行 gxpm cleanup land <id> --execute
+//   Then  cleanup 命令以零退出码返回
+//   And   archive 中 events.jsonl 出现 gitnexus.unregister.failed 事件
+//   And   不出现 gitnexus.unregister.triggered 事件
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -131,5 +146,59 @@ describe("GXPM-190 cleanup land triggers GitNexus reindex", () => {
     const events = readEvents(getIssuePaths(repo, "GXPM-903").eventsPath);
     expect(events.some((e) => e.type === "gitnexus.reindex.triggered")).toBe(false);
     expect(events.some((e) => e.type === "gitnexus.reindex.failed")).toBe(false);
+  });
+
+  // GXPM-201 scenarios — cleanup land unregisters the deleted worktree from
+  // the GitNexus registry. We reuse GXPM_GITNEXUS_REINDEX_MODE so the same
+  // mock/mock-fail/auto switch governs both reindex and unregister telemetry.
+  test("scn-04 cleanup_land_execute_removes_worktree_from_gitnexus_registry", () => {
+    const { repo, worktreePath } = setupLandedIssue("GXPM-190-904");
+    const tmpHome = mkdtempSync(join(tmpdir(), "gxpm-201-home-scn05-"));
+    const registryDir = join(tmpHome, ".gitnexus");
+    require("node:fs").mkdirSync(registryDir, { recursive: true });
+    const registryPath = join(registryDir, "registry.json");
+    writeFileSync(
+      registryPath,
+      JSON.stringify(
+        [
+          { name: "keep-me", path: repo, indexedAt: "2026-05-23T00:00:00Z" },
+          { name: "GXPM-190-904", path: worktreePath, indexedAt: "2026-05-23T00:00:00Z" },
+        ],
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-190-904", "--execute"], {
+      GXPM_GITNEXUS_REINDEX_MODE: "auto",
+      HOME: tmpHome,
+    });
+    expect(result.exitCode).toBe(0);
+
+    const events = readArchiveEvents(repo, "GXPM-190-904");
+    const unreg = events.filter((e) => e.type === "gitnexus.unregister.triggered");
+    expect(unreg.length).toBe(1);
+    expect((unreg[0].payload as { removed?: boolean }).removed).toBe(true);
+    expect((unreg[0].payload as { path?: string }).path).toBe(worktreePath);
+
+    const after = JSON.parse(readFileSync(registryPath, "utf8")) as Array<{ path: string }>;
+    expect(after.some((e) => e.path === worktreePath)).toBe(false);
+    expect(after.some((e) => e.path === repo)).toBe(true);
+  });
+
+  test("scn-05 cleanup_land_unregister_failure_still_exits_zero_and_logs_failed_event", () => {
+    const { repo } = setupLandedIssue("GXPM-190-905");
+
+    const result = runCliWithEnv(repo, ["cleanup", "land", "GXPM-190-905", "--execute"], {
+      GXPM_GITNEXUS_REINDEX_MODE: "mock-fail",
+    });
+    expect(result.exitCode).toBe(0);
+
+    const events = readArchiveEvents(repo, "GXPM-190-905");
+    const failed = events.filter((e) => e.type === "gitnexus.unregister.failed");
+    expect(failed.length).toBe(1);
+    expect((failed[0].payload as { errorMessage?: string }).errorMessage).toBeDefined();
+    expect(events.some((e) => e.type === "gitnexus.unregister.triggered")).toBe(false);
   });
 });
