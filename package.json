@@ -1,6 +1,6 @@
 {
   "name": "@geminix/gxpm",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "Second-generation project management runtime designed to replace PMC and gstack.",
   "type": "module",
   "bin": {
