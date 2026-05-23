@@ -47,6 +47,10 @@ describe("GXPM-205 · phase-anchored skill Terminal State + MUST description", (
     const missing: string[] = [];
     for (const skill of PHASE_ANCHORED_SKILLS) {
       const path = resolve(REPO_ROOT, "skills", skill, "SKILL.md");
+      if (!existsSync(path)) {
+        missing.push(`${skill}: SKILL.md not found at ${path}`);
+        continue;
+      }
       const content = readFileSync(path, "utf8");
       const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (!frontmatterMatch) {
