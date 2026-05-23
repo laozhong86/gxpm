@@ -395,9 +395,113 @@ async function processStop(
 
 async function processPostToolUse(
   _host: HookHostName,
-  _input: HookInput,
+  input: HookInput,
 ): Promise<HookResult> {
+  const reminder = buildPhaseTransitionReminder(input);
+  if (reminder) {
+    return { action: "allow", additionalContext: reminder, exitCode: 0 };
+  }
   return { action: "allow", exitCode: 0 };
+}
+
+/**
+ * GXPM-204: when an agent just ran `gxpm issue transition <id> <phase>` or
+ * `gxpm issue handoff <id> --to-next-phase` successfully, surface the next
+ * phase's requiredSkill so the agent can re-anchor before writing code or
+ * artifacts. Returns null when the conditions for injection are not met.
+ */
+function buildPhaseTransitionReminder(input: HookInput): string | null {
+  if (!input.cwd) return null;
+  if (!SHELL_TOOL_NAMES.has(input.tool_name ?? "")) return null;
+  if (!isPostToolUseSuccess(input.tool_response)) return null;
+
+  const command = extractBashCommand(input);
+  if (!command) return null;
+  const match = matchPhaseTransitionCommand(command);
+  if (!match) return null;
+
+  let stateCurrentPhase: string;
+  try {
+    const state = readIssueState({ root: input.cwd, issueId: match.issueId });
+    stateCurrentPhase = state.currentPhase;
+  } catch {
+    return null;
+  }
+
+  // `transition` writes the new phase to state before exit, so state.currentPhase
+  // already IS the next phase. `handoff --to-next-phase` only emits a handoff
+  // artifact and leaves state.currentPhase pointing at the old phase, so we have
+  // to walk the gate registry one hop forward to name the *next* phase + skill.
+  let phaseForReminder = stateCurrentPhase;
+  let requiredSkill: string | null;
+  if (match.kind === "transition") {
+    const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    requiredSkill = rule?.requiredSkill ?? null;
+  } else {
+    const currentRule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    const nextPhase = currentRule?.nextPhase;
+    if (!nextPhase) return null;
+    const nextRule = PHASE_GATE_RULES.find((r) => r.fromPhase === nextPhase);
+    requiredSkill = nextRule?.requiredSkill ?? null;
+    phaseForReminder = nextPhase;
+  }
+
+  if (requiredSkill) {
+    return (
+      `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段。` +
+      `下一步必须先 \`Skill(${requiredSkill})\`，再写任何 artifact / 代码。` +
+      `查 \`gxpm issue next ${match.issueId} --json\` 看 requiredArtifact 详情。`
+    );
+  }
+  return (
+    `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段（本阶段无强制 skill）。` +
+    `继续按 \`gxpm issue next ${match.issueId} --json\` 提示的 command / requiredArtifact 推进。`
+  );
+}
+
+// Phase tokens are pulled from PHASE_GATE_RULES so the regex stays in sync with
+// the registry — if a new phase is added there it automatically becomes a valid
+// transition target here.
+const PHASE_TOKEN_ALTERNATION = Array.from(
+  new Set(PHASE_GATE_RULES.flatMap((r) => [r.fromPhase, r.nextPhase])),
+)
+  .map((p) => p.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
+  .join("|");
+
+const PHASE_TRANSITION_PATTERNS: Array<{ kind: "transition" | "handoff"; pattern: RegExp }> = [
+  // transition requires `<id> <phase-token>` to avoid matching arbitrary shell
+  // strings (e.g. `echo gxpm issue transition GXPM-99`) that never mutated state.
+  {
+    kind: "transition",
+    pattern: new RegExp(
+      `\\bgxpm\\s+issue\\s+transition\\s+(GXG-\\d+|GXPM-\\d+)\\s+(?:${PHASE_TOKEN_ALTERNATION})\\b`,
+      "i",
+    ),
+  },
+  // handoff requires the explicit --to-next-phase flag.
+  {
+    kind: "handoff",
+    pattern: /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
+  },
+];
+
+function matchPhaseTransitionCommand(
+  command: string,
+): { issueId: string; kind: "transition" | "handoff" } | null {
+  for (const { kind, pattern } of PHASE_TRANSITION_PATTERNS) {
+    const m = command.match(pattern);
+    if (m?.[1]) return { issueId: m[1].toUpperCase(), kind };
+  }
+  return null;
+}
+
+function isPostToolUseSuccess(toolResponse: Record<string, unknown> | undefined): boolean {
+  if (!toolResponse) return false;
+  if (typeof toolResponse.exit_code === "number") return toolResponse.exit_code === 0;
+  if (typeof toolResponse.exitCode === "number") return toolResponse.exitCode === 0;
+  if (typeof toolResponse.success === "boolean") return toolResponse.success;
+  if (typeof toolResponse.is_error === "boolean") return !toolResponse.is_error;
+  return false;
 }
 
 // =======================================================================
