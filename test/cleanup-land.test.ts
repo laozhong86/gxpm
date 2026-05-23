@@ -338,9 +338,9 @@ describe("cleanup land command", () => {
   // Scenario (scn-02): archive 副本的 events.jsonl 末尾依次包含 cleanup.executed → gitnexus.reindex.triggered → source.deleted
   //   Given 一个已 land 的 issue，GXPM_GITNEXUS_REINDEX_MODE=mock 以确保 reindex 事件可观察
   //   When 在主仓库运行 gxpm cleanup land <id> --execute
-  //   Then archive 副本 events.jsonl 末三行类型按顺序为 "cleanup.executed"、"gitnexus.reindex.triggered"、"source.deleted"
+  //   Then archive 副本 events.jsonl 末四行类型按顺序为 "cleanup.executed"、"gitnexus.unregister.triggered"（GXPM-201）、"gitnexus.reindex.triggered"、"source.deleted"
   //   And  source.deleted 事件 payload 包含 sourcePath、archivePath、deletedAt
-  test("scn-02: archive events.jsonl ends with cleanup.executed then reindex.triggered then source.deleted", () => {
+  test("scn-02: archive events.jsonl ends with cleanup.executed then unregister.triggered then reindex.triggered then source.deleted", () => {
     const repo = mkdtempSync(join(tmpdir(), "gxpm-repo-scn02-"));
     initGitRepo(repo);
     const worktreePath = mkdtempSync(join(tmpdir(), "gxpm-wt-scn02-"));
@@ -357,9 +357,10 @@ describe("cleanup land command", () => {
     expect(result.exitCode).toBe(0);
 
     const events = readArchiveEvents(repo, "GXPM-902");
-    const tailTypes = events.slice(-3).map((e) => e.type);
+    const tailTypes = events.slice(-4).map((e) => e.type);
     expect(tailTypes).toEqual([
       "cleanup.executed",
+      "gitnexus.unregister.triggered",
       "gitnexus.reindex.triggered",
       "source.deleted",
     ]);
