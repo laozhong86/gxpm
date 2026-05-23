@@ -87,4 +87,28 @@ describe("GXPM-206 · gxpm issue status surfaces nextRequiredSkill", () => {
     expect(stdout).not.toContain("nextRequiredSkill");
     expect(stdout).not.toContain("nextPhase");
   });
+
+  // Scenario (scn-03): handoff stale (currentPhase 已超过 fromPhase) → status 不打印
+  // Codex P2 review: phase-handoff 在 handoff 时写入，后续 transition 不删；当
+  // currentPhase 已等于 nextPhase（即 transition 已完成），handoff 的 nextPhase
+  // 反映的是历史下一步，输出会误导，必须门控。
+  test("test_status_silent_when_handoff_is_stale", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-206-scn03-"));
+    // state 已经 transitioned 到 local-verify，但 handoff artifact 仍写着 fromPhase=implement
+    const issueDir = setupIssue(cwd, "GXPM-997", "local-verify");
+    writePhaseHandoff(issueDir, {
+      fromPhase: "implement",
+      nextPhase: "local-verify",
+      nextRequiredArtifact: "local-verify",
+      nextRequiredSkill: "gxpm-verify",
+      completedAcceptance: [],
+      nextPhaseMustRead: [],
+      openBlockers: [],
+      status: "ready",
+    });
+
+    const stdout = execSync(`bun ${CLI} issue status GXPM-997`, { cwd, encoding: "utf8" });
+    expect(stdout).not.toContain("nextRequiredSkill");
+    expect(stdout).not.toContain("nextPhase");
+  });
 });
