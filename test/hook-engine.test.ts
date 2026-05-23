@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -31,6 +31,24 @@ function createInitializedGxpmProject(cwd: string) {
   writeFileSync(join(cwd, ".gxpm", "config.json"), JSON.stringify({
     worktree: { enforcement: "optional", default: "ask" },
   }));
+}
+
+// GXPM-207: createIssueState seeds a triage skill.load.required event whose
+// requiredSkill is gxpm-triage. The new Stop policing blocks on an unacked
+// required skill. Tests that exercise the GXPM-191 continuation path need to
+// fake-ack the skill so policing passes through to the original branch.
+function ackTriageSkill(cwd: string, issueId: string) {
+  appendFileSync(
+    join(cwd, ".gxpm", "issues", issueId, "events.jsonl"),
+    JSON.stringify({
+      schemaVersion: 1,
+      type: "skill.load.satisfied",
+      issueId,
+      timestamp: new Date().toISOString(),
+      sessionId: "test-session",
+      payload: { phase: "triage", skill: "gxpm-triage" },
+    }) + "\n",
+  );
 }
 
 describe("hook-engine utilities", () => {
@@ -348,6 +366,7 @@ describe("processHook Stop", () => {
     try {
       process.env.CODEX_COMPANION_SESSION_ID = "owner-session";
       startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+      ackTriageSkill(cwd, "GXPM-1");
 
       const result = await processHook("codex", "Stop", baseInput({
         hook_event_name: "Stop",
@@ -411,6 +430,7 @@ describe("processHook Stop", () => {
     try {
       process.env.CODEX_COMPANION_SESSION_ID = "matched-session";
       startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+      ackTriageSkill(cwd, "GXPM-1");
 
       const result = await processHook("codex", "Stop", baseInput({
         hook_event_name: "Stop",
@@ -436,6 +456,7 @@ describe("processHook Stop", () => {
     try {
       process.env.CODEX_COMPANION_SESSION_ID = "previous-session";
       startAutopilotGrant({ root: cwd, issueId: "GXPM-1" });
+      ackTriageSkill(cwd, "GXPM-1");
 
       writeFileSync(
         join(cwd, ".gxpm-worktree-owner.json"),

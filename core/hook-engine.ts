@@ -386,11 +386,76 @@ async function processStop(
     sessionId: input.session_id,
     ownerIssueId: owner?.ownerIssueId,
   });
+  // GXPM-207: within scoped active grants, block Stop when the current phase's
+  // requiredSkill has not been acknowledged via `gxpm skill ack`. Reads the
+  // skill.load.required / skill.load.satisfied events laid down by
+  // GXPM-170 PR-1; this is the Stop-hook counterpart of that ticket's PR-2.
+  const skillBlock = buildSkillAckStopBlock(cwd, scoped);
+  if (skillBlock) {
+    return { action: "block", reason: skillBlock, exitCode: 2 };
+  }
   const continuation = buildAutopilotStopContinuation(scoped);
   if (continuation) {
     return { action: "block", reason: continuation, exitCode: 2 };
   }
   return { action: "allow", exitCode: 0 };
+}
+
+function buildSkillAckStopBlock(cwd: string, scopedGrants: ReadonlyArray<{ issueId: string }>): string | null {
+  for (const grant of scopedGrants) {
+    let currentPhase: string;
+    try {
+      const state = readIssueState({ root: cwd, issueId: grant.issueId });
+      currentPhase = state.currentPhase;
+    } catch {
+      continue;
+    }
+    const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === currentPhase);
+    if (!rule || !rule.requiredSkill) continue;
+    if (skillAckSatisfied(cwd, grant.issueId, currentPhase, rule.requiredSkill)) continue;
+    return (
+      `[gxpm autopilot stop policing] ${grant.issueId} 仍在 \`${currentPhase}\` 阶段，` +
+      `requiredSkill=\`${rule.requiredSkill}\` 但事件流无匹配 skill.load.satisfied。` +
+      `先 invoke \`Skill(${rule.requiredSkill})\` 并运行 \`gxpm skill ack ${grant.issueId} ${rule.requiredSkill}\` 再 Stop。`
+    );
+  }
+  return null;
+}
+
+function skillAckSatisfied(cwd: string, issueId: string, phase: string, skill: string): boolean {
+  const eventsPath = join(cwd, ".gxpm", "issues", issueId, "events.jsonl");
+  // Fail-open when the log is missing or unreadable: without observed
+  // skill.load.required events there is nothing to satisfy, so policing
+  // would otherwise reject every Stop on a skill-required phase before the
+  // first required event is ever emitted (e.g. brand-new worktree, transient
+  // FS error). Treat absence as "satisfied" — when a real required event
+  // exists we will see it on the next Stop tick.
+  if (!existsSync(eventsPath)) return true;
+  let raw: string;
+  try {
+    raw = readFileSync(eventsPath, "utf8");
+  } catch {
+    return true;
+  }
+  let lastRequiredAt: string | null = null;
+  let lastSatisfiedAt: string | null = null;
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    let evt: { type?: string; timestamp?: string; payload?: { phase?: string; skill?: string } };
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (evt.payload?.phase !== phase || evt.payload?.skill !== skill) continue;
+    if (evt.type === "skill.load.required" && typeof evt.timestamp === "string") {
+      if (!lastRequiredAt || evt.timestamp > lastRequiredAt) lastRequiredAt = evt.timestamp;
+    } else if (evt.type === "skill.load.satisfied" && typeof evt.timestamp === "string") {
+      if (!lastSatisfiedAt || evt.timestamp > lastSatisfiedAt) lastSatisfiedAt = evt.timestamp;
+    }
+  }
+  if (!lastRequiredAt) return true; // no required = nothing to satisfy
+  return !!lastSatisfiedAt && lastSatisfiedAt >= lastRequiredAt;
 }
 
 async function processPostToolUse(
