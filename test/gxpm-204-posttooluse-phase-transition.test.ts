@@ -119,6 +119,39 @@ describe("GXPM-204 · PostToolUse phase-transition reminder", () => {
     expect(result.additionalContext).toBeUndefined();
   });
 
+  // Scenario (scn-05): transition 命令缺少 phase token（或包含在 echo / 日志中）→ 不注入
+  // CodeRabbit round 2 minor: regex must not match `echo "gxpm issue transition GXPM-x"`
+  // or `gxpm issue transition GXPM-x` without a real phase token following.
+  test("test_transition_without_phase_token_skips_injection", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "gxpm-204-scn05-"));
+    createInitializedGxpmProject(cwd);
+    seedIssueState(cwd, "GXPM-999", "triage");
+
+    const echoResult = await processHook(
+      "codex",
+      "PostToolUse",
+      baseInput({
+        cwd,
+        tool_name: "Bash",
+        tool_input: { command: 'echo "gxpm issue transition GXPM-999"' },
+        tool_response: { exit_code: 0 },
+      }),
+    );
+    expect(echoResult.additionalContext).toBeUndefined();
+
+    const bareResult = await processHook(
+      "codex",
+      "PostToolUse",
+      baseInput({
+        cwd,
+        tool_name: "Bash",
+        tool_input: { command: "gxpm issue transition GXPM-999" },
+        tool_response: { exit_code: 0 },
+      }),
+    );
+    expect(bareResult.additionalContext).toBeUndefined();
+  });
+
   // Scenario (scn-04): handoff --to-next-phase 不改 state.currentPhase，但 reminder 必须指向下一个 phase
   // 当 state 仍是 implement（handoff 不写 state），reminder 应说"已进入 local-verify"+gxpm-verify。
   test("test_handoff_to_next_phase_uses_next_phase_skill", async () => {

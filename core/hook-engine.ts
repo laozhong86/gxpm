@@ -459,8 +459,26 @@ function buildPhaseTransitionReminder(input: HookInput): string | null {
   );
 }
 
+// Phase tokens are pulled from PHASE_GATE_RULES so the regex stays in sync with
+// the registry — if a new phase is added there it automatically becomes a valid
+// transition target here.
+const PHASE_TOKEN_ALTERNATION = Array.from(
+  new Set(PHASE_GATE_RULES.flatMap((r) => [r.fromPhase, r.nextPhase])),
+)
+  .map((p) => p.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
+  .join("|");
+
 const PHASE_TRANSITION_PATTERNS: Array<{ kind: "transition" | "handoff"; pattern: RegExp }> = [
-  { kind: "transition", pattern: /\bgxpm\s+issue\s+transition\s+(GXG-\d+|GXPM-\d+)\b/i },
+  // transition requires `<id> <phase-token>` to avoid matching arbitrary shell
+  // strings (e.g. `echo gxpm issue transition GXPM-99`) that never mutated state.
+  {
+    kind: "transition",
+    pattern: new RegExp(
+      `\\bgxpm\\s+issue\\s+transition\\s+(GXG-\\d+|GXPM-\\d+)\\s+(?:${PHASE_TOKEN_ALTERNATION})\\b`,
+      "i",
+    ),
+  },
+  // handoff requires the explicit --to-next-phase flag.
   {
     kind: "handoff",
     pattern: /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
