@@ -1,7 +1,7 @@
 ---
 name: gxpm-review-changes
 type: technique
-description: Structured code review using change detection and impact analysis. Use when reviewing a pull request, assessing risk before merging, or checking for missing test coverage after changes.
+description: MUST use during the self-review and pr-check phases before transitioning. Structured code review using change detection and impact analysis. Use when reviewing a pull request, assessing risk before merging, or checking for missing test coverage after changes.
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl - do not edit directly -->
 
@@ -42,3 +42,12 @@ Provide findings grouped by risk level (high/medium/low) with:
 
 - `/gxpm-review-army` — multi-role parallel review
 - `/gxpm` — main project management runtime
+
+## Terminal State
+
+完成本阶段审查 + 写完对应 artifact 后，按 currentPhase 选下一跳：
+
+- `self-review` → `gxpm artifact write <id> self-review --from <file>` + `gxpm issue transition <id> cleanup`，invoke `gxpm-cleanup`。
+- `pr-check` → `gxpm artifact write <id> pr-check --from <file>` + `gxpm issue transition <id> verify`，invoke `gxpm-verify` 写 `verify-findings`。
+
+如果发现 P1 / 阻断性问题，先写到 self-review.findings 或 pr-check.reviewFindings，再修补后回到本 skill。

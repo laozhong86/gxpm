@@ -21,3 +21,8 @@ coverage/
 # GXPM-151: worktree-local state files (auto-generated per worktree)
 .gxpm-worktree-owner.json
 ISSUE_CONTEXT.md
+
+# Tool artifacts not part of the project source
+.playwright-mcp/
+.workbuddy/
+test/.gxpm-fixtures/

@@ -1,7 +1,7 @@
 ---
 name: gxpm-tdd
 type: discipline
-description: Test-driven development with red-green-refactor loops via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
+description: MUST use during the implement phase before writing any production code. Test-driven development with red-green-refactor loops via vertical slices. Use when user wants to build features or fix bugs using TDD, mentions 'red-green-refactor', wants integration tests, or asks for test-first development.
 ---
 
 **Announce at start:** "I am using the gxpm-tdd skill to drive every production change via a failing test first, vertical slice by vertical slice — red, green, refactor — never code-before-test."
@@ -195,3 +195,11 @@ No exceptions without your human partner's permission.
 - `/gxpm-specifier` — write behavior spec first
 - `/gxpm-verify` — run local verification pipeline
 - `/gxpm` — main project management runtime
+
+## Terminal State
+
+完成所有 RED→GREEN→REFACTOR 循环且 `bun test` 全绿后：
+
+1. `gxpm implement verify <issue-id>` 初始化 `local-verify` artifact。
+2. 写完 verificationSteps 后 `gxpm artifact write <issue-id> local-verify --from <file>`。
+3. `gxpm issue transition <issue-id> local-verify`，invoke `gxpm-verify` 跑完整流水线。

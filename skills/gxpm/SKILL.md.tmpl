@@ -63,7 +63,9 @@ Agent 不得自行拼凑 checkpoint、issue-intake 或其他非标准命令来�
 
 **各阶段 artifact init 映射表：**
 
-| 当前阶段 | 初始化命令 | 产出 artifact |
+> **阅读约定**：表中"初始化命令"是 **transition 命令**——在你**完成"当前阶段"的工作后**运行，它会把 issue 推进到下一阶段并初始化"产出 artifact"。命令名采用 `gxpm <当前阶段> <下一阶段> <issue-id>` 的格式（来源：`core/phase-gates.ts` 的 `PHASE_GATE_RULES`）。换言之：`gxpm triage init <id>` 不是"在 triage 阶段做事"，而是"triage 已完成、进入 init/triage→plan 通路"。
+
+| 当前阶段 | 完成后运行（transition 命令） | 产出 artifact |
 |----------|-----------|--------------|
 | triage | `gxpm triage init <issue-id>` | acceptance-contract |
 | plan | `gxpm plan init <issue-id>` | implementation-plan |

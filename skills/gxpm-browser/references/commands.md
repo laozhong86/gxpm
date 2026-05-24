@@ -41,3 +41,17 @@ gxpm-browser screenshot <url> --no-headless
 ```
 
 Opens a visible Chrome window. Use sparingly; default is headless.
+
+### Session persistence (storage-state)
+
+All subcommands accept two opt-in flags for reusing an authenticated Playwright
+session across runs:
+
+```bash
+gxpm-browser <cmd> <url> --storage-state <path>        # load session before navigate
+gxpm-browser <cmd> <url> --save-storage-state <path>   # write session after command
+gxpm-browser <cmd> <url> --issueid <id> --save-storage-state   # default to issue evidence dir
+```
+
+Default behaviour without flags stays stateless. See the persistence section in
+`references/evidence-path.md` for chained-command examples.

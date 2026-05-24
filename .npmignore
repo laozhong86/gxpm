@@ -1,0 +1,13 @@
+.git/
+.gitignore
+.gitnexus/
+.gxpm/
+.claude/
+.codex/
+.qoder/
+node_modules/
+test/
+*.test.ts
+*.spec.ts
+.DS_Store
+.gxpm-worktree-owner.json

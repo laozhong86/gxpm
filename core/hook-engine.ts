@@ -8,7 +8,8 @@
 
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   formatProjectInitializationContext,
   getProjectInitializationStatus,
@@ -16,6 +17,7 @@ import {
 import { readWorktreeOwner } from "./worktree-owner";
 import { queryToolPermission } from "./role-capability-gate";
 import { readIssueState } from "./state";
+import { PHASE_GATE_RULES } from "./phase-gates";
 
 export type HookHostName = "claude" | "codex" | "cursor" | "kimi";
 
@@ -206,11 +208,20 @@ async function processSessionStart(
   const worktreeCtx = getWorktreeContext(cwd);
   if (worktreeCtx) parts.push(worktreeCtx);
 
+  // GXPM-187: when cwd is inside a gxpm worktree, prepend an identity
+  // block (issue / phase / requiredSkill / recent commits) so the agent
+  // can re-anchor after context compaction without manual recall.
+  const identitySummary = buildSessionStartIdentitySummary(cwd);
+  if (identitySummary) parts.push(identitySummary);
+
   const schema = readSchemaVersion(cwd);
   const version = readVersion(cwd);
   parts.push(
     `This repo uses gxpm (schema v${schema}, version ${version}). Run \`gxpm issue list\` to see active work, \`gxpm issue status <id>\` to load context.`,
   );
+
+  const bootstrap = loadGxpmRuntimeBootstrap();
+  if (bootstrap) parts.push(bootstrap);
 
   const updateCtx = checkUpdate(cwd);
   if (updateCtx) parts.push(updateCtx);
@@ -364,26 +375,315 @@ async function processStop(
   if (!cwd) {
     return { action: "allow", exitCode: 0 };
   }
-  const { buildAutopilotStopContinuation, listActiveAutopilotGrants } = await import("./autopilot");
-  const continuation = buildAutopilotStopContinuation(
-    listActiveAutopilotGrants({ root: cwd, limit: 3 }),
-  );
+  const {
+    buildAutopilotStopContinuation,
+    listActiveAutopilotGrants,
+    filterAutopilotGrantsForHook,
+  } = await import("./autopilot");
+  const allActive = listActiveAutopilotGrants({ root: cwd, limit: 3 });
+  const owner = readWorktreeOwner(cwd);
+  const scoped = filterAutopilotGrantsForHook(allActive, {
+    sessionId: input.session_id,
+    ownerIssueId: owner?.ownerIssueId,
+  });
+  // GXPM-207: within scoped active grants, block Stop when the current phase's
+  // requiredSkill has not been acknowledged via `gxpm skill ack`. Reads the
+  // skill.load.required / skill.load.satisfied events laid down by
+  // GXPM-170 PR-1; this is the Stop-hook counterpart of that ticket's PR-2.
+  const skillBlock = buildSkillAckStopBlock(cwd, scoped);
+  if (skillBlock) {
+    return { action: "block", reason: skillBlock, exitCode: 2 };
+  }
+  const continuation = buildAutopilotStopContinuation(scoped);
   if (continuation) {
     return { action: "block", reason: continuation, exitCode: 2 };
   }
   return { action: "allow", exitCode: 0 };
 }
 
+function buildSkillAckStopBlock(cwd: string, scopedGrants: ReadonlyArray<{ issueId: string }>): string | null {
+  for (const grant of scopedGrants) {
+    let currentPhase: string;
+    try {
+      const state = readIssueState({ root: cwd, issueId: grant.issueId });
+      currentPhase = state.currentPhase;
+    } catch {
+      continue;
+    }
+    const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === currentPhase);
+    if (!rule || !rule.requiredSkill) continue;
+    if (skillAckSatisfied(cwd, grant.issueId, currentPhase, rule.requiredSkill)) continue;
+    return (
+      `[gxpm autopilot stop policing] ${grant.issueId} 仍在 \`${currentPhase}\` 阶段，` +
+      `requiredSkill=\`${rule.requiredSkill}\` 但事件流无匹配 skill.load.satisfied。` +
+      `先 invoke \`Skill(${rule.requiredSkill})\` 并运行 \`gxpm skill ack ${grant.issueId} ${rule.requiredSkill}\` 再 Stop。`
+    );
+  }
+  return null;
+}
+
+function skillAckSatisfied(cwd: string, issueId: string, phase: string, skill: string): boolean {
+  const eventsPath = join(cwd, ".gxpm", "issues", issueId, "events.jsonl");
+  // Fail-open when the log is missing or unreadable: without observed
+  // skill.load.required events there is nothing to satisfy, so policing
+  // would otherwise reject every Stop on a skill-required phase before the
+  // first required event is ever emitted (e.g. brand-new worktree, transient
+  // FS error). Treat absence as "satisfied" — when a real required event
+  // exists we will see it on the next Stop tick.
+  if (!existsSync(eventsPath)) return true;
+  let raw: string;
+  try {
+    raw = readFileSync(eventsPath, "utf8");
+  } catch {
+    return true;
+  }
+  let lastRequiredAt: string | null = null;
+  let lastSatisfiedAt: string | null = null;
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    let evt: { type?: string; timestamp?: string; payload?: { phase?: string; skill?: string } };
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (evt.payload?.phase !== phase || evt.payload?.skill !== skill) continue;
+    if (evt.type === "skill.load.required" && typeof evt.timestamp === "string") {
+      if (!lastRequiredAt || evt.timestamp > lastRequiredAt) lastRequiredAt = evt.timestamp;
+    } else if (evt.type === "skill.load.satisfied" && typeof evt.timestamp === "string") {
+      if (!lastSatisfiedAt || evt.timestamp > lastSatisfiedAt) lastSatisfiedAt = evt.timestamp;
+    }
+  }
+  if (!lastRequiredAt) return true; // no required = nothing to satisfy
+  return !!lastSatisfiedAt && lastSatisfiedAt >= lastRequiredAt;
+}
+
 async function processPostToolUse(
   _host: HookHostName,
-  _input: HookInput,
+  input: HookInput,
 ): Promise<HookResult> {
+  const reminder = buildPhaseTransitionReminder(input);
+  if (reminder) {
+    return { action: "allow", additionalContext: reminder, exitCode: 0 };
+  }
   return { action: "allow", exitCode: 0 };
+}
+
+/**
+ * GXPM-204: when an agent just ran `gxpm issue transition <id> <phase>` or
+ * `gxpm issue handoff <id> --to-next-phase` successfully, surface the next
+ * phase's requiredSkill so the agent can re-anchor before writing code or
+ * artifacts. Returns null when the conditions for injection are not met.
+ */
+function buildPhaseTransitionReminder(input: HookInput): string | null {
+  if (!input.cwd) return null;
+  if (!SHELL_TOOL_NAMES.has(input.tool_name ?? "")) return null;
+  if (!isPostToolUseSuccess(input.tool_response)) return null;
+
+  const command = extractBashCommand(input);
+  if (!command) return null;
+  const match = matchPhaseTransitionCommand(command);
+  if (!match) return null;
+
+  let stateCurrentPhase: string;
+  try {
+    const state = readIssueState({ root: input.cwd, issueId: match.issueId });
+    stateCurrentPhase = state.currentPhase;
+  } catch {
+    return null;
+  }
+
+  // `transition` writes the new phase to state before exit, so state.currentPhase
+  // already IS the next phase. `handoff --to-next-phase` only emits a handoff
+  // artifact and leaves state.currentPhase pointing at the old phase, so we have
+  // to walk the gate registry one hop forward to name the *next* phase + skill.
+  let phaseForReminder = stateCurrentPhase;
+  let requiredSkill: string | null;
+  if (match.kind === "transition") {
+    const rule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    requiredSkill = rule?.requiredSkill ?? null;
+  } else {
+    const currentRule = PHASE_GATE_RULES.find((r) => r.fromPhase === stateCurrentPhase);
+    const nextPhase = currentRule?.nextPhase;
+    if (!nextPhase) return null;
+    const nextRule = PHASE_GATE_RULES.find((r) => r.fromPhase === nextPhase);
+    requiredSkill = nextRule?.requiredSkill ?? null;
+    phaseForReminder = nextPhase;
+  }
+
+  if (requiredSkill) {
+    return (
+      `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段。` +
+      `下一步必须先 \`Skill(${requiredSkill})\`，再写任何 artifact / 代码。` +
+      `查 \`gxpm issue next ${match.issueId} --json\` 看 requiredArtifact 详情。`
+    );
+  }
+  return (
+    `[gxpm post-transition] ${match.issueId} 已进入 \`${phaseForReminder}\` 阶段（本阶段无强制 skill）。` +
+    `继续按 \`gxpm issue next ${match.issueId} --json\` 提示的 command / requiredArtifact 推进。`
+  );
+}
+
+// Phase tokens are pulled from PHASE_GATE_RULES so the regex stays in sync with
+// the registry — if a new phase is added there it automatically becomes a valid
+// transition target here.
+const PHASE_TOKEN_ALTERNATION = Array.from(
+  new Set(PHASE_GATE_RULES.flatMap((r) => [r.fromPhase, r.nextPhase])),
+)
+  .map((p) => p.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
+  .join("|");
+
+const PHASE_TRANSITION_PATTERNS: Array<{ kind: "transition" | "handoff"; pattern: RegExp }> = [
+  // transition requires `<id> <phase-token>` to avoid matching arbitrary shell
+  // strings (e.g. `echo gxpm issue transition GXPM-99`) that never mutated state.
+  {
+    kind: "transition",
+    pattern: new RegExp(
+      `\\bgxpm\\s+issue\\s+transition\\s+(GXG-\\d+|GXPM-\\d+)\\s+(?:${PHASE_TOKEN_ALTERNATION})\\b`,
+      "i",
+    ),
+  },
+  // handoff requires the explicit --to-next-phase flag.
+  {
+    kind: "handoff",
+    pattern: /\bgxpm\s+issue\s+handoff\s+(GXG-\d+|GXPM-\d+)\s+(?:[^&|;]*\s)?--to-next-phase\b/i,
+  },
+];
+
+function matchPhaseTransitionCommand(
+  command: string,
+): { issueId: string; kind: "transition" | "handoff" } | null {
+  for (const { kind, pattern } of PHASE_TRANSITION_PATTERNS) {
+    const m = command.match(pattern);
+    if (m?.[1]) return { issueId: m[1].toUpperCase(), kind };
+  }
+  return null;
+}
+
+function isPostToolUseSuccess(toolResponse: Record<string, unknown> | undefined): boolean {
+  if (!toolResponse) return false;
+  if (typeof toolResponse.exit_code === "number") return toolResponse.exit_code === 0;
+  if (typeof toolResponse.exitCode === "number") return toolResponse.exitCode === 0;
+  if (typeof toolResponse.success === "boolean") return toolResponse.success;
+  if (typeof toolResponse.is_error === "boolean") return !toolResponse.is_error;
+  return false;
 }
 
 // =======================================================================
 // Helpers
 // =======================================================================
+
+let cachedRuntimeBootstrap: string | null | undefined;
+
+function loadGxpmRuntimeBootstrap(): string | null {
+  if (cachedRuntimeBootstrap !== undefined) return cachedRuntimeBootstrap;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "skills", "using-gxpm-runtime", "SKILL.md"),
+    join(here, "..", "..", "skills", "using-gxpm-runtime", "SKILL.md"),
+  ];
+  for (const path of candidates) {
+    try {
+      if (existsSync(path)) {
+        cachedRuntimeBootstrap = readFileSync(path, "utf8").trim();
+        return cachedRuntimeBootstrap;
+      }
+    } catch {
+      // ignore and try next
+    }
+  }
+  cachedRuntimeBootstrap = null;
+  return null;
+}
+
+function buildSessionStartIdentitySummary(cwd: string): string | null {
+  const owner = readWorktreeOwner(cwd);
+  if (!owner) return null;
+  let requiredSkill: string | null = null;
+  try {
+    const state = readIssueState({ root: process.cwd(), issueId: owner.ownerIssueId });
+    const rule = PHASE_GATE_RULES.find((r) => r.phase === state.currentPhase);
+    requiredSkill = rule?.requiredSkill ?? null;
+  } catch {
+    // owner present but state lookup failed (e.g. cwd != main repo). Best-effort.
+  }
+  let recentCommits: Array<{ sha: string; subject: string }> = [];
+  try {
+    const raw = execSync('git log -3 --pretty=format:"%h\t%s"', {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    recentCommits = raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, ...rest] = line.split("\t");
+        return { sha: sha.replace(/^"|"$/g, ""), subject: rest.join("\t").replace(/^"|"$/g, "") };
+      });
+  } catch {
+    // git not available or worktree not a git repo
+  }
+  return formatWorktreeIdentitySummary({
+    cwd,
+    requiredSkill,
+    recentCommits,
+  });
+}
+
+/**
+ * GXPM-187: format a worktree identity summary for SessionStart hook injection.
+ *
+ * When the agent's cwd is inside a gxpm worktree (i.e. `.gxpm-worktree-owner.json`
+ * exists), emit a compact block containing issue id, phase, branch, the skill
+ * the agent must invoke for the current phase, and the most recent commits.
+ *
+ * The combined output is hard-capped at `maxBytes` (default 2048) — when the
+ * raw body exceeds the budget, commit lines are dropped from the tail and a
+ * `… (truncated)` sentinel is appended. ownerIssueId / phase / requiredSkill
+ * are always preserved.
+ */
+export function formatWorktreeIdentitySummary(opts: {
+  cwd: string;
+  requiredSkill?: string | null;
+  recentCommits?: Array<{ sha: string; subject: string }>;
+  maxBytes?: number;
+}): string | null {
+  const owner = readWorktreeOwner(opts.cwd);
+  if (!owner) return null;
+  const maxBytes = opts.maxBytes ?? 2048;
+  const headerLines: string[] = [
+    `gxpm worktree identity:`,
+    `- issue: ${owner.ownerIssueId}`,
+    `- phase: ${owner.currentPhase ?? "(unknown)"}`,
+  ];
+  if (owner.branchName) headerLines.push(`- branch: ${owner.branchName}`);
+  headerLines.push(`- requiredSkill: ${opts.requiredSkill ?? "(none)"}`);
+  const header = headerLines.join("\n");
+
+  const commitLines: string[] = [];
+  if (opts.recentCommits && opts.recentCommits.length > 0) {
+    commitLines.push(`- recent commits:`);
+    for (const c of opts.recentCommits) {
+      commitLines.push(`  - ${c.sha.slice(0, 7)} ${c.subject}`);
+    }
+  }
+
+  const fullBody = commitLines.length > 0 ? `${header}\n${commitLines.join("\n")}` : header;
+  if (Buffer.byteLength(fullBody, "utf8") <= maxBytes) {
+    return fullBody;
+  }
+
+  const suffix = "\n… (truncated)";
+  const budget = Math.max(0, maxBytes - Buffer.byteLength(suffix, "utf8"));
+  let candidate = header;
+  for (const line of commitLines) {
+    const next = `${candidate}\n${line}`;
+    if (Buffer.byteLength(next, "utf8") > budget) break;
+    candidate = next;
+  }
+  return candidate + suffix;
+}
 
 function getWorktreeContext(cwd: string): string | null {
   try {

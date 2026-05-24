@@ -1,7 +1,7 @@
 ---
 name: gxpm-cleanup
 type: technique
-description: 多 issue worktree 合并前的代码清理与简化。在 cleanup 阶段识别跨 issue 重复、命名不一致、接口错位和死代码。
+description: MUST use during the cleanup phase before transitioning to ship. 多 issue worktree 合并前的代码清理与简化。在 cleanup 阶段识别跨 issue 重复、命名不一致、接口错位和死代码。
 status: stable
 ---
 
@@ -19,11 +19,13 @@ status: stable
 
 ## 可操作流程
 
-### 在 cleanup 阶段初始化报告
+### 从 self-review 进入 cleanup 并初始化报告
 
 ```bash
 gxpm self-review cleanup <issue-id>
 ```
+
+> **命令语义**：这是从 `self-review` 阶段**完成后**触发的 transition 命令——它把 issue 从 `self-review` 推进到 `cleanup`，并同时创建 `cleanup-report` artifact 草稿（命名约定来自 `core/phase-gates.ts`：`gxpm <当前阶段> <下一阶段> <id>`）。本 skill 之后的所有操作都发生在 `cleanup` 阶段内，写入这同一个 artifact。
 
 这会创建 `cleanup-report.json` artifact，包含：
 - `duplicatesExtracted` — 重复代码提取记录
@@ -77,3 +79,13 @@ gxpm issue transition <issue-id> ship --skip-cleanup
 
 - `/gxpm-cleanup-auditor` — 审计角色详细定义
 - `/gxpm-refactor-safely` — 安全重构指南
+
+## Terminal State
+
+完成 cleanup-report artifact 后：
+
+1. `gxpm artifact write <issue-id> cleanup-report --from <file>` 落盘。
+2. `gxpm issue transition <issue-id> ship` 进入 ship 阶段。
+3. Ship 阶段 `requiredSkill=null`：写 `ship-readiness`、`git push`、`gh pr create`，等 CodeRabbit/Codex review 通过后 squash-merge。
+4. PR merged 后 `gxpm issue transition <issue-id> pr-check`，invoke `gxpm-review-changes` 处理任何遗留 review thread。
+5. 最终 `gxpm cleanup land <issue-id> --execute` 从 main repo 根执行，清理 worktree。

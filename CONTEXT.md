@@ -28,6 +28,12 @@ A persisted `autopilot-grant` artifact that records the user's explicit authoriz
 **Worktree**:
 A git worktree used to isolate feature branch development from the canonical main checkout.
 
+**GitNexus registry**:
+The user-global file at `~/.gitnexus/registry.json` that GitNexus maintains as the list of indexed code locations (one entry per **Worktree** or repository root, each with `name`, `path`, and index metadata). gxpm reads it for status checks and writes to it to keep the registry in sync with **Worktree** lifecycle.
+
+**Dangling registry entry**:
+A **GitNexus registry** entry whose `path` is missing, no longer resolves, or no longer points at a git worktree root (e.g. left behind after a **Worktree** was removed). Dangling entries are the cleanup target of `gxpm gitnexus prune` and of the unregister step that runs at `cleanup land`.
+
 **Claim**:
 A soft-state lock indicating which session is currently executing an issue. Not a write lock — ownership records the latest writing session for hook warnings.
 
@@ -42,6 +48,7 @@ A reusable agent capability loaded by the host (Codex/Claude). Each skill is a s
 - A **Phase** transition requires one **Artifact**
 - An **Autopilot Grant** may authorize autonomous execution for one **Issue**
 - A **Session** may **Claim** one **Issue** at a time
+- A **Worktree** appears in the **GitNexus registry** once it has been indexed; when the **Worktree** is removed, its entry becomes a **Dangling registry entry** until pruned
 
 ## Flagged ambiguities
 

@@ -1,5 +1,7 @@
 import { runCleanupLandCommand } from "./cleanup";
 import { formatDoctorReport, runDoctor } from "./doctor";
+import { formatDoctorIssuesReport, runDoctorIssues } from "./doctor-issues";
+import { runDoctorIdentityCommand, runIssueHandoffCommand } from "./commands/identity";
 import { runGlobalDiscover } from "./global-discover";
 import { findPhaseArtifactCommand } from "./phase-artifact-commands";
 import { runScaffoldCheck } from "./scaffold-check";
@@ -46,6 +48,7 @@ async function main(argv: string[]) {
   // land in `issueId`) or `gxpm issue claim --next --actor worker-cli`.
   const VALUE_FLAGS = new Set([
     "--actor",
+    "--age-days",
     "--branch",
     "--canonical-main",
     "--description",
@@ -64,9 +67,11 @@ async function main(argv: string[]) {
     "--related",
     "--root",
     "--run",
+    "--set",
     "--sha",
     "--status",
     "--title",
+    "--topic",
     "--ttl-minutes",
     "--type",
     "--workspace",
@@ -171,6 +176,28 @@ async function main(argv: string[]) {
   }
 
   if (command === "doctor") {
+    // GXPM-188: `gxpm doctor identity` subcommand prints the worktree
+    // identity card. Other doctor invocations fall through to the default
+    // health-check report.
+    if (subcommand === "identity") {
+      runDoctorIdentityCommand();
+      return;
+    }
+    if (subcommand === "issues") {
+      // GXPM-197: business-state health check across all tracked issues.
+      const json = argv.includes("--json");
+      const fix = argv.includes("--fix");
+      const fixAggressive = argv.includes("--fix-aggressive");
+      const sinceIdx = argv.indexOf("--since");
+      const since = sinceIdx >= 0 && sinceIdx + 1 < argv.length ? argv[sinceIdx + 1] : undefined;
+      const report = runDoctorIssues({ fix, fixAggressive, since });
+      if (json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatDoctorIssuesReport(report));
+      }
+      return;
+    }
     const json = argv.includes("--json");
     const fix = argv.includes("--fix");
     const report = runDoctor({ fix });

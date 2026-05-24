@@ -198,6 +198,33 @@ export function isAutopilotGrantActive(grant: AutopilotGrant, now: Date = new Da
   return Date.parse(grant.expiresAt) > now.getTime();
 }
 
+export interface AutopilotHookScope {
+  sessionId?: string;
+  ownerIssueId?: string;
+}
+
+/**
+ * Narrow Stop-hook interception to grants that belong to the current session
+ * or the current worktree's owner issue. Without this filter the hook would
+ * hijack unrelated sessions sharing the same cwd.
+ */
+export function filterAutopilotGrantsForHook(
+  active: ActiveAutopilotGrant[],
+  scope: AutopilotHookScope,
+): ActiveAutopilotGrant[] {
+  const { sessionId, ownerIssueId } = scope;
+  if (!sessionId && !ownerIssueId) return active;
+  return active.filter((item) => {
+    if (sessionId && item.grant.startedBySession && item.grant.startedBySession === sessionId) {
+      return true;
+    }
+    if (ownerIssueId && item.issueId === ownerIssueId) {
+      return true;
+    }
+    return false;
+  });
+}
+
 export function isAutopilotProfile(value: string): value is AutopilotProfile {
   return AUTOPILOT_PROFILES.includes(value as AutopilotProfile);
 }

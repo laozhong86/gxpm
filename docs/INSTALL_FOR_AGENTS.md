@@ -36,6 +36,19 @@ This will:
 3. Install Codex hooks (if `.codex/` detected)
 4. Install gxpm skills to all detected host adapters (Claude, Codex, Cursor)
 5. Initialize `.gxpm/config.json` with sensible defaults
+6. Inject two `nexus` npm scripts into the target repo's `package.json` (if present) so GitNexus indexing has a canonical entry point that does not modify versioned `AGENTS.md` / `CLAUDE.md` blocks:
+   - `npm run nexus` → `gitnexus analyze --skip-agents-md` (everyday indexing)
+   - `npm run nexus:full` → `gitnexus analyze` (full indexing including doc stats refresh)
+
+   Already-customized `scripts.nexus` is never overwritten. Pass `--skip-nexus-script` to opt out entirely.
+
+   **Registry lifecycle:** `gxpm cleanup land --execute` automatically unregisters the deleted worktree from `~/.gitnexus/registry.json` and emits a `gitnexus.unregister.triggered` event into the issue archive (or `gitnexus.unregister.failed` if the registry write fails — cleanup still exits 0). To audit and remove dangling registry entries left over from earlier worktrees, run:
+
+   ```bash
+   gxpm gitnexus prune              # dry-run, lists dangling entries
+   gxpm gitnexus prune --execute    # atomically rewrite registry without them
+   gxpm gitnexus prune --json       # machine-readable output
+   ```
 
 For non-interactive / CI mode:
 ```bash

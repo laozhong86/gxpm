@@ -1,7 +1,7 @@
 ---
 name: gxpm-planning
 type: technique
-description: Break plans into independently-grabbable issues using vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, break down a feature, or turn discussion into a structured PRD.
+description: MUST use during the plan phase to write implementation-plan before transitioning to dispatch. Break plans into independently-grabbable vertical-slice issues. Use when converting a plan into tickets, breaking a feature down, or turning discussion into a structured PRD.
 ---
 
 **Announce at start:** "I am using the gxpm-planning skill to decompose this plan into tracer-bullet vertical slices with explicit blocked-by edges and per-slice acceptance criteria."
@@ -142,3 +142,13 @@ Any additional notes.
 - `/gxpm-grill` — stress-test plans
 - `/gxpm-specifier` — convert plans to behavior specs
 - `/gxpm` — main project management runtime
+
+## Terminal State
+
+完成 `implementation-plan` artifact 后：
+
+1. `gxpm artifact write <issue-id> implementation-plan --from <file>` 落盘 plan。
+2. `gxpm issue transition <issue-id> dispatch` 进入 dispatch 阶段。
+3. Dispatch 阶段 `requiredSkill=null`，写完 `dispatch-handoff` artifact 后 `gxpm issue transition <issue-id> specify`，再 invoke `gxpm-specifier`。
+
+如果 plan 拆出子 issue，每个子 issue 走完整 plan→…→land 链路。

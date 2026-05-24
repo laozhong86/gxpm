@@ -140,9 +140,7 @@ bun run check
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **gxpm** (6575 symbols, 10872 relationships, 300 execution flows). Use GitNexus MCP tools (`query`, `context`, `impact`, `detect_changes`) to understand code, assess impact, and navigate safely. If index is stale, run `npx gitnexus analyze` first.
+This project is indexed by GitNexus as **gxpm** (7711 symbols, 12538 relationships, 300 execution flows). Use GitNexus MCP tools (`query`, `context`, `impact`, `detect_changes`) to understand code, assess impact, and navigate safely. If index is stale, run `npx gitnexus analyze` first.
 
 **Always Do:** run `impact` before editing any symbol; run `detect_changes` before committing; warn on HIGH/CRITICAL risk. **Never Do:** edit without impact analysis; ignore HIGH/CRITICAL risk; rename with find-and-replace; commit without `detect_changes`.
-
-Resources: `gitnexus://repo/gxpm/context` (overview), `/clusters` (functional areas), `/processes` (execution flows), `/process/{name}` (step-by-step trace). Skill files: `gitnexus-exploring`, `gitnexus-impact-analysis`, `gitnexus-debugging`, `gitnexus-refactoring`, `gitnexus-guide`, `gitnexus-cli` under `.claude/skills/gitnexus/`.
 <!-- gitnexus:end -->

@@ -39,17 +39,19 @@ Collect the essential state from the current session:
 
 ### 2. Write the handoff doc
 
-Save to a temporary path:
+Save to a temporary path (for ad-hoc human-readable handoffs between agents in the same session):
 
 ```bash
 mktemp -t handoff-XXXXXX.md
 ```
 
-Or append to the issue's artifact history:
+For a **formal phase transition handoff** (so the next-phase agent can resume from the structured artifact), use the dedicated command instead—it writes a `phase-handoff` artifact with provenance and target-phase metadata (added by GXPM-188):
 
 ```bash
-gxpm artifact write <issue-id> handoff --stdin
+gxpm issue handoff <issue-id> --to-next-phase
 ```
+
+> Do not invent an ad-hoc `handoff` artifact type via `gxpm artifact write`—`handoff` is not in `ARTIFACT_TYPES`. The real type is `phase-handoff` and the canonical writer is the command above.
 
 ### 3. Structure
 

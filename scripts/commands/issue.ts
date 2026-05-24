@@ -17,6 +17,7 @@ import { readSyncState } from "../../core/issue-sync";
 import { hasArtifact } from "../../core/artifacts";
 import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
+import { runIssueHandoffCommand } from "./identity";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
 import { assessLandCompletion, type LandCompletionAssessment } from "../../core/land-completion";
 import { PHASE_GATE_RULES, type PhaseGateRule } from "../../core/phase-gates";
@@ -32,7 +33,7 @@ import { ensureIssueWorkspaceWithResolver } from "../../core/workspace-runtime";
 import { readArtifact, writeArtifact } from "../../core/artifacts";
 import { currentGitBranch, detectCanonicalMainRoot, currentGitRoot, optionRequiredValue, optionValue, parsePositiveIntegerOption, payloadTitle, readJsonPayloadFromArgs } from "./helpers";
 import { getResolvedConfigValue } from "../../core/config";
-import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd } from "../../core/worktree-owner";
+import { readWorktreeOwner, writeWorktreeOwnerMarker, writeIssueContextMd, ensureWorktreeIdentity } from "../../core/worktree-owner";
 
 const ISSUE_TYPE_USAGE = ISSUE_TYPES.join("|");
 const ISSUE_TYPE_LIST = formatList(ISSUE_TYPES);
@@ -91,6 +92,28 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
       for (const target of syncState.targets) {
         const syncStatus = target.lastError ? `error: ${target.lastError.message}` : `synced at ${target.syncedAt ?? "unknown"}`;
         console.log(`external: ${target.provider} ${target.displayId} (${target.url}) — ${syncStatus}`);
+      }
+    }
+    // GXPM-206: surface the phase-handoff payload's next-phase / next-skill so
+    // agents do not have to cat the artifact to know the next contractual gate.
+    // Gate on `payload.fromPhase === state.currentPhase` — `phase-handoff` is
+    // dumped at handoff time and persists across the subsequent transition, so
+    // after the issue moves forward the stored `nextPhase` becomes stale and
+    // would mislead operators into thinking the next gate is the phase they
+    // already entered. Once currentPhase moves past fromPhase, stay silent.
+    if (hasArtifact({ issueId, type: "phase-handoff" })) {
+      try {
+        const handoff = readArtifact({ issueId, type: "phase-handoff" });
+        const payload = (handoff?.payload ?? {}) as Record<string, unknown>;
+        const fromPhase = payload.fromPhase as string | undefined;
+        if (fromPhase === state.currentPhase) {
+          const nextPhase = payload.nextPhase as string | null | undefined;
+          const nextSkill = payload.nextRequiredSkill as string | null | undefined;
+          if (typeof nextPhase === "string") console.log(`nextPhase: ${nextPhase}`);
+          if (typeof nextSkill === "string") console.log(`nextRequiredSkill: ${nextSkill}`);
+        }
+      } catch {
+        // unreadable handoff payload — stay silent rather than break status
       }
     }
     return;
@@ -246,6 +269,12 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
     return;
   }
 
+  // GXPM-188: dump a phase-handoff artifact for the next-phase agent.
+  if (subcommand === "handoff") {
+    runIssueHandoffCommand(argv, issueId);
+    return;
+  }
+
   if (subcommand === "transition") {
     if (!issueId || !value) throw new Error("Usage: gxpm issue transition <issue-id> <phase>");
     const before = readIssueState({ issueId });
@@ -268,22 +297,15 @@ export async function runIssueCommand(argv: string[], subcommand: string | undef
               worktreeDecision: result.method?.type === "created" ? "created" : "reused",
             },
           });
-          // Write enhanced worktree ownership marker + passive context recovery file
-          const allLinked = [issueId, ...linkedIssues];
+          // GXPM-187: single entry point — preserves createdAt, guards
+          // ownerIssueId conflicts, emits worktree.identity.written event.
           try {
-            writeWorktreeOwnerMarker(result.workspacePath, {
-              ownerIssueId: issueId,
-              linkedIssues: allLinked,
-              currentPhase: after.currentPhase,
-              branchName: result.resolution.env.branchName,
-              workspacePath: result.resolution.env.workspacePath,
-            });
-            writeIssueContextMd(result.workspacePath, {
+            ensureWorktreeIdentity({
+              repoRoot: process.cwd(),
+              workspacePath: result.workspacePath,
               issueId,
               currentPhase: after.currentPhase,
-              branchName: result.resolution.env.branchName,
-              workspacePath: result.resolution.env.workspacePath,
-              updatedAt: new Date().toISOString(),
+              branchName: result.resolution.env.branchName ?? undefined,
             });
           } catch {
             // best-effort; marker is advisory
@@ -723,24 +745,16 @@ function refreshWorktreeContextFiles(issueId: string, currentPhase: string, titl
   const nextPhase = idx >= 0 && idx < phaseOrder.length - 1 ? phaseOrder[idx + 1] : undefined;
 
   try {
-    writeWorktreeOwnerMarker(workspacePath, {
-      ownerIssueId: existingOwner?.ownerIssueId ?? issueId,
-      linkedIssues,
-      createdAt,
-      currentPhase,
-      title: title ?? existingOwner?.title,
-      updatedAt: new Date().toISOString(),
-      branchName: existingOwner?.branchName ?? currentGitBranch(),
+    // GXPM-187: ensureWorktreeIdentity handles preserve-createdAt internally
+    // and emits worktree.identity.written for bootstrap-protocol audits.
+    ensureWorktreeIdentity({
+      repoRoot: process.cwd(),
       workspacePath,
-    });
-    writeIssueContextMd(workspacePath, {
       issueId: existingOwner?.ownerIssueId ?? issueId,
       currentPhase,
       title: title ?? existingOwner?.title,
       nextPhase,
-      branchName: existingOwner?.branchName ?? currentGitBranch(),
-      workspacePath,
-      updatedAt: new Date().toISOString(),
+      branchName: existingOwner?.branchName ?? (currentGitBranch() ?? undefined),
     });
   } catch {
     // best-effort

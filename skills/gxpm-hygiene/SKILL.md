@@ -39,7 +39,7 @@ git diff --staged --name-only | xargs grep -l "\.env" 2>/dev/null || true
 git diff --staged --stat
 ```
 
-**为什么这里不运行 `bun run check` / `bun test` / `bun run build`？**
+**为什么这里不运行 `bun run check` / `bun test`（以及其他项目的 build 步骤）？**
 These are the responsibility of `gxpm-build` (during development) and `gxpm-verify` (at the `local-verify` gate). Running them in hygiene creates redundant cycles and blurs accountability.
 
 ### 原子提交规则

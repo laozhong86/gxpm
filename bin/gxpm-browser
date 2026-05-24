@@ -1,9 +1,17 @@
-#!/bin/bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Prefer local bun, fall back to system bun
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  TARGET="$(readlink "$SOURCE")"
+  if [[ "$TARGET" = /* ]]; then
+    SOURCE="$TARGET"
+  else
+    SOURCE="$(cd -P "$(dirname "$SOURCE")" && pwd)/$TARGET"
+  fi
+done
+ROOT_DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
 BUN_CMD="${ROOT_DIR}/node_modules/.bin/bun"
 if [ ! -x "$BUN_CMD" ]; then
   BUN_CMD="$(which bun 2>/dev/null || echo "")"

@@ -150,7 +150,12 @@ export function classifyPrGate(
     });
   }
 
-  if (!options.allowReviewRequired && reviewDecision !== "APPROVED") {
+  // GXPM-181: only block on actual GitHub-required review.
+  // Empty/null reviewDecision means GitHub does not require human review
+  // (repos like gxpm gate on bot reviews like CodeRabbit, which never produce
+  // an APPROVED decision). Only REVIEW_REQUIRED is a real blocking signal.
+  // CHANGES_REQUESTED is handled above; APPROVED falls through.
+  if (!options.allowReviewRequired && reviewDecision === "REVIEW_REQUIRED") {
     return classification("pending", "waiting for approving review decision", {
       headRefOid,
       mergeStateStatus,

@@ -169,7 +169,20 @@ export interface StateEvent {
     // (required) and gxpm skill ack (satisfied). PR-1 is telemetry-only; PR-2
     // will add a gate that reads these events.
     | "skill.load.required"
-    | "skill.load.satisfied";
+    | "skill.load.satisfied"
+    // GXPM-187: worktree identity + bootstrap audit telemetry. Emitted by
+    // ensureWorktreeIdentity (written), artifact write/transition middleware
+    // (read.missing — telemetry-only in PR-1, gated under GXPM_IDENTITY_GATE
+    // env var in PR-2), and the phase-handoff dump CLI (handoff.dumped).
+    | "worktree.identity.written"
+    | "worktree.identity.read"
+    | "issue.context.read"
+    | "identity.read.missing"
+    | "phase.handoff.dumped"
+    // GXPM-190: GitNexus reindex telemetry. cleanup land fire-and-forgets a
+    // reindex; triggered is written on dispatch, failed on synchronous error.
+    | "gitnexus.reindex.triggered"
+    | "gitnexus.reindex.failed";
   issueId: string;
   timestamp: string;
   sessionId?: string;
