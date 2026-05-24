@@ -71,10 +71,20 @@ describe("cleanup land command", () => {
     expect(output(result)).toContain("cleanup only applies to landed issues");
   });
 
+  test("refusal-path: land phase is missing PR, merge, or mainline evidence", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-incomplete-land-"));
+    enterPhase(root, "GXPM-719", "land");
+
+    const result = runCli(root, ["cleanup", "land", "GXPM-719"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("cleanup requires completed land evidence");
+    expect(output(result)).toContain("pull request evidence");
+  });
+
   test("refusal-path: dispatch-handoff missing", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-cleanup-missing-handoff-"));
-    // Set up issue in land phase, then remove the dispatch-handoff artifact
-    enterPhase(root, "GXPM-702", "land");
+    enterLandedIssue(root, "GXPM-702");
     rmSync(join(root, ".gxpm", "issues", "GXPM-702", "artifacts", "dispatch-handoff.json"));
 
     const result = runCli(root, ["cleanup", "land", "GXPM-702"]);
@@ -472,6 +482,29 @@ function enterLandedIssue(
   payload?: Record<string, unknown>,
 ) {
   enterPhase(root, issueId, "land");
+  const sha = ensureGitHead(root);
+  writeArtifact({
+    root,
+    issueId,
+    type: "pr-check",
+    payload: {
+      status: "approved",
+      pullRequest: { url: `https://github.com/example/repo/pull/${issueId}` },
+      reviewFindings: [],
+    },
+  });
+  writeArtifact({
+    root,
+    issueId,
+    type: "land-findings",
+    payload: {
+      landReady: true,
+      mergePlan: "merged",
+      status: "landed",
+      mergedAt: new Date().toISOString(),
+      mergedSha: sha,
+    },
+  });
   writeArtifact({
     root,
     issueId,
@@ -488,6 +521,15 @@ function enterLandedIssue(
       branch: `feature/${issueId}`,
     },
   });
+}
+
+function ensureGitHead(root: string) {
+  try {
+    return execSync("git rev-parse HEAD", { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    initGitRepo(root);
+    return execSync("git rev-parse HEAD", { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  }
 }
 
 /** Initialise a bare git repo with one commit so worktrees and branches work. */

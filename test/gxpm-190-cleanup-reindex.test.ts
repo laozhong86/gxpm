@@ -81,6 +81,7 @@ function setupLandedIssue(issueId: string): { repo: string; worktreePath: string
   const worktreePath = mkdtempSync(join(tmpdir(), `gxpm-190-wt-${issueId}-`));
   const branch = `feature/${issueId}`;
   addWorktree(repo, worktreePath, branch);
+  const mergedSha = execSync("git rev-parse HEAD", { cwd: repo }).toString().trim();
 
   enterPhase(repo, issueId, "land");
   writeArtifact({
@@ -97,6 +98,28 @@ function setupLandedIssue(issueId: string): { repo: string; worktreePath: string
       worktree: worktreePath,
       branch,
       workerTasks: [],
+    },
+  });
+  writeArtifact({
+    root: repo,
+    issueId,
+    type: "pr-check",
+    payload: {
+      status: "approved",
+      pullRequest: { url: `https://github.com/example/repo/pull/${issueId}` },
+      reviewFindings: [],
+    },
+  });
+  writeArtifact({
+    root: repo,
+    issueId,
+    type: "land-findings",
+    payload: {
+      landReady: true,
+      mergePlan: "merged",
+      status: "landed",
+      mergedAt: new Date().toISOString(),
+      mergedSha,
     },
   });
   return { repo, worktreePath, branch };

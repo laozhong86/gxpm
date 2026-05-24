@@ -1,4 +1,5 @@
 import { hasArtifact, readArtifact, rewriteArtifact } from "./artifacts";
+import { assessLandCompletion, gitContainsCommit, resolveMainlineRef } from "./land-completion";
 import { createPhaseArtifactInitializer } from "./phase-artifact";
 import { readIssueState, setIssueArchived, type StateEvent } from "./state";
 
@@ -72,6 +73,10 @@ export function reconcileLandFindings(input: {
     mergedAt,
     mergedSha: input.sha,
   };
+  const mainlineRef = resolveMainlineRef(root);
+  const mainlineContainsSha = mainlineRef ? gitContainsCommit(root, mainlineRef, input.sha) : false;
+  payload.mainlineRef = mainlineRef;
+  payload.mainlineContainsSha = mainlineContainsSha;
   const event: StateEvent = {
     schemaVersion: 1,
     type: "artifact.reconciled",
@@ -82,6 +87,8 @@ export function reconcileLandFindings(input: {
       path: "artifacts/land-findings.json",
       mergedAt,
       mergedSha: input.sha,
+      mainlineRef,
+      mainlineContainsSha,
     },
   };
 
@@ -94,8 +101,10 @@ export function reconcileLandFindings(input: {
     event,
   });
 
-  // Auto-archive issue on successful reconcile
-  setIssueArchived({ root, issueId: input.issueId, archived: true });
+  const completion = assessLandCompletion({ root, issueId: input.issueId });
+  if (completion.complete) {
+    setIssueArchived({ root, issueId: input.issueId, archived: true });
+  }
 
   return { reconciled: true, reason: "land-findings reconciled", mergedAt };
 }

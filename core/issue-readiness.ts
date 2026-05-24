@@ -1,6 +1,7 @@
 import { closeSync, openSync, unlinkSync, writeFileSync } from "node:fs";
 import { hasArtifact } from "./artifacts";
 import { listIssues } from "./issues";
+import { assessLandCompletion } from "./land-completion";
 import {
   appendIssueEvent,
   buildOwnershipChangedEvent,
@@ -81,7 +82,10 @@ export function classifyIssueReadiness(input: {
     return { ...base, decision: "ignored", reason: `issue_type_${state.issueType}` };
   }
   if (state.currentPhase === "land") {
-    return { ...base, decision: "ignored", reason: "landed" };
+    const completion = assessLandCompletion({ root, issueId: state.issueId });
+    return completion.complete
+      ? { ...base, decision: "ignored", reason: "landed" }
+      : { ...base, decision: "blocked", reason: `land_completion_incomplete:${completion.missing.join("|")}` };
   }
   if (state.currentPhase !== "implement") {
     return { ...base, decision: "blocked", reason: `phase_${state.currentPhase}_not_implement` };

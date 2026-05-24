@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -103,18 +104,24 @@ describe("listIssues filters", () => {
     expect(entries[0].issueId).toBe("GXPM-B");
   });
 
-  test("hides land-phase issues by default", () => {
+  test("keeps incomplete land-phase issues visible by default", () => {
     const root = mkdtempSync(join(tmpdir(), "gxpm-list-land-hide-"));
     createIssueState({ root, issueId: "GXPM-ACTIVE" });
-    // walk all the way to land
     enterPhase(root, "GXPM-LANDED", "qa");
-    // additional artifact + transition for qa→land
     writeArtifact({ root, issueId: "GXPM-LANDED", type: "land-findings", payload: {} });
     transitionIssuePhase({ root, issueId: "GXPM-LANDED", nextPhase: "land" });
 
     const entries = listIssues({ root });
-    expect(entries.length).toBe(1);
-    expect(entries[0].issueId).toBe("GXPM-ACTIVE");
+    expect(entries.map((entry) => entry.issueId).sort()).toEqual(["GXPM-ACTIVE", "GXPM-LANDED"]);
+  });
+
+  test("hides completed land-phase issues by default", () => {
+    const root = mkdtempSync(join(tmpdir(), "gxpm-list-land-complete-hide-"));
+    createIssueState({ root, issueId: "GXPM-ACTIVE" });
+    enterCompletedLand(root, "GXPM-LANDED");
+
+    const entries = listIssues({ root });
+    expect(entries.map((entry) => entry.issueId)).toEqual(["GXPM-ACTIVE"]);
   });
 
   test("--all returns landed and archived", () => {
@@ -164,6 +171,45 @@ describe("listIssues filters", () => {
     expect(entries.every((entry) => entry.issueType === "meta")).toBe(true);
   });
 });
+
+function enterCompletedLand(root: string, issueId: string) {
+  const sha = initGitCommit(root);
+  enterPhase(root, issueId, "qa");
+  writeArtifact({
+    root,
+    issueId,
+    type: "pr-check",
+    payload: {
+      status: "approved",
+      pullRequest: { url: `https://github.com/example/repo/pull/${issueId}` },
+      reviewFindings: [],
+    },
+  });
+  writeArtifact({
+    root,
+    issueId,
+    type: "land-findings",
+    payload: {
+      landReady: true,
+      mergePlan: "merged",
+      status: "landed",
+      mergedAt: new Date().toISOString(),
+      mergedSha: sha,
+    },
+  });
+  transitionIssuePhase({ root, issueId, nextPhase: "land" });
+}
+
+function initGitCommit(root: string) {
+  execSync("git init -q", { cwd: root });
+  writeFileSync(join(root, "tracked.txt"), "initial\n");
+  execSync("git add tracked.txt", { cwd: root });
+  execSync(
+    "git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.name='gxpm test' -c user.email='gxpm@example.test' commit -q -m initial",
+    { cwd: root },
+  );
+  return execSync("git rev-parse HEAD", { cwd: root }).toString().trim();
+}
 
 describe("gxpm issue archive CLI", () => {
   test("archive marks issue as archived; list hides it", () => {

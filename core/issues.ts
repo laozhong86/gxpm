@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { assessLandCompletion } from "./land-completion";
 import { normalizeIssueType, type GxpmPhase, type IssueState, type IssueType } from "./state";
 
 export interface IssueListEntry {
@@ -60,13 +61,13 @@ export function listIssues(input: ListIssuesInput = {}): IssueListEntry[] {
     const archived = state.archived === true;
     const issueType = normalizeIssueType(state.issueType);
 
-    // Filter: default hides archived AND landed; --all overrides; --archived narrows to only archived.
+    // Filter: default hides archived AND fully completed land issues; --all overrides; --archived narrows to only archived.
     if (!input.includeAll) {
       if (input.archivedOnly) {
         if (!archived) continue;
       } else {
         if (archived) continue;
-        if (state.currentPhase === "land") continue;
+        if (state.currentPhase === "land" && assessLandCompletion({ root, issueId: state.issueId }).complete) continue;
       }
     }
     if (input.types && !input.types.includes(issueType)) continue;

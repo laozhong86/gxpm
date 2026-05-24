@@ -19,6 +19,7 @@ import { readResumePacket, writeIssueCheckpoint } from "../../core/checkpoint";
 import { buildIssueContext } from "../../core/issue-context";
 import { runIssueHandoffCommand } from "./identity";
 import { getNextAvailableIssueId, listIssues, recentLandedIssues } from "../../core/issues";
+import { assessLandCompletion, type LandCompletionAssessment } from "../../core/land-completion";
 import { PHASE_GATE_RULES, type PhaseGateRule } from "../../core/phase-gates";
 import {
   claimIssue,
@@ -529,6 +530,7 @@ interface IssueNextPayload {
   requiredArtifact: string | null;
   command: string | null;
   artifactExists: boolean;
+  landCompletion?: LandCompletionAssessment;
 }
 
 export function buildIssueNextPayload(
@@ -584,6 +586,9 @@ function runIssueNext(issueId: string, options: { json?: boolean } = {}) {
     ? nextVisiblePhase(state.currentPhase, state.rigorLevel) ?? rule.nextPhase
     : null;
   const payload = buildIssueNextPayload(issueId, state, rule, has, effectiveNextPhase);
+  if (state.currentPhase === "land") {
+    payload.landCompletion = assessLandCompletion({ issueId });
+  }
 
   if (options.json) {
     console.log(JSON.stringify(payload, null, 2));
@@ -596,7 +601,14 @@ function runIssueNext(issueId: string, options: { json?: boolean } = {}) {
     console.log("");
     console.log(`Phase ${state.currentPhase} is terminal — no further transition.`);
     if (state.currentPhase === "land") {
-      console.log("This issue has landed. Mark as Done in upstream issue tracker.");
+      const completion = payload.landCompletion ?? assessLandCompletion({ issueId });
+      if (completion.complete) {
+        console.log("This issue has landed with PR, merge, and mainline evidence. Mark as Done in upstream issue tracker.");
+      } else {
+        console.log("This issue is in land phase but is not complete.");
+        console.log(`Missing evidence: ${completion.missing.join(", ")}`);
+        console.log("Next: attach PR evidence, merge the PR, and run post-merge reconcile before marking Done.");
+      }
     }
     return;
   }
